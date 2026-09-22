@@ -1,0 +1,326 @@
+# ============================================================
+#  .GITIGNORE — Proyecto .NET (Microservicios) + Angular
+#  Ignora artefactos de build, configs locales, secretos,
+#  resultados de tests, logs y archivos generados por IDEs.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1) SISTEMA OPERATIVO
+# ------------------------------------------------------------
+
+# Windows: miniaturas y archivos de caché de sistema
+Thumbs.db
+Thumbs.db:*
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+
+# macOS: metadatos de Finder
+.DS_Store
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.trashes
+.VolumeIcon.icns
+
+# Linux: archivos temporales / de enlaces
+*~
+*.swp
+
+# ------------------------------------------------------------
+# 2) EDITORES E IDEs
+# ------------------------------------------------------------
+
+# Visual Studio (caché, estado de sesión y opciones de usuario)
+.vs/
+.vs/Configuration/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vssscc
+*.vspscc
+_VS_SCC_Path.txt
+*.vscode-version
+
+# .NET Core: archivos de proyecto generados y efímeros
+*.project.json.ide
+*.nuget.targets
+*.nuget.props
+
+# Visual Studio Code — ignora todo excepto configs que SÍ queremos versionar
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Rider / ReSharper
+.idea/
+*.DotSettings.user
+*.DotSettings.workspace
+
+# SonarLint / herramientas de análisis estático local
+.sonarlint/
+.sonar/
+analyzers/
+
+# Archivos de respaldo de IDE
+*.bak
+*.orig
+*.old
+
+# ------------------------------------------------------------
+# 3) .NET — ARTEFACTOS DE BUILD Y RUNTIME
+# ------------------------------------------------------------
+
+# Carpetas de compilación por configuración (Debug/Release, x86/x64/arm64, plataforma)
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+xD64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]inaries/
+[Ll]og/
+
+# Paquetes NuGet y residuos de restauración
+*.nupkg
+*.snupkg
+*.nupkg.metadata
+*.whl
+packages/
+*.nuget.packages
+*.nuget.Config
+*.[Pp]aket/
+
+# Ensamblados compilados y símbolos de depuración
+*.dll
+*.exe
+*.pdb
+*.msi
+*.msm
+*.msp
+*.mst
+*.so
+*.dylib
+*.module
+*.dyl
+*.war
+*.ear
+*.nupkg.upgradebackup
+
+# Archivos de generación de código / proxy (NSwag, OpenAPI locales)
+*_g.cs
+*.Generated.cs.metadata
+
+# Global tooling / SDK local
+.dotnet/
+global-packages/
+.nuget/
+
+# Benchmarks / profiling autogenerado
+*.binlog
+*.htmlcov
+*.evtx
+*.gpdl
+
+# ------------------------------------------------------------
+# 4) CONFIGURACIÓN POR ENTORNO Y SECRETOS (Microservicios)
+# ------------------------------------------------------------
+# IMPORTANTE: los appsettings base SÍ se versionan (appsettings.json).
+# Solo se ignoran los específicos de un entorno local/de desarrollo.
+
+appsettings.*.local.json
+appsettings.Local.json
+appsettings.Development.json
+appsettings.Development.*.json
+appsettings.Staging.json
+appsettings.codespaces.json
+
+# Perfiles de arranque con datos locales (connection strings, puertos)
+launchSettings.local.json
+*.env.Development
+.env
+.env.*
+!.env.example
+
+# Claves, certificados y ficheros con material sensible
+*.pfx
+*.p12
+*.snk
+*.keystore
+*.jks
+secrets.json
+secrets.*.json
+appsecrets.local
+*.key
+*.crt
+!*.csr
+
+# Credenciales de servicios cloud (AWS/Azure/GCP)
+.aws-credentials
+azureProfile.json
+credentials.json
+serviceAccount.json
+gcloud-service-key.json
+
+# ------------------------------------------------------------
+# 5) TESTS Y COBERTURA DE CÓDIGO
+# ------------------------------------------------------------
+
+# Resultados de test runners (xUnit, nUnit, MSTest, Jest, etc.)
+[Tt]est[Rr]esults/
+[Tt]est[Rr]esult*/
+[Ee]xport/
+coverage/
+coverage-html/
+htmlcov/
+*.trx
+*.coverage
+*.coveragexml
+*.opencover.xml
+*.xml.ba
+*.coverage-xml
+
+# Reportes de cobertura generados por herramientas
+[Cc]overlet.*
+__pycache__/
+*.pyc
+*.lcov
+*junit*.xml
+cypress/screenshots/
+cypress/videos/
+playwright-report/
+test-results/
+.pytest_cache/
+
+# Artefactos de integración continua (no subir el cache de pipelines)
+PublishScripts/
+.azuredevops/
+.jenkins/
+.pipeline-cache/
+
+# ------------------------------------------------------------
+# 6) LOGS, DIAGNÓSTICO Y DUMPS
+# ------------------------------------------------------------
+
+# Logs de aplicaciones y de herramientas
+logs/
+*.log
+*.logs
+
+# Dumps y archivos de volcado de memoria (diagnóstico local)
+*.mdmp
+*.dump
+*.dmp
+*.core
+core.*
+
+# Perf / tracing
+*.timing
+*.etl
+
+# ------------------------------------------------------------
+# 7) ANGULAR / NODE (FRONTEND)
+# ------------------------------------------------------------
+
+# Dependencias instaladas — SIEMPRE se regeneran con npm install
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.lerna/
+.npm/
+.yarn/
+.pnp/
+.pnp.*
+
+# Compilación y bundle producido por ng build
+dist/
+out-tsc/
+bazel-out/
+.tmp/
+
+# Cache de compilación de Angular (NGCC / ngcc)
+.angular/
+.angular/cache
+
+# Server-Side Rendering (Angular Universal / Express)
+server/
+main.server.ts
+*.server.js
+*.server.mjs
+
+# Caché de TypeScript y metadatos de compilación incremental
+*.tsbuildinfo
+*.tsbuildindex
+
+# Coverage de tests Angular (Karma/Jasmine)
+nyc_output/
+coverage-html-report/
+.lighthouseci/
+
+# Envoltorios de framework (Vite/Webpack/Other)
+.vite/
+.webpack-cache/
+
+# ------------------------------------------------------------
+# 8) DOCKER / KUBERNETES / CONTENEDORES
+# ------------------------------------------------------------
+# El .dockerignore de cada servicio SÍ se versiona (no se ignora).
+
+# Cachés y volúmenes locales de contenedores
+.docker-cache/
+.docker/volumes/
+*.local.yml
+docker-compose.override.yml
+docker-compose.*.override.yml
+kubeconfig
+.kube/
+.helm/cache/
+values.local.yaml
+values-dev.yaml
+
+# ------------------------------------------------------------
+# 9) HERRAMIENTAS Y GENERADOS
+# ------------------------------------------------------------
+
+# Carpeta de empaquetado / publicación
+artifacts/
+publish/
+output/
+
+# Archivos generados por herramientas de doc/analisis
+*.generated.cs
+*.designer.cs.bak
+documentation/obj/
+*.azuredeploy-*.json
+
+# Bases de datos locales / SQLite de desarrollo
+*.sqlite
+*.sqlite3
+local.db
+*.db-wal
+*.db-shm
+
+# Editorconfig NO se ignora (se versiona), pero sí sus derivados locales
+.editorconfig.bak
+.tool-versions.local
+
+# Archivo de dependencias que no se debe versionar a nivel máquina
+user.env
+machine.env
+
+# ------------------------------------------------------------
+# FIN DEL ARCHIVO
+# ------------------------------------------------------------
