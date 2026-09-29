@@ -1,0 +1,115 @@
+# AGENTS.md — Pirry Ledger
+
+Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session. It holds permanent rules and the verified state of the repo. If something here is no longer true, tell Franklin instead of following it blindly.
+
+## Project
+
+- ERP for Pirri, a fast-food business with 2 branches and 2–3 employees per branch. It is real software (daily use from a tablet) and also a university project (Programación III, ITLA).
+- Business module (Billing): invoicing (including the physical invoice given to the customer), daily sales, investment (purchases and expenses) and profit. An owner view shows income and how the business is doing. No delivery for now.
+- Possible future ideas, do not build them unless asked: AI invoice scanning to feed investment, Excel or desktop-web versions, full inventory.
+- Architecture: **modular monolith in C#/.NET**, single deployment, strict module boundaries. Do not propose microservices.
+- The point of the course is learning to build with AI. Franklin directs and decides; you propose, execute and verify. He must be able to explain and defend every decision, so never decide silently on his behalf.
+
+## Sources of truth
+
+- `docs/current-iteration.md` defines what we are working on now: scope, requirement IDs, out-of-scope items and definition of done. Work only inside that scope. If the file is missing or looks stale, ask.
+- Requirements live in `docs/requirements/`. Read its `README.md` (the index) first, then open only the files that `docs/current-iteration.md` lists. Cite requirements by ID (`RD-03`, `RF-CA-19`) in commits and PRs. Their text is the professor's original Spanish; do not translate or paraphrase the IDs.
+- If a requirement you need is not in `docs/`, ask for it. Never reconstruct it from memory.
+- An acceptance criterion that is not met means the requirement is not done, even if the code runs.
+- If two documents contradict each other, say so and ask. Do not pick one yourself.
+- The Core is built piece by piece. Do not build pieces that are not in the current iteration. Design so later pieces can be added (audit, notifications, documents, reports), but do not implement them early.
+
+## Language
+
+All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/logbooks/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise.
+
+## Verified repo state
+
+- Scaffold only. There is no `.sln`, `.csproj`, `package.json`, `global.json`, `.editorconfig` or CI, so no build, test or run command exists yet. Update this section as they are created.
+- Folders: `Src/Core`, `Src/Business`, `Src/Host`, `docs/`, `.github/`.
+- Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.x, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
+
+## Truthfulness rules
+
+- **Never invent commands, paths, packages, versions or results.** Past error in this repo: a README documented `npm install` and `npm run dev` with no `package.json`. If a task needs a run command: create the project or manifest first, then document it, then run it.
+- Verify with a command, not by eye: `Test-Path`, `git status`, `git check-ignore -v`, `dotnet build`.
+- Run every command you document before proposing the commit, and show the real output.
+- Cross-check every new file against the rest of the repo. If something contradicts, flag it before continuing.
+- Never claim something works if you did not run it. If you could not verify it, say so.
+
+## Architecture rules
+
+- `Src/Core`: one module per Core piece. `Src/Business`: the business module (Billing). `Src/Host`: composition only (startup, module registration, configuration) plus background processes such as the mail sender. The Host has no controllers and no logic.
+- One-way dependency (RD-03): the Core never references Business. Business references only the Core's contracts project. Mental test: delete Business and the Core must still build.
+- Modules talk only through public interfaces. No module touches another module's internal classes or tables. Each module owns its data.
+- Each module is layered (Domain, Application, Infrastructure, Api). Business logic lives in Domain and Application, never in controllers or presentation (RD-02). A module's controllers belong to that module (RD-01).
+- Every piece must be testable without starting the full application (RD-12). Each module has its own test project.
+- The Core connects to the business module through three contact points only: notify and feed reports, attach documents (optional), and protect endpoints with Core roles.
+- Cross-cutting rules:
+  - Authorization is enforced on the server for every operation (RD-06). Hiding something in the UI does not count.
+  - State transitions are resolved in a single component (RD-04). Role requirements are declared in a single readable place (RF-CA-05).
+  - All external input is validated; errors never expose stack traces, file paths or queries (RD-07, RD-08).
+  - Dates and times in UTC through one injectable clock (RD-11).
+  - Data persists outside the process (RD-09).
+  - Secrets and keys come from environment variables only (RD-10).
+
+## Security baselines
+
+- Passwords are stored with a hash and per-user salt, never in plain text. Use a standard, proven implementation; never write your own cryptography.
+- Tokens and codes are single-use and expire.
+- Flows that involve an email address (activation resend, password recovery) respond identically whether or not the email exists.
+- Outgoing email is never sent inside the operation that triggers it: it is queued and a separate process sends it. Sending twice must not duplicate emails.
+
+## Git
+
+- Branches: `type/short-description`, lowercase with hyphens. Types: `feature`, `chore`, `fix`, `docs`. One branch per feature.
+- Never commit directly to `main` or `develop`. Never `push`, force-push or merge without Franklin's explicit approval. Confirm the base branch before creating the first branch.
+- Commits: English subject, imperative mood, one change per commit, with the requirement ID when one applies. Example: `Add salted password hashing (RF-CA-02)`. Do not mix unrelated changes.
+- Before proposing a commit, run `git status` and `git diff --staged`. No `bin/`, `obj/`, generated files or secrets. A credential in history is penalized even if deleted later, so check before committing, not after.
+- Pull requests use `.github/PULL_REQUEST_TEMPLATE.md` with exactly its four sections (Qué cambia, Por qué, Cómo probarlo, Qué NO incluye). Do not add sections. Cite requirement IDs. Franklin opens the PR.
+
+## Workflow
+
+One requirement (or a small group) at a time:
+
+1. Read the requirement and its acceptance criterion.
+2. Propose a plan before writing code: files you will touch, design decisions with alternatives, how you will verify each criterion, and what you will NOT do. Wait for Franklin's approval.
+3. Implement the minimum that meets the criterion.
+4. Build, run the tests and show the real output.
+5. Check the acceptance criterion point by point with evidence (command and result). Test rejections too, not only the happy path.
+6. Propose the commit and wait.
+
+After each step report what you did, what you verified and what you could not verify. If something is ambiguous, ask before assuming. Explain each design decision in a few lines. Franklin does the final review: well-written code can still be wrong.
+
+## README
+
+Any change that affects how the project runs must update the README with exact run steps, environment variable names and what each is for (never the values), and how to trigger each acceptance criterion. What the README does not say will not be looked for when grading, so verify each instruction by running it.
+
+## Prohibitions
+
+- Do not commit credentials, passwords, tokens or real connection strings, and do not use them as examples.
+- Do not touch code outside the current scope. No opportunistic refactors.
+- Do not install packages or tools without asking.
+- Do not delete files or modify `docs/`, `.github/` or `.gitignore` unless Franklin asks.
+- Do not add infrastructure nobody asked for (Docker, CI, microservices).
+
+## Open decisions (ask, do not assume)
+
+Franklin will resolve these and update the list. Until then propose options with trade-offs and wait:
+
+1. Base branch for PRs (`main` and `develop` both exist).
+2. Frontend (undefined; do not assume Angular).
+3. Database and data access.
+4. Session credential mechanism.
+5. Project naming prefix (see known issues).
+6. Whether a `Shared` project exists. Do not create one without approval.
+
+## Known issues (temporary, delete when fixed)
+
+- The `.gitignore` header says ".NET (microservices) + Angular", which contradicts the modular monolith and the undefined frontend. Do not assume that stack. Franklin will fix it in its own PR.
+- The `.gitignore` has unanchored patterns that match at any depth. Before adding a file, run `git check-ignore -v <path>`:
+  - `core.*` ignores any name starting with `core.`. On Windows matching can be case-insensitive, so projects or folders like `Core.Contracts` may be silently ignored. Verify before creating projects; a prefix such as `PirryLedger.Core.Contracts` avoids it.
+  - `server/` ignores any directory with that name.
+  - `Debug/`, `Release/`, `logs/`, `dist/`, `artifacts/`, `publish/`, `output/` are ignored at any level.
+  - `appsettings.Development.json`, `appsettings.Staging.json` and `appsettings.*.local.json` are ignored on purpose. Do not "fix" that.
+  - `.vscode/*` uses an allow list; if an allowed file does not show in `git status`, force it with `git add -f`.
