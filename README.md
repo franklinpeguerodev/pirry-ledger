@@ -17,8 +17,7 @@ cd pirry-ledger
 
 Actualmente no hay dependencias configuradas ni un archivo de proyecto que
 requiera instalación de paquetes.
-Probocador del problema de rama a
-
+Provocador del problema de rama b
 ## Cómo ejecutar
 
 Todavía no existe un comando de ejecución. El repositorio se encuentra en su
