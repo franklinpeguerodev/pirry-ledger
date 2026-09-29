@@ -17,6 +17,7 @@ cd pirry-ledger
 
 Actualmente no hay dependencias configuradas ni un archivo de proyecto que
 requiera instalación de paquetes.
+Probocador del problema de rama a
 
 ## Cómo ejecutar
 
