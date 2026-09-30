@@ -2,6 +2,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PirryLedger.Core.AccessControl.Domain\PirryLedger.Core.AccessControl.Domain.csproj" />
+    <!-- Solo los contratos: IClock (RD-11) e IEmailQueue (RF-NOT-08). Nunca una
+         implementacion, para que esta capa no dependa de Infrastructure. -->
+    <ProjectReference Include="..\..\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

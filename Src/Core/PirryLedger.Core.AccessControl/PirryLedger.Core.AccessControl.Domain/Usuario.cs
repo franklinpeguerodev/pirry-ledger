@@ -81,10 +81,14 @@ public sealed class Usuario
             throw new ArgumentException("El hash de la contrasena es obligatorio.", nameof(hashDeContrasena));
         }
 
+        // Decision propia: el correo se guarda siempre en minusculas. Sin esto,
+        // "Juan@Correo.com" y "juan@correo.com" serian dos personas distintas
+        // para el indice unico de RF-CA-01. La normalizacion vive en la entidad,
+        // en un solo sitio, para que buscar y guardar no puedan discrepar.
         return new Usuario(
             Guid.NewGuid(),
             nombre.Trim(),
-            correo.Trim(),
+            correo.Trim().ToLowerInvariant(),
             hashDeContrasena,
             Rol.Estandar,
             activo: false,
