@@ -19,9 +19,13 @@ builder.Services.AddOpenApi();
 // ninguna llama a DateTime.UtcNow por su cuenta.
 builder.Services.AddSingleton<IClock, SystemClock>();
 
-builder.Services.AddAccessControl();
+// Las dos piezas reciben la misma cadena de conexion: una sola base de datos,
+// tablas separadas por prefijo. Ninguna de las dos ve los contextos de la otra.
+var conexion = LeerConexionObligatoria(builder.Configuration);
+
+builder.Services.AddAccessControl(conexion);
 builder.Services.AddNotifications(
-    LeerConexionObligatoria(builder.Configuration),
+    conexion,
     ConfiguracionEntorno.LeerSmtp(builder.Configuration) ?? SmtpConfiguracion.Vacia);
 
 var app = builder.Build();
