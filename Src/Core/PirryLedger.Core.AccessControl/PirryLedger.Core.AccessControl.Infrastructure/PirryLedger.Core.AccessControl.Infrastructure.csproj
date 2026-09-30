@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Argon2id para las contrasenas (RF-CA-02, RD-05). Es la unica dependencia
+         criptografica del repositorio y solo la ve esta capa: Domain y Application
+         conocen IPasswordHasher, nunca el paquete. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

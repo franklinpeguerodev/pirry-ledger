@@ -105,7 +105,24 @@ Now listening on: http://localhost:5243
 Application started. Press Ctrl+C to shut down.
 ```
 
-Devuelve `404` en cualquier ruta porque todavía no hay endpoints.
+Devuelve `404` en cualquier ruta que no sea una de las dos de acceso control
+(`/api/auth/register`, `/api/auth/reenviar-activacion` y `/activar`), porque el
+resto todavía no está construido.
+
+## Endpoints de acceso control
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/auth/register` | Registra un usuario y encola el correo de activación. |
+| `POST` | `/api/auth/reenviar-activacion` | Reenvía el enlace. La respuesta es idéntica exista o no el correo. |
+| `GET` | `/activar?token=<valor>` | Activa la cuenta con el token del enlace. |
+
+Para probarlos a mano con la aplicación en marcha, en otra terminal:
+
+```powershell
+$cuenta = @{ nombre = 'Ana'; correo = 'ana@ejemplo.com'; contrasena = 'abc12345' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body $cuenta -ContentType 'application/json'
+```
 
 ## Cómo enviar el correo pendiente
 
@@ -118,6 +135,88 @@ dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
 ## Cómo provocar cada criterio de aceptación
+
+### RF-CA-01 — el registro acepta un correo libre y rechaza el duplicado
+
+Registra un correo cualquiera. Después repite con el mismo correo, también en
+mayúsculas, y comprueba que la segunda vez responde `409` con el mismo mensaje que
+un correo nuevo.
+
+```sql
+SELECT "Correo", "Activo" FROM ac_usuarios ORDER BY "Correo";
+```
+
+Hay una sola fila por correo, sin importar si se escribió en mayúsculas o con
+espacios alrededor.
+
+### RF-CA-02 — la contraseña no se guarda en claro
+
+```sql
+SELECT "Correo", left("HashDeContrasena", 40) AS inicio FROM ac_usuarios;
+```
+
+El hash empieza por `$argon2id$v=19$m=...` y **no** contiene la contraseña. Cada
+fila tiene un hash distinto aunque dos usuarios usen la misma contraseña, porque
+el salt es por usuario.
+
+### RF-CA-14 — la contraseña tiene al menos 8 caracteres, con letras y números
+
+```powershell
+# Menos de 8 caracteres -> 400
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; correo='a@ejemplo.com'; contrasena='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+# Solo letras -> 400
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; correo='b@ejemplo.com'; contrasena='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+```
+
+### RF-CA-15 — la cuenta nace inactiva y el enlace es de un solo uso
+
+Tras registrar, antes de abrir el enlace:
+
+```sql
+SELECT "Activo" FROM ac_usuarios;   -- false
+SELECT "Cuerpo" FROM not_correos_en_cola ORDER BY "fecha_creacion_utc" DESC LIMIT 1;
+```
+
+El correo trae `http://localhost:5243/activar?token=<64 caracteres hexadecimales>`.
+En la tabla de tokens solo está el SHA-256:
+
+```sql
+SELECT left("HashDelToken", 20) FROM ac_tokens_activacion;   -- SHA-256, no el token
+```
+
+### RF-CA-16 — el enlace activa la cuenta y no se reutiliza
+
+Abre el enlace del correo: responde `200 {"activado":true}` y la cuenta queda
+`Activo = true`. Ábrelo otra vez y responde `400`.
+
+```sql
+SELECT "UsadoUtc" FROM ac_tokens_activacion;   -- con fecha tras el primer uso
+```
+
+Un token inexistente, uno ya usado y uno recortado devuelven el mismo `400`, para
+no revelar si ese enlace existió.
+
+### RF-CA-17 — el reenvío es idéntico exista o no el correo
+
+Compara estas cinco peticiones: la respuesta debe ser el mismo `202` con el mismo
+cuerpo en los cinco casos.
+
+```powershell
+$reenviar = 'http://localhost:5243/api/auth/reenviar-activacion'
+Invoke-WebRequest $reenviar -Method Post -Body (@{correo='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'   # pendiente
+Invoke-WebRequest $reenviar -Method Post -Body (@{correo='nadie@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json' # no existe
+Invoke-WebRequest $reenviar -Method Post -Body (@{correo='esto-no-es-correo'}|ConvertTo-Json) -ContentType 'application/json'   # mal formado
+```
+
+Que el enlace nuevo sirva y el viejo no:
+
+```sql
+SELECT u."Correo", count(t."Id") AS tokens_vivos
+FROM ac_usuarios u LEFT JOIN ac_tokens_activacion t ON t."UsuarioId" = u."Id"
+GROUP BY u."Correo";
+```
+
+El usuario pendiente tiene **un solo** token: el anterior se borró al reenviar.
 
 ### RF-NOT-08 — la operación no necesita servidor de correo
 
