@@ -25,9 +25,16 @@ All development is in English: code, identifiers, comments, commit messages, bra
 
 ## Verified repo state
 
-- Scaffold only. There is no `.sln`, `.csproj`, `package.json`, `global.json`, `.editorconfig` or CI, so no build, test or run command exists yet. Update this section as they are created.
-- Folders: `Src/Core`, `Src/Business`, `Src/Host`, `docs/`, `.github/`.
-- Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.x, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
+- Modular monolith in .NET 10, structured by layers per module (RD-01, RD-03). `global.json` pins SDK 10.0.302; solution is `pirry-ledger.slnx` (XML format).
+- Projects: `Src/Core/PirryLedger.Core.AccessControl` and `PirryLedger.Core.Notifications`, each with {Domain, Application, Infrastructure, Api}; `Src/Core/PirryLedger.Core.Contracts`; `Src/Business/PirryLedger.Business` {Domain, Application}; `Src/Host/PirryLedger.Host` (composition only); `Tests/PirryLedger.Core.AccessControl.Tests` and `PirryLedger.Core.Notifications.Tests` (xunit).
+- The Core pieces are still stubs: `EndpointRegistration.cs` and `DependencyInjection.cs` register nothing yet. Practice 1 fills them. No DbContexts, migrations or endpoints exist yet.
+- Data stack chosen: both Infrastructure projects already reference `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 and `Microsoft.EntityFrameworkCore.Design` 10.0.4; `dotnet ef` 10.0.12 is installed on the machine. PostgreSQL + EF Core. Migrations pending.
+- Commands (PowerShell; all verified on 2026-09-29, outputs in commit history):
+  - Build: `dotnet build pirry-ledger.slnx` (0 warnings, 0 errors).
+  - Test: `dotnet test pirry-ledger.slnx` (exit 0; still 0 tests until real ones are written).
+  - Run: `dotnet run --project Src/Host/PirryLedger.Host --urls http://127.0.0.1:5099` ("Now listening on").
+- Branch flow (decision 2026-09-29): `main` is the production base and the target base branch for PRs. `develop` held the tested integration state, which was merged into `main` (local merge only, not pushed yet). Work always on `type/...` branches, never directly on `main` or `develop`.
+- Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
 
 ## Truthfulness rules
 
@@ -97,18 +104,16 @@ Any change that affects how the project runs must update the README with exact r
 
 Franklin will resolve these and update the list. Until then propose options with trade-offs and wait:
 
-1. Base branch for PRs (`main` and `develop` both exist).
-2. Frontend (undefined; do not assume Angular).
-3. Database and data access.
-4. Session credential mechanism.
-5. Project naming prefix (see known issues).
-6. Whether a `Shared` project exists. Do not create one without approval.
+1. Frontend (undefined; do not assume Angular). Until decided, the app is consumed as an API.
+2. Session credential mechanism. It must be server-invalidatable (RF-CA-12, 18, 20). Options being compared for Practice 1: server-side sessions with an opaque token, or a JWT with a server-side session version.
+3. The business entity that carries the state machine (RF-NEG-03; the invoice is a candidate, Franklin's choice).
+4. Mail sender shape for the queue (CLI command vs hosted service) and how the first Administrator is created (self-registration is inactive + Estándar: either seed from environment variables or promote the first activated user).
+5. Whether a `Shared` project exists. Do not create one without approval.
 
 ## Known issues (temporary, delete when fixed)
 
 - The `.gitignore` header says ".NET (microservices) + Angular", which contradicts the modular monolith and the undefined frontend. Do not assume that stack. Franklin will fix it in its own PR.
 - The `.gitignore` has unanchored patterns that match at any depth. Before adding a file, run `git check-ignore -v <path>`:
-  - `core.*` ignores any name starting with `core.`. On Windows matching can be case-insensitive, so projects or folders like `Core.Contracts` may be silently ignored. Verify before creating projects; a prefix such as `PirryLedger.Core.Contracts` avoids it.
   - `server/` ignores any directory with that name.
   - `Debug/`, `Release/`, `logs/`, `dist/`, `artifacts/`, `publish/`, `output/` are ignored at any level.
   - `appsettings.Development.json`, `appsettings.Staging.json` and `appsettings.*.local.json` are ignored on purpose. Do not "fix" that.
