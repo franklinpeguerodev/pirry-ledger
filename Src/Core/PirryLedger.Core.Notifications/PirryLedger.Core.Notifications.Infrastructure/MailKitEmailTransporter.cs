@@ -53,8 +53,8 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
         catch (Exception excepcion)
         {
             throw new EmailDeliveryException(
-                $"No se pudo entregar el correo a {destinatario} por {_configuracion.Servidor}:{_configuracion.Puerto}. {excepcion.Message}",
-                excepcion);
+                $"No se pudo entregar el correo a {destinatario} por {_configuracion.Servidor}:{_configuracion.Puerto}. {Enmascarar(excepcion.Message)}",
+                new Exception(Enmascarar(excepcion.ToString())));
         }
         finally
         {
@@ -72,4 +72,24 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
         ModoSsl.Ssl => SecureSocketOptions.SslOnConnect,
         _ => SecureSocketOptions.StartTls,
     };
+
+    // RD-08: un error jamas debe filtrar credenciales. El usuario y la contrasena
+    // son valores de variables de entorno (RD-10), asi que si una libreria
+    // los repite en su mensaje, ese mensaje no puede guardarse ni mostrarse tal cual.
+    private string Enmascarar(string texto)
+    {
+        var resultado = texto;
+
+        if (!string.IsNullOrWhiteSpace(_configuracion.Usuario))
+        {
+            resultado = resultado.Replace(_configuracion.Usuario, "[usuario SMTP]", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_configuracion.Contrasena))
+        {
+            resultado = resultado.Replace(_configuracion.Contrasena, "[contrasena SMTP]", StringComparison.Ordinal);
+        }
+
+        return resultado;
+    }
 }
