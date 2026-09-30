@@ -13,9 +13,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
-    <ProjectReference Include="..\..\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.csproj" />
-    <ProjectReference Include="..\..\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.csproj" />
-    <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.csproj" />
+    <ProjectReference Include="..\..\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
+    <ProjectReference Include="..\..\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Infrastructure\PirryLedger.Core.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Api\PirryLedger.Core.Notifications.Api.csproj" />
+    <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
+    <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
   </ItemGroup>
 
 </Project>

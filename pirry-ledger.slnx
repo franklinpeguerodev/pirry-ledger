@@ -1,17 +1,28 @@
 <Solution>
-  <Folder Name="/Src/" />
-  <Folder Name="/Src/Business/">
-    <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.csproj" />
+  <Folder Name="/Src/">
+    <Project Path="Src/Host/PirryLedger.Host/PirryLedger.Host.csproj" />
   </Folder>
   <Folder Name="/Src/Core/">
-    <Project Path="Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.csproj" />
     <Project Path="Src/Core/PirryLedger.Core.Contracts/PirryLedger.Core.Contracts.csproj" />
-    <Project Path="Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.csproj" />
   </Folder>
-  <Folder Name="/Src/Host/">
-    <Project Path="Src/Host/PirryLedger.Host/PirryLedger.Host.csproj" />
+  <Folder Name="/Src/Core/PirryLedger.Core.AccessControl/">
+    <Project Path="Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Domain/PirryLedger.Core.AccessControl.Domain.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Application/PirryLedger.Core.AccessControl.Application.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure/PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Api/PirryLedger.Core.AccessControl.Api.csproj" />
+  </Folder>
+  <Folder Name="/Src/Core/PirryLedger.Core.Notifications/">
+    <Project Path="Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Domain/PirryLedger.Core.Notifications.Domain.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Application/PirryLedger.Core.Notifications.Application.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure/PirryLedger.Core.Notifications.Infrastructure.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Api/PirryLedger.Core.Notifications.Api.csproj" />
+  </Folder>
+  <Folder Name="/Src/Business/">
+    <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/PirryLedger.Business.Domain.csproj" />
+    <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Application/PirryLedger.Business.Application.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj" />
+    <Project Path="Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj" />
   </Folder>
 </Solution>
