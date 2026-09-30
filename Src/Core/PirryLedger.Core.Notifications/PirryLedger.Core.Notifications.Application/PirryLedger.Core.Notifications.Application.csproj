@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PirryLedger.Core.Notifications.Domain\PirryLedger.Core.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
