@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.4" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <ProjectReference Include="..\PirryLedger.Core.AccessControl.Domain\PirryLedger.Core.AccessControl.Domain.csproj" />
+    <ProjectReference Include="..\..\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

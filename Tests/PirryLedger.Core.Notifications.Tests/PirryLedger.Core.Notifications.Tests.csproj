@@ -19,8 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Domain\PirryLedger.Core.AccessControl.Domain.csproj" />
-    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Domain\PirryLedger.Core.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Application\PirryLedger.Core.Notifications.Application.csproj" />
   </ItemGroup>
 
 </Project>
