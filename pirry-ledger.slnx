@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Src/" />
+  <Folder Name="/Src/Business/">
+    <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.csproj" />
+  </Folder>
+  <Folder Name="/Src/Core/">
+    <Project Path="Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Contracts/PirryLedger.Core.Contracts.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.csproj" />
+  </Folder>
+  <Folder Name="/Src/Host/">
+    <Project Path="Src/Host/PirryLedger.Host/PirryLedger.Host.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj" />
+  </Folder>
+</Solution>
