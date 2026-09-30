@@ -35,7 +35,7 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
             await cliente.AuthenticateAsync(_configuracion.Usuario, _configuracion.Contrasena, cancellationToken);
 
             var mensaje = new MimeMessage();
-            mensaje.From.Add(new MailboxAddress(_configuracion.Remitente, _configuracion.Usuario));
+            mensaje.From.Add(MailboxAddress.Parse(_configuracion.Remitente));
             mensaje.To.Add(MailboxAddress.Parse(destinatario));
             mensaje.Subject = asunto;
             mensaje.Body = new TextPart("plain") { Text = cuerpo };
