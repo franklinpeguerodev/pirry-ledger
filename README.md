@@ -68,16 +68,24 @@ Resultado esperado: `10.0.302` y una compilación con 0 errores y 0 advertencias
 dotnet test pirry-ledger.slnx
 ```
 
-Termina con código de salida 0. **Aviso**: los proyectos de prueba existen pero
-todavía no hay ninguna prueba escrita, así que el runner responde `No hay
-ninguna prueba disponible`. Eso es lo esperado, no un fallo.
+Termina con `Correctas!` y el recuento de pruebas superadas. A fecha de hoy hay
+**31 pruebas** en `PirryLedger.Core.AccessControl.Tests`, todas sobre la fase de
+sesión, y ninguna necesita base de datos ni servidor SMTP: usan dobles en
+memoria y un reloj falso, así que corren en unos 10 segundos.
 
 ## Preparar la base de datos
 
-La migración crea la tabla de la cola de correo:
+La migración de AccessControl crea `ac_usuarios`, `ac_tokens_activacion`,
+`ac_codigos_recuperacion` y `ac_sesiones`:
 
 ```powershell
 $env:ConnectionStrings__PirryLedger = [Environment]::GetEnvironmentVariable('ConnectionStrings__PirryLedger', 'User')
+dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
+```
+
+La migración crea además la tabla de la cola de correo:
+
+```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
 ```
 
@@ -91,6 +99,21 @@ Done.
 Crea `not_correos_en_cola` con las columnas que exige el diseño: `id`,
 `destinatario`, `asunto`, `cuerpo`, `estado`, `intentos`, `fecha_creacion_utc`,
 `fecha_envio_utc` y `ultimo_error`.
+
+La tabla `ac_sesiones` de esta fase queda así:
+
+| Columna | Tipo | Para qué |
+|---|---|---|
+| `Id` | `uuid` | Clave primaria. |
+| `UsuarioId` | `uuid` | Dueño de la sesión. Clave foránea con borrado en cascada. |
+| `HashDelToken` | `varchar(128)` | SHA-256 del token en hexadecimal. **Único**, nunca el token en claro. |
+| `EmitidaUtc` | `timestamptz` | Cuándo se creó la sesión. |
+| `ExpiraUtc` | `timestamptz` | Vencimiento **absoluto**: 8 horas después de emitirla. |
+| `CerradaUtc` | `timestamptz` | Cuándo se cerró. Nulo si sigue abierta. |
+| `CredencialVersion` | `integer` | Copia de la del usuario al emitirla. Si no coinciden, la sesión ya no vale. |
+
+Índices: único sobre `HashDelToken`, uno sobre `UsuarioId` y uno sobre
+`ExpiraUtc` para poder limpiar las vencidas más adelante.
 
 ## Cómo arrancar la aplicación
 
@@ -116,6 +139,9 @@ resto todavía no está construido.
 | `POST` | `/api/auth/register` | Registra un usuario y encola el correo de activación. |
 | `POST` | `/api/auth/reenviar-activacion` | Reenvía el enlace. La respuesta es idéntica exista o no el correo. |
 | `GET` | `/activar?token=<valor>` | Activa la cuenta con el token del enlace. |
+| `POST` | `/api/auth/login` | Devuelve el token de sesión en el cuerpo de la respuesta. |
+| `POST` | `/api/auth/logout` | Cierra la sesión del token que llega en la cabecera. Responde `204` siempre. |
+| `GET` | `/yo` | Nombre, correo y rol del usuario autenticado. Exige `Authorization: Bearer <token>`. |
 
 Para probarlos a mano con la aplicación en marcha, en otra terminal:
 
@@ -280,16 +306,104 @@ Correos fallidos: 1
 Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
 `[usuario SMTP]` y `[contrasena SMTP]` antes de mostrarse o guardarse.
 
+### RF-CA-03 — iniciar sesión devuelve un token y no revela qué cuentas existen
+
+Necesitas una cuenta **activada**. Si aún no tienes una, registra
+`ana@ejemplo.com` con la contraseña `abc12345` y abre el enlace como explica
+RF-CA-16.
+
+Con la aplicación en marcha, en otra terminal:
+
+```powershell
+$credenciales = @{ correo = 'ana@ejemplo.com'; contrasena = 'abc12345' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+```
+
+Resultado esperado: un token de 43 caracteres, sin `+`, `/` ni `=`.
+
+Ahora bien, un correo que no existe y una contraseña equivocada tienen que ser
+indistinguibles:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post `
+  -Body (@{ correo = 'nadie@ejemplo.com'; contrasena = 'abc12345' } | ConvertTo-Json) `
+  -ContentType 'application/json'
+```
+
+Resultado esperado: `401` con el mismo mensaje que el intento con contraseña
+equivocada. Si los mensajes o el tiempo de respuesta fueran distintos, el
+endpoint serviría para enumerar las cuentas que existen. Por eso el caso de uso
+verifica la contraseña contra un hash señuelo cuando el correo no existe: los dos
+caminos ejecutan la misma operación de Argon2.
+
+### RF-CA-07 — el usuario autenticado conoce su nombre, correo y rol
+
+```powershell
+$sesion = Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/yo -Headers @{ Authorization = "Bearer $($sesion.token)" }
+```
+
+Resultado esperado: `Nombre`, `Correo` y `Rol`. Nunca el hash de la contraseña,
+ni el token, ni `CredencialVersion`.
+
+Y sin cabecera:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/yo
+```
+
+Resultado esperado: `401 Sesion no valida.`
+
+### RF-CA-18 — cerrar sesión invalida esa credencial
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/logout -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" }
+Invoke-RestMethod -Uri http://localhost:5243/yo -Headers @{ Authorization = "Bearer $($sesion.token)" }
+```
+
+El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una sesión
+no cierra las demás del mismo usuario: un empleado puede tener el móvil y el
+portátil abiertos a la vez.
+
+### RF-CA-19 — cinco intentos fallidos bloquean la cuenta quince minutos
+
+```powershell
+1..5 | ForEach-Object {
+  Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post `
+    -Body (@{ correo = 'ana@ejemplo.com'; contrasena = 'malaclave1' } | ConvertTo-Json) `
+    -ContentType 'application/json'
+}
+```
+
+Ahora la contraseña correcta se sigue rechazando:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+```
+
+Resultado esperado: `401` con **el mismo mensaje** que los intentos fallidos. Un
+mensaje propio confirmaría que ese correo existe. Pasados quince minutos el
+bloqueo se levanta solo y entra con la contraseña correcta.
+
+La expiración de las ocho horas no se prueba esperando: `IClock` es inyectable y
+las pruebas automatizadas avanzan el reloj.
+
 ## Qué NO incluye
 
-- **Ningún endpoint.** La API no expone rutas todavía. Lo que sigue es la Fase 2:
-  registro con activación por correo.
-- **Reintentos automáticos, estado fallido y escritura de `ultimo_error`.** Un
-  envío fallido devuelve el correo a `Pendiente` y espera a que alguien vuelva a
-  lanzar el comando. Llega en la semana 11.
+- **Recuperación de contraseña.** La tabla `ac_codigos_recuperacion` existe, pero
+  no hay endpoint ni correo: llega más adelante.
+- **Cambio de contraseña.** El dominio ya sube `CredencialVersion` y hay pruebas
+  de que invalida las sesiones, pero no hay endpoint para pedirlo.
+- **Limpieza de las sesiones vencidas.** Las filas se quedan en `ac_sesiones`.
+  El índice sobre `ExpiraUtc` está para hacerlo después; esta fase no borra nada
+  por su cuenta.
+- **Roles en los endpoints.** `Autenticar.EjecutarConRolAsync` ya distingue el
+  `403` del `401` y hay pruebas, pero ningún endpoint exige todavía un rol porque
+  no hay operación de administración a la que restringir.
+- **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
+  estira. Se decided así a propósito y está en `docs/adr/001-credencial-de-sesion.md`.
+- **Reintentos automáticos, estado fallido y escritura de `ultimo_error`** en el
+  envío de correo. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.
-- **Cuerpo de los correos.** La cola sabe entregar un texto, pero nadie redacta
-  todavía el mensaje de activación ni el de recuperación.
-- **Control de acceso.** Sin entidades, sin hash de contraseña, sin endpoints.
 - **Módulo de negocio.** La máquina de estados de `Factura` se declara al final de
   la práctica.
