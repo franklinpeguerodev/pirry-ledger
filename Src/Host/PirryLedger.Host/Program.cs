@@ -19,9 +19,13 @@ builder.Services.AddOpenApi();
 // ninguna llama a DateTime.UtcNow por su cuenta.
 builder.Services.AddSingleton<IClock, SystemClock>();
 
-builder.Services.AddAccessControl();
+// Las dos piezas reciben la misma cadena de conexion: una sola base de datos,
+// tablas separadas por prefijo. Ninguna de las dos ve los contextos de la otra.
+var conexion = LeerConexionObligatoria(builder.Configuration);
+
+builder.Services.AddAccessControl(conexion, LeerUrlBaseObligatoria(builder.Configuration));
 builder.Services.AddNotifications(
-    LeerConexionObligatoria(builder.Configuration),
+    conexion,
     ConfiguracionEntorno.LeerSmtp(builder.Configuration) ?? SmtpConfiguracion.Vacia);
 
 var app = builder.Build();
@@ -99,4 +103,22 @@ static string LeerConexionObligatoria(IConfiguration configuracion)
     }
 
     return valor;
+}
+
+// Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de activacion
+// y de recuperacion. Sin ella los enlaces saldrian con una direccion que no
+// existe, asi que es obligatoria igual que la cadena de conexion.
+static string LeerUrlBaseObligatoria(IConfiguration configuracion)
+{
+    var valor = configuracion[ConfiguracionEntorno.VariableBaseUrl];
+
+    if (string.IsNullOrWhiteSpace(valor))
+    {
+        Console.Error.WriteLine(
+            $"Falta la variable de entorno {ConfiguracionEntorno.VariableBaseUrl}. " +
+            "El README explica como definirla.");
+        Environment.Exit(1);
+    }
+
+    return valor.TrimEnd('/');
 }

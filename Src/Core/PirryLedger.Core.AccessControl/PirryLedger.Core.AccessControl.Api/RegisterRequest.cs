@@ -1,0 +1,26 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace PirryLedger.Core.AccessControl.Api;
+
+// Lo que llega por el cuerpo. Es un record aparte del de la entidad: la entidad
+// nunca se enlaza directamente a una peticion (RD-02).
+//
+// Los atributos Required de DataAnnotations son la primera barrera, pero no la
+// unica: el caso de uso vuelve a validar correo, contrasena y nombre. Un endpoint
+// mal construido a mano pasa por los dos (RD-07), y por eso los mensajes de
+// error los produce el caso de uso, no los atributos.
+public sealed record RegisterRequest(
+    [property: Required(ErrorMessage = "El nombre es obligatorio.")]
+    string Nombre,
+
+    [property: Required(ErrorMessage = "El correo es obligatorio.")]
+    string Correo,
+
+    [property: Required(ErrorMessage = "La contrasena es obligatoria.")]
+    string Contrasena);
+
+// RF-CA-17. Solo el correo: el nombre y la contrasena no hacen falta para reenviar
+// un enlace, y pedirlos daria al usuario la sensacion de que hace falta.
+public sealed record ResendActivationRequest(
+    [property: Required(ErrorMessage = "El correo es obligatorio.")]
+    string Correo);
