@@ -103,6 +103,98 @@ public static class EndpointRegistration
                 statusCode: StatusCodes.Status202Accepted);
         });
 
+        // RF-CA-03: iniciar sesion. Devuelve el token en claro UNA vez; el cliente
+        // lo envia en Authorization: Bearer y ya nunca se vuelve a pedir.
+        endpoints.MapPost("/api/auth/login", async (
+            LoginRequest peticion,
+            Login iniciarSesion,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var token = await iniciarSesion.EjecutarAsync(
+                    peticion.Correo,
+                    peticion.Contrasena,
+                    cancellationToken);
+
+                return Results.Json(
+                    new TokenResponse(token),
+                    statusCode: StatusCodes.Status200OK);
+            }
+            catch (CredencialesRechazadasException error)
+            {
+                // Correo inexistente y contrasena erronea: mismo 401, mismo cuerpo.
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (CuentaBloqueadaException error)
+            {
+                // Decision de Franklin: el mensaje de bloqueo es el MISMO que el de
+                // credenciales, porque un mensaje propio confirmaria que ese correo
+                // existe. El cliente ve un 401 igual que en los demas fallos.
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (CuentaNoActivadaException error)
+            {
+                // Unico mensaje distinto, y solo se alcanza con la contrasena
+                // correcta (RF-CA-15).
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+        });
+
+        // RF-CA-18: cerrar sesion. 204 siempre, exista o no el token, para que no
+        // se pueda comprobar si una credencial fue valida alguna vez.
+        endpoints.MapPost("/api/auth/logout", async (
+            HttpRequest peticionHttp,
+            Logout cerrarSesion,
+            CancellationToken cancellationToken) =>
+        {
+            await cerrarSesion.EjecutarAsync(
+                PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                cancellationToken);
+
+            return Results.NoContent();
+        });
+
+        // RF-CA-07: el usuario autenticado y su rol.
+        //
+        // Devuelve SOLO nombre, correo y rol. Nunca el hash, nunca el token y
+        // nunca CredencialVersion: por mucho que se sabe de la sesion, eso no le
+        // sirve a nadie y no debe viajar.
+        endpoints.MapGet("/yo", async (
+            HttpRequest peticionHttp,
+            Autenticar autenticar,
+            CancellationToken cancellationToken) =>
+        {
+            UsuarioAutenticado usuario;
+
+            try
+            {
+                usuario = await autenticar.EjecutarAsync(
+                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                    cancellationToken);
+            }
+            catch (SesionInvalidaException error)
+            {
+                // 401: no hay sesion valida.
+                //
+                // Aqui no se captura RolInsuficienteException porque /yo no exige
+                // ningun rol: solo pregunta quien es. Un 403 en este endpoint
+                // seria imposible, y un catch para una excepcion que no puede
+                // ocurrir solo confunde a quien lo lea.
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            return Results.Json(new YoResponse(usuario.Nombre, usuario.Correo, usuario.Rol.ToString()));
+        });
+
         return endpoints;
     }
 }
