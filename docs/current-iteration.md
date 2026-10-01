@@ -36,7 +36,7 @@ Deliver the first working Core piece, Access control, from registration with ema
 
 ## Constraints specific to this iteration
 
-- The session credential must be invalidatable on the server. Logging out (RF-CA-18), deactivating a user (RF-CA-20) and changing a password (RF-CA-12) invalidate sessions already issued. A purely self-contained credential with no server-side check does not meet this. Propose options and wait for Franklin's decision.
+- The session credential must be invalidatable on the server. Logging out (RF-CA-18), deactivating a user (RF-CA-20) and changing a password (RF-CA-12) invalidate sessions already issued. A purely self-contained credential with no server-side check does not meet this. **Decided on 2026-09-30:** an opaque token with a `Sesion` table and a `CredencialVersion` copied per session, recorded in `docs/adr/001-credencial-de-sesion.md`.
 - Lockout: 5 consecutive failures block the account for 15 minutes; the counter is persisted and resets on a successful login (RF-CA-19).
 - Forced password reset by an Administrator (RF-CA-13): the old password stops working and the user receives, through the queue, the email with the code to set a new one.
 - Operations never send mail directly. They write a `CorreoEnCola` row as pending and finish successfully even with no SMTP server. A separate process or command sends pending mail over SMTP and marks it sent; running it twice must not duplicate sends. SMTP credentials come from environment variables.
@@ -60,6 +60,7 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
 
 ## Open decisions for this iteration
 
-- Session credential mechanism.
-- Database and data access.
 - Which entity carries the business state machine.
+- How the first Administrator is created. Self-registration only produces an inactive Estándar, so RF-CA-08, RF-CA-20 and RF-CA-21 cannot be exercised until an Administrador exists. Options: seed one from environment variables, or promote the first activated user.
+
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30) and the data stack (PostgreSQL with EF Core migrations, applied in the README).
