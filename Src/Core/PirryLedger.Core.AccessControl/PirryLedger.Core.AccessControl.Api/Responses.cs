@@ -19,3 +19,8 @@ public sealed record TokenResponse(string Token);
 // rol. Nunca el hash de la contrasena, nunca el token y nunca
 // CredencialVersion.
 public sealed record YoResponse(string Nombre, string Correo, string Rol);
+
+// RF-CA-08. El rol llega como texto, no como numero del enum: si llegara el
+// numero, un cliente con una version distinta del API interpretaria 0 y 1 de
+// otra manera, y el JSON dejaria de ser legible en un log.
+public sealed record ChangeRoleRequest(string Rol);

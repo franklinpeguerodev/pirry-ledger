@@ -57,7 +57,8 @@ public static class EndpointRegistration
             return Results.Json(
                 new ActivadoResponse(Activado: false),
                 statusCode: StatusCodes.Status202Accepted);
-        });
+        })
+        .ConAcceso(Operacion.RegistrarUsuario);
 
         // RF-CA-16: abrir el enlace activa la cuenta.
         endpoints.MapGet("/activar", async (
@@ -80,7 +81,8 @@ public static class EndpointRegistration
             }
 
             return Results.Json(new ActivadoResponse(Activado: true));
-        });
+        })
+        .ConAcceso(Operacion.ActivarCuenta);
 
         // RF-CA-17: reenviar el enlace de activacion.
         //
@@ -101,7 +103,8 @@ public static class EndpointRegistration
             return Results.Json(
                 new EnviadoResponse(Enviado: true),
                 statusCode: StatusCodes.Status202Accepted);
-        });
+        })
+        .ConAcceso(Operacion.ReenviarActivacion);
 
         // RF-CA-03: iniciar sesion. Devuelve el token en claro UNA vez; el cliente
         // lo envia en Authorization: Bearer y ya nunca se vuelve a pedir.
@@ -145,7 +148,8 @@ public static class EndpointRegistration
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
-        });
+        })
+        .ConAcceso(Operacion.IniciarSesion);
 
         // RF-CA-18: cerrar sesion. 204 siempre, exista o no el token, para que no
         // se pueda comprobar si una credencial fue valida alguna vez.
@@ -159,7 +163,8 @@ public static class EndpointRegistration
                 cancellationToken);
 
             return Results.NoContent();
-        });
+        })
+        .ConAcceso(Operacion.CerrarSesion);
 
         // RF-CA-07: el usuario autenticado y su rol.
         //
@@ -193,8 +198,172 @@ public static class EndpointRegistration
             }
 
             return Results.Json(new YoResponse(usuario.Nombre, usuario.Correo, usuario.Rol.ToString()));
-        });
+        })
+        .ConAcceso(Operacion.ConsultarSesionPropia);
+
+        MapearAdministracionDeUsuarios(endpoints);
 
         return endpoints;
+    }
+
+    // RF-CA-21, RF-CA-08 y RF-CA-20: las cuatro rutas de Administrador.
+    //
+    // RF-CA-05: aqui no se compara ningun rol. Cada ruta se declara con
+    // ConAcceso(Operacion.X) y el filtro de acceso consulta ExigenciasDeRol, el
+    // punto unico. Este bloque solo traduce excepciones a codigos de estado.
+    //
+    // Los catch de SesionInvalida y RolInsuficiente se repiten en cada ruta, y no
+    // hay un helper: un unico helper seria una funcion con cuatro ramas y un tipo
+    // de retorno, mas dificil de leer que el try catch que se ve. Ademas el 401
+    // tiene que salir antes que el 403 en todas, que es justo el orden que la
+    // rubrica revisa.
+    private static void MapearAdministracionDeUsuarios(IEndpointRouteBuilder endpoints)
+    {
+        // RF-CA-21: listar usuarios con su rol y su estado.
+        endpoints.MapGet("/api/admin/usuarios", async (
+            HttpRequest peticionHttp,
+            ListUsers listar,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var usuarios = await listar.EjecutarAsync(
+                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                    cancellationToken);
+
+                return Results.Ok(usuarios);
+            }
+            catch (SesionInvalidaException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (RolInsuficienteException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+        })
+        .ConAcceso(Operacion.ListarUsuarios);
+
+        // RF-CA-08: cambiar el rol de un usuario.
+        endpoints.MapPost("/api/admin/usuarios/{id:guid}/rol", async (
+            Guid id,
+            ChangeRoleRequest peticion,
+            HttpRequest peticionHttp,
+            ChangeUserRole cambiarRol,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await cambiarRol.EjecutarAsync(
+                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                    id,
+                    peticion.Rol,
+                    cancellationToken);
+
+                return Results.NoContent();
+            }
+            catch (SesionInvalidaException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (RolInsuficienteException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (OperacionDeAdministracionRechazadaException error)
+            {
+                // 400: el rol es valido pero la operacion no se puede hacer
+                // (cambiarse el rol a si mismo, usuario inexistente, rol que no
+                // existe). No es 403: el rol de quien llama SI alcanzaba.
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+        .ConAcceso(Operacion.CambiarRolDeUsuario);
+
+        // RF-CA-20: desactivar y reactivar. La misma ruta y el mismo caso de uso
+        // con un parametro distinto, porque desactivar y reactivar son la misma
+        // operacion con dos finales.
+        endpoints.MapPost("/api/admin/usuarios/{id:guid}/desactivar", async (
+            Guid id,
+            HttpRequest peticionHttp,
+            DeactivateUser desactivar,
+            CancellationToken cancellationToken) =>
+        {
+            return await CambiarEstadoAsync(peticionHttp, desactivar, id, Operacion.DesactivarUsuario, cancellationToken);
+        })
+        .ConAcceso(Operacion.DesactivarUsuario);
+
+        endpoints.MapPost("/api/admin/usuarios/{id:guid}/reactivar", async (
+            Guid id,
+            HttpRequest peticionHttp,
+            DeactivateUser desactivar,
+            CancellationToken cancellationToken) =>
+        {
+            return await CambiarEstadoAsync(peticionHttp, desactivar, id, Operacion.ReactivarUsuario, cancellationToken);
+        })
+        .ConAcceso(Operacion.ReactivarUsuario);
+    }
+
+    // El cuerpo de los dos endpoints de estado. Es el unico caso donde un helper
+    // si paga: los dos tendrian exactamente el mismo try catch, cuatro ramas
+    // cada uno, y la unica diferencia seria una palabra. Duplicar eso invites a
+    // que uno se actualice y el otro no.
+    private static async Task<IResult> CambiarEstadoAsync(
+        HttpRequest peticionHttp,
+        DeactivateUser casoDeUso,
+        Guid usuarioId,
+        Operacion operacion,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // El mismo caso de uso para los dos finales. El metodo decide por que
+            // operacion se entra: desactivar o reactivar. Asi el punto unico de
+            // RF-CA-05 decide el rol de cada uno y no el endpoint.
+            if (operacion == Operacion.ReactivarUsuario)
+            {
+                await casoDeUso.ReactivarAsync(
+                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                    usuarioId,
+                    cancellationToken);
+            }
+            else
+            {
+                await casoDeUso.EjecutarAsync(
+                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                    usuarioId,
+                    cancellationToken);
+            }
+
+            return Results.NoContent();
+        }
+        catch (SesionInvalidaException error)
+        {
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+        catch (RolInsuficienteException error)
+        {
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (OperacionDeAdministracionRechazadaException error)
+        {
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status400BadRequest);
+        }
     }
 }

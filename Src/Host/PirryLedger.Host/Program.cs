@@ -89,6 +89,30 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
+// enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
+app.UseRouting();
+app.Use(async (contexto, siguiente) =>
+{
+    try
+    {
+        await siguiente(contexto);
+    }
+    catch (OperacionSinDeclararException)
+    {
+        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await contexto.Response.WriteAsJsonAsync(
+            new ErrorResponse("La operacion no tiene una exigencia de acceso declarada."));
+    }
+    catch (OperacionSinExigenciaDeRolException)
+    {
+        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await contexto.Response.WriteAsJsonAsync(
+            new ErrorResponse("La operacion no tiene una exigencia de acceso valida."));
+    }
+});
+app.Use(PirryLedger.Core.AccessControl.Api.FiltroDeAcceso.ExigirOperacionDeclaradaAsync);
+
 app.MapAccessControl();
 app.MapNotifications();
 
