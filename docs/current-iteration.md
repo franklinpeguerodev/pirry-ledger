@@ -61,6 +61,5 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
 ## Open decisions for this iteration
 
 - Which entity carries the business state machine.
-- How the first Administrator is created. Self-registration only produces an inactive Estándar, so RF-CA-08, RF-CA-20 and RF-CA-21 cannot be exercised until an Administrador exists. Options: seed one from environment variables, or promote the first activated user.
 
-Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30) and the data stack (PostgreSQL with EF Core migrations, applied in the README).
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).

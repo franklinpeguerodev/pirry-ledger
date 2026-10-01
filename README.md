@@ -38,12 +38,17 @@ La aplicación lee todo de variables de entorno. **Ninguna va en el repositorio*
 | `PIRRY_LEDGER_SMTP_PASSWORD` | Contraseña de aplicación de esa cuenta. Nunca la contraseña de la cuenta. |
 | `PIRRY_LEDGER_SMTP_FROM` | Dirección de correo que aparece como remitente. |
 | `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública de la aplicación. Es con la que se arman los enlaces de activación y de recuperación. |
+| `PIRRY_LEDGER_FIRST_ADMIN_EMAIL` | Correo del primer Administrador. Ver [El primer Administrador](#el-primer-administrador). |
+| `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` | Contraseña de ese Administrador. Cumple la política de RF-CA-14. |
+| `PIRRY_LEDGER_FIRST_ADMIN_NAME` | Nombre que se muestra. Si no se define, es `Administrador`. |
 
 Las dos marcadas como obligatorias se leen antes de decidir qué se ejecuta, así
 que sin ellas la aplicación no arranca **y tampoco corre el enviador de correo**:
 avisa del nombre de la que falta y termina. Las seis del SMTP son
 opcionales: sin ellas la aplicación y el registro funcionan igual, y solo el
-enviador se queja cuando no hay a quién entregar el correo.
+enviador se queja cuando no hay a quién entregar el correo. Las tres del primer
+Administrador también son opcionales, pero sin ellas no existe ningún
+Administrador.
 
 Para definirlas en Windows, a nivel Usuario, y abrir después una terminal nueva:
 
@@ -56,10 +61,66 @@ Para definirlas en Windows, a nivel Usuario, y abrir después una terminal nueva
 [Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_PASSWORD', '<contrasena de aplicacion>', 'User')
 [Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_FROM', '<direccion remitente>', 'User')
 [Environment]::SetEnvironmentVariable('PIRRY_LEDGER_PUBLIC_BASE_URL', 'http://localhost:5243', 'User')
+[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_EMAIL', '<correo del administrador>', 'User')
+[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_PASSWORD', '<contrasena del administrador>', 'User')
+[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_NAME', 'Administrador', 'User')
 ```
 
 Gmail exige una contraseña de aplicación, no la contraseña de la cuenta: se
 genera en la configuración de seguridad de la cuenta de Google.
+
+## El primer Administrador
+
+El registro público siempre crea un `Rol.Estandar`, porque un usuario recién
+registrado no puede gobernarse a sí mismo. Por eso no hay forma de llegar a
+Administrador por el camino normal, y sin uno **RF-CA-08, RF-CA-20 y RF-CA-21 no
+se pueden probar**: los tres son operaciones que solo un Administrador puede
+ejecutar.
+
+La solución es una semilla que corre en el arranque y lee las tres variables
+`PIRRY_LEDGER_FIRST_ADMIN_*`. La decisión y las alternativas está en
+`docs/adr/002-primer-administrador.md`.
+
+Cómo se comporta:
+
+- **Es idempotente.** Si ya existe algún Administrador, no hace nada y la
+  aplicación arranca igual. Puedes arrancar la aplicación las veces que quieras.
+- **El Administrador nace activo.** No llega por correo, así que no hay enlace de
+  activación que abrir.
+- **No promueve cuentas que ya existen.** Si el correo de la semilla ya está
+  registrado como Estándar, lo dice en consola y no toca la cuenta.
+- **Respeta la política de contraseñas** (RF-CA-14): al menos 8 caracteres, con
+  letras y números.
+- **Si no defines las variables, no pasa nada.** La aplicación arranca sin
+  Administrador y sin avisar.
+
+Para verlo funcionar:
+
+```powershell
+# Base desechable, para no tocar la de desarrollo
+$env:ConnectionStrings__PirryLedger = [Environment]::GetEnvironmentVariable('ConnectionStrings__PirryLedger', 'User') -replace 'Database=[^;]+', 'Database=seed_prueba'
+dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
+
+$env:PIRRY_LEDGER_FIRST_ADMIN_EMAIL = 'admin@ejemplo.com'
+$env:PIRRY_LEDGER_FIRST_ADMIN_PASSWORD = 'Admin12345'
+
+dotnet run --project Src/Host/PirryLedger.Host
+```
+
+La primera vez imprime:
+
+```
+Se creo el primer Administrador desde las variables de entorno.
+```
+
+La segunda vez no imprime nada, porque ya hay uno. Y con esa contraseña puedes
+iniciar sesión y obtener un token:
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"correo":"admin@ejemplo.com","contrasena":"Admin12345"}'
+```
 
 ## Cómo clonar el repositorio
 
@@ -488,6 +549,10 @@ las pruebas automatizadas avanzan el reloj.
 - **Limpieza de las sesiones vencidas.** Las filas se quedan en `ac_sesiones`.
   El índice sobre `ExpiraUtc` está para hacerlo después; esta fase no borra nada
   por su cuenta.
+- **Operaciones de administración de usuarios.** El primer Administrador ya existe
+  (ver [El primer Administrador](#el-primer-administrador)), pero no hay endpoints
+  para listar usuarios, cambiar un rol ni desactivar a alguien, así que RF-CA-08,
+  RF-CA-20 y RF-CA-21 todavía no se pueden provocar. Llega en el siguiente PR.
 - **Roles en los endpoints.** `Autenticar.EjecutarConRolAsync` ya distingue el
   `403` del `401` y hay pruebas, pero ningún endpoint exige todavía un rol porque
   no hay operación de administración a la que restringir.

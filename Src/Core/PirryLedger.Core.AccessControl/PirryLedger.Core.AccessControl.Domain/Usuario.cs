@@ -61,9 +61,13 @@ public sealed class Usuario
 
     public DateTime? BloqueoHastaUtc { get; private set; }
 
-    // Una sola puerta de entrada: nada crea un usuario escribiendolo a mano.
-    // El rol y el activo se fijan aqui y no como parametros, porque
-    // RF-CA-15 exige que nazca inactivo y RF-CA-04 que nazca con un rol.
+    // Una sola puerta de entrada para el registro publico: nada crea un usuario
+    // escribiendolo a mano. El rol y el activo se fijan aqui y no como
+    // parametros, porque RF-CA-15 exige que nazca inactivo y RF-CA-04 que nazca
+    // con un rol.
+    //
+    // Esta es la UNICA excepcion a esa regla, y hay dos: CrearComoAdministrador.
+    // Se llego a esta forma tras comparar tres, en docs/adr/002-primer-administrador.md.
     public static Usuario Crear(string nombre, string correo, string hashDeContrasena, DateTime ahoraUtc)
     {
         if (string.IsNullOrWhiteSpace(nombre))
@@ -92,6 +96,53 @@ public sealed class Usuario
             hashDeContrasena,
             Rol.Estandar,
             activo: false,
+            ahoraUtc);
+    }
+
+    // La segunda puerta, y la unica que no es el registro publico. La necesita el
+    // seed del primer Administrador, porque Crear fija Rol.Estandar de forma
+    // fija y no hay forma de llegar a Administrador por el camino normal
+    // (docs/adr/002-primer-administrador.md).
+    //
+    // Nace ACTIVO, al contrario que Crear. No es un descuido: este usuario no
+    // llega por correo, asi que no tiene enlace de activacion que nadie pueda
+    // abrir. Si naciera inactivo no habria forma de activarlo, porque activarlo
+    // es una operacion de Administrador y no habria ningun Administrador.
+    //
+    // Los chequeos de nombre, correo y hash son los mismos que en Crear, y estan
+    // repetidos a proposito: duplicar cuatro lineas es mas barato que un
+    // constructor privado que una de las dos puertas puedan saltarse.
+    public static Usuario CrearComoAdministrador(
+        string nombre,
+        string correo,
+        string hashDeContrasena,
+        DateTime ahoraUtc)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            throw new ArgumentException("El nombre es obligatorio.", nameof(nombre));
+        }
+
+        if (string.IsNullOrWhiteSpace(correo))
+        {
+            throw new ArgumentException("El correo es obligatorio.", nameof(correo));
+        }
+
+        if (string.IsNullOrWhiteSpace(hashDeContrasena))
+        {
+            throw new ArgumentException("El hash de la contrasena es obligatorio.", nameof(hashDeContrasena));
+        }
+
+        // El correo se normaliza igual que en Crear, para que las dos puertas
+        // escriban el mismo formato y el indice unico de RF-CA-01 no tenga dos
+        // formas de decidir que dos correos son la misma persona.
+        return new Usuario(
+            Guid.NewGuid(),
+            nombre.Trim(),
+            correo.Trim().ToLowerInvariant(),
+            hashDeContrasena,
+            Rol.Administrador,
+            activo: true,
             ahoraUtc);
     }
 
