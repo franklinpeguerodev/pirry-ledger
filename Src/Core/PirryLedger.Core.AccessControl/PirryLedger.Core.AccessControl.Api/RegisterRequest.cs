@@ -24,3 +24,13 @@ public sealed record RegisterRequest(
 public sealed record ResendActivationRequest(
     [property: Required(ErrorMessage = "El correo es obligatorio.")]
     string Correo);
+
+// RF-CA-03. El cuerpo del login. Los mensajes de error los produce el caso de uso,
+// no estos atributos, porque los tres rechazos posibles deben ser indistinguibles
+// y el mensaje depende de mas cosas que de la forma del cuerpo.
+public sealed record LoginRequest(
+    [property: Required(ErrorMessage = "El correo es obligatorio.")]
+    string Correo,
+
+    [property: Required(ErrorMessage = "La contrasena es obligatoria.")]
+    string Contrasena);

@@ -21,6 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Domain\PirryLedger.Core.AccessControl.Domain.csproj" />
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <!-- Infrastructure aporta el Argon2id real. Probar con un hasher de mentira
+         no diria nada del hash senuelo, que es justamente lo que hay que
+         comprobar en RF-CA-03. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
