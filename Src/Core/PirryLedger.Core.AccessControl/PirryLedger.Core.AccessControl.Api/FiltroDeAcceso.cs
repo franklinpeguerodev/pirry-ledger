@@ -167,7 +167,8 @@ public static class FiltroDeAcceso
 
         if (endpoint.Metadata.GetMetadata<MetadatoDeOperacion>() is null)
         {
-            throw new OperacionSinDeclararException(endpoint.DisplayName);
+            throw new OperacionSinDeclararException(
+                endpoint.DisplayName ?? "(ruta sin nombre)");
         }
 
         await siguiente(contexto);
