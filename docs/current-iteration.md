@@ -63,3 +63,11 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
 - Which entity carries the business state machine.
 
 Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
+
+Administration decisions confirmed for the `feature/user-administration` work:
+
+- An Administrator cannot change their own role.
+- An Administrator cannot deactivate their own account.
+- The last active Administrator cannot be deactivated.
+- Logout is idempotent and responds successfully even when its credential is
+  missing, invalid or expired.
