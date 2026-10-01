@@ -4,9 +4,9 @@ ERP para un negocio de comida rápida. Práctica 1 — Control de acceso.
 
 En este punto el repositorio tiene la cola de correo con su persistencia y un
 comando para enviar lo pendiente. La API expone el registro con activación, el
-inicio de sesión con su tabla de sesiones y la administración de usuarios.
-**La recuperación de contraseña y la máquina de estados de negocio llegan en
-las fases siguientes.**
+inicio de sesión con su tabla de sesiones, la recuperación de contraseña y la
+administración de usuarios. El módulo Business contiene la estructura de la
+máquina de estados de `Invoice`; su prueba queda para la semana 8.
 
 ## Requisitos
 
@@ -233,7 +233,7 @@ Application started. Press Ctrl+C to shut down.
 ```
 
 Devuelve `404` en cualquier ruta que no exista, porque el resto del sistema
-todavía no está construido. Las diez rutas de esta iteración están en las tablas
+todavía no está construido. Las rutas de esta iteración están en las tablas
 de abajo. De esas, `/yo` sin cabecera `Authorization` responde `401` y no `404`:
 la ruta existe, lo que falta es la credencial.
 
@@ -246,6 +246,9 @@ la ruta existe, lo que falta es la credencial.
 | `GET` | `/activar?token=<valor>` | Activa la cuenta con el token del enlace. |
 | `POST` | `/api/auth/login` | Devuelve el token de sesión en el cuerpo de la respuesta. |
 | `POST` | `/api/auth/logout` | Cierra la sesión del token que llega en la cabecera. Responde `204` siempre. |
+| `POST` | `/api/auth/recuperacion` | Encola un código de recuperación. Responde igual exista o no el correo. |
+| `POST` | `/api/auth/restablecer-contrasena` | Consume el código y establece una contraseña nueva. |
+| `POST` | `/api/auth/cambiar-contrasena` | Cambia la contraseña propia y exige la contraseña actual. |
 | `GET` | `/yo` | Nombre, correo y rol del usuario autenticado. Exige `Authorization: Bearer <token>`. |
 
 ### Endpoints de administración
@@ -256,6 +259,7 @@ la ruta existe, lo que falta es la credencial.
 | `POST` | `/api/admin/usuarios/{id}/rol` | Cambia el rol de otro usuario. Exige Administrador. |
 | `POST` | `/api/admin/usuarios/{id}/desactivar` | Desactiva otro usuario e invalida sus sesiones. Exige Administrador. |
 | `POST` | `/api/admin/usuarios/{id}/reactivar` | Reactiva otro usuario. Exige Administrador. |
+| `POST` | `/api/admin/usuarios/{id}/forzar-restablecimiento` | Invalida la contraseña anterior y encola un código nuevo. Exige Administrador. |
 
 Para probarlos a mano con la aplicación en marcha, en otra terminal:
 
@@ -601,12 +605,58 @@ de acceso se declara en un único punto en
 `ExigenciasDeRol.cs`; cada ruta usa `ConAcceso(...)` y el servidor rechaza una
 ruta de negocio que no declare su operación.
 
+### RF-CA-09 a RF-CA-12 — recuperar y cambiar la contraseña
+
+Solicita la recuperación con un correo existente y con uno inexistente. Ambas
+peticiones responden `202` con el mismo cuerpo; solo el correo existente deja un
+mensaje pendiente en `not_correos_en_cola`.
+
+```powershell
+$recuperacion = @{ correo = 'ana@ejemplo.com' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/recuperacion `
+  -Method Post -Body $recuperacion -ContentType 'application/json'
+```
+
+Ejecuta el enviador con `--send-mail` y usa el código recibido en:
+
+```powershell
+$restablecer = @{ codigo = '<codigo recibido>'; contrasena = 'nueva12345' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/restablecer-contrasena `
+  -Method Post -Body $restablecer -ContentType 'application/json'
+```
+
+El código se almacena como SHA-256, vence en 15 minutos y solo se puede usar
+una vez. La contraseña anterior deja de funcionar y las sesiones emitidas antes
+del cambio responden `401`.
+
+### RF-CA-13 — restablecimiento forzado
+
+Con el token de Administrador y el `id` del usuario:
+
+```powershell
+Invoke-RestMethod `
+  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/forzar-restablecimiento' `
+  -Method Post -Headers $adminHeaders
+```
+
+La contraseña anterior deja de funcionar inmediatamente y el nuevo código se
+encola. El usuario completa el cambio mediante
+`/api/auth/restablecer-contrasena`.
+
+### RF-CA-22 — cambio autenticado
+
+```powershell
+$cambio = @{ contrasenaActual = 'abc12345'; nuevaContrasena = 'nueva12345' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/cambiar-contrasena `
+  -Method Post -Headers @{ Authorization = '<token>' } `
+  -Body $cambio -ContentType 'application/json'
+```
+
+Una contraseña actual incorrecta produce un rechazo controlado. El cambio
+aplica la misma política mínima de `RF-CA-14` e invalida las sesiones previas.
+
 ## Qué NO incluye
 
-- **Recuperación de contraseña.** La tabla `ac_codigos_recuperacion` existe, pero
-  no hay endpoint ni correo: llega más adelante.
-- **Cambio de contraseña.** El dominio ya sube `CredencialVersion` y hay pruebas
-  de que invalida las sesiones, pero no hay endpoint para pedirlo.
 - **Limpieza de las sesiones vencidas.** Las filas se quedan en `ac_sesiones`.
   El índice sobre `ExpiraUtc` está para hacerlo después; esta fase no borra nada
   por su cuenta.
@@ -618,5 +668,5 @@ ruta de negocio que no declare su operación.
 - **Reintentos automáticos, estado fallido y escritura de `ultimo_error`** en el
   envío de correo. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.
-- **Módulo de negocio.** La máquina de estados de `Factura` se declara al final de
-  la práctica.
+- **Pruebas de la máquina de estados.** La estructura de `Factura` está
+  declarada en `docs/maquina-de-estados.md`; sus pruebas llegan en la semana 8.

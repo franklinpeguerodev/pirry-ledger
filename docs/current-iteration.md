@@ -58,9 +58,12 @@ The repo is cloned, the tag checked out, and the README followed to the letter. 
 
 From Practice 2 on, two of the eight points in each practice re-verify this work: registration with activation, login, role rejection and password recovery. Do not break what is delivered here.
 
-## Open decisions for this iteration
+## Decisions resolved for this iteration
 
-- Which entity carries the business state machine.
+- The business state machine is carried by `Invoice`, with `Draft`, `Issued`,
+  `Paid` and `Cancelled` states. The transitions and terminal states are
+  documented in `docs/maquina-de-estados.md`.
+- Recovery and forced-reset codes are valid for 15 minutes.
 
 Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
 
