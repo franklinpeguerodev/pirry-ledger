@@ -195,17 +195,17 @@ public class PruebasDelPuntoUnicoDeAcceso
         Assert.Equal(Domain.Rol.Administrador, ExigenciasDeRol.RolRequerido(operacion));
     }
 
-    // El caso que mas se repite al releer RF-CA-05: las cuatro rutas de
+    // El caso que mas se repite al releer RF-CA-05: las cinco rutas de
     // administracion declaradas, contadas desde las rutas reales. Si alguien
     // anade una quinta y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteCuatroRutasDeAdministrador()
+    public void HayExactamenteCincoRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(ruta => ruta.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(4, deAdministracion.Count);
+        Assert.Equal(5, deAdministracion.Count);
 
         foreach (var ruta in deAdministracion)
         {

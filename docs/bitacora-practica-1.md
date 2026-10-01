@@ -436,16 +436,36 @@ trabajo criptográfico de dos caminos.
 
 ## Qué NO incluye todavía
 
-- **Recuperación de contraseña** (RF-CA-09 a 13, 22): la tabla
-  `ac_codigos_recuperacion` existe, no hay endpoint ni correo.
-- **Administración de usuarios** (RF-CA-08, 20, 21): los endpoints no existen, y
-  no hay forma de crear el primer Administrador, así que esa rúbrica de 1.5
-  puntos todavía no se puede ejercer.
-- **Punto único de exigencia de rol** (RF-CA-05).
-- **`docs/maquina-de-estados.md`** y la entidad de negocio con su estado
-  (RF-NEG-03, 04, 05).
-- **Etiqueta `practica-1`**, que el enunciado exige publicar.
-- **Pruebas de la cola de correo**: el proyecto de pruebas existe y está vacío.
+- Auditoría de RF-CA-08, RF-CA-13 y RF-CA-20: corresponde a la semana 14.
+- Reintentos, estado fallido, último error y consulta administrativa de la cola:
+  corresponden a las semanas 11 y 12.
+- Pruebas de la máquina de estados: corresponden a la semana 8.
+- La etiqueta `practica-1` y su publicación: se ejecutan después de la revisión
+  final de entrega.
+- El proyecto de pruebas de Notifications existe, pero todavía no contiene
+  pruebas detectables.
+
+---
+
+## Recuperación de contraseña — RF-CA-09 a 13, 22
+
+**Qué se implementó:** solicitud de recuperación con respuesta uniforme,
+códigos almacenados como SHA-256, validez de 15 minutos, consumo único,
+restablecimiento que invalida sesiones, cambio autenticado que exige la
+contraseña actual y restablecimiento forzado por Administrador. Los tres flujos
+encolan correo y no conectan directamente con SMTP.
+
+**Qué se verificó:** la suite de AccessControl cubre la respuesta uniforme,
+vencimiento y uso único. La compilación del Host y la suite completa se
+ejecutaron después de integrar esta pieza.
+
+## Máquina de estados de negocio — RF-NEG-03, 04, 05, RD-04
+
+Franklin decidió que la entidad central es `Invoice` y que sus estados son
+`Draft`, `Issued`, `Paid` y `Cancelled`. Las transiciones viven en
+`InvoiceStateMachine`; `Paid` y `Cancelled` son terminales. La tabla completa se
+encuentra en `docs/maquina-de-estados.md`. Las pruebas se reservan para la
+semana 8 según el alcance de Práctica 1.
 
 ---
 

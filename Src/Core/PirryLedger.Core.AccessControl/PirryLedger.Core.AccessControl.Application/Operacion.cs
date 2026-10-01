@@ -44,6 +44,11 @@ public enum Operacion
     CambiarRolDeUsuario,
     DesactivarUsuario,
     ReactivarUsuario,
+
+    SolicitarRecuperacion,
+    RestablecerContrasena,
+    CambiarContrasenaPropia,
+    ForzarRestablecimiento,
 }
 
 // Los tres niveles de exigencia. El orden va de menos a mas: una ruta publica
