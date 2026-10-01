@@ -10,6 +10,9 @@ namespace PirryLedger.Core.AccessControl.Infrastructure;
 // necesita saber que DbContext, repositorios o casos de uso existen aqui (RD-01).
 public static class DependencyInjection
 {
+    // Decision de Franklin. El ADR justifica por que absoluta y no deslizante.
+    private static readonly TimeSpan DuracionDeLaSesion = TimeSpan.FromHours(8);
+
     public static IServiceCollection AddAccessControl(
         this IServiceCollection services,
         string connectionString,
@@ -28,6 +31,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IActivationTokenRepository, ActivationTokenRepository>();
+        services.AddScoped<ISessionRepository, SessionRepository>();
 
         services.AddScoped<RegisterUser>(proveedor => new RegisterUser(
             proveedor.GetRequiredService<IUserRepository>(),
@@ -38,6 +42,18 @@ public static class DependencyInjection
             urlBase));
 
         services.AddScoped<ActivateAccount>();
+
+        // Decision de Franklin (docs/adr/001-credencial-de-sesion.md): caducidad
+        // ABSOLUTA de 8 horas. La sesion no se renueva al usarla.
+        services.AddScoped<Login>(proveedor => new Login(
+            proveedor.GetRequiredService<IUserRepository>(),
+            proveedor.GetRequiredService<ISessionRepository>(),
+            proveedor.GetRequiredService<IPasswordHasher>(),
+            proveedor.GetRequiredService<IClock>(),
+            DuracionDeLaSesion));
+
+        services.AddScoped<Logout>();
+        services.AddScoped<Autenticar>();
 
         // RF-CA-17. No necesita IPasswordHasher: el reenvio no toca la contrasena.
         services.AddScoped<ResendActivationLink>(proveedor => new ResendActivationLink(

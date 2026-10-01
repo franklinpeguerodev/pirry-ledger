@@ -23,10 +23,26 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
 
     private readonly ParametrosDeArgon2 _parametros;
 
+    // El hash senuelo se calcula UNA vez por instancia y se reutiliza.
+    //
+    // Calcularlo en cada intento cuesta un Argon2 extra: el correo inexistente
+    // tardaba el doble que una contrasena erronea (hash + verificacion contra uno,
+    // solo verificacion contra el otro). Esa diferencia de tiempo se mide en
+    // milisegundos desde fuera y enumera las cuentas igual de bien que un
+    // mensaje distinto. Calcularlo una vez deja ambos caminos en una sola
+    // verificacion.
+    private readonly Lazy<string> _hashSenaluelo;
+
     public Argon2idPasswordHasher(ParametrosDeArgon2 parametros)
     {
         parametros.Validar();
         _parametros = parametros;
+
+        // Random de 32 bytes: una contrasena que nadie conoce, asi que que el
+        // mismo hash se reutilice no filtra nada y no se puede exploitear.
+        _hashSenaluelo = new Lazy<string>(
+            () => Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
+            LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     public string Hash(string contrasena)
@@ -61,7 +77,7 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
 
     public string CrearHashSenaluelo()
     {
-        return Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+        return _hashSenaluelo.Value;
     }
 
     private static string ConstruirHash(string contrasena, byte[] sal, ParametrosDeArgon2 parametros)

@@ -22,6 +22,8 @@ public sealed class AccessControlDbContext : DbContext
 
     public DbSet<CodigoRecuperacion> CodigosDeRecuperacion => Set<CodigoRecuperacion>();
 
+    public DbSet<Sesion> Sesiones => Set<Sesion>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AccessControlDbContext).Assembly);
