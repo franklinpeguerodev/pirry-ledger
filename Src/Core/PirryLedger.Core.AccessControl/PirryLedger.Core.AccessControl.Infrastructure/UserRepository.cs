@@ -50,4 +50,12 @@ internal sealed class UserRepository : IUserRepository
 
         await _contexto.SaveChangesAsync(cancellationToken);
     }
+
+    // AnyAsync se detiene en la primera fila que cumple, asi que no trae la lista
+    // de Administradores: solo responde si hay alguno.
+    public async Task<bool> ExisteAlgunAdministradorAsync(CancellationToken cancellationToken = default)
+    {
+        return await _contexto.Usuarios
+            .AnyAsync(usuario => usuario.Rol == Rol.Administrador, cancellationToken);
+    }
 }

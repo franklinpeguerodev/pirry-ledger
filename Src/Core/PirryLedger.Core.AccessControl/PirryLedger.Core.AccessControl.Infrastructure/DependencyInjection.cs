@@ -63,6 +63,11 @@ public static class DependencyInjection
             proveedor.GetRequiredService<IClock>(),
             urlBase));
 
+        // Primer Administrador (docs/adr/002-primer-administrador.md). El Host lo
+        // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
+        // dispararlo: no es una operacion de negocio, es parte del despliegue.
+        services.AddScoped<SeedFirstAdministrator>();
+
         return services;
     }
 }

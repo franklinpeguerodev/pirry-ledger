@@ -16,4 +16,9 @@ public interface IUserRepository
     Task<Usuario?> BuscarPorIdAsync(Guid usuarioId, CancellationToken cancellationToken = default);
 
     Task GuardarAsync(Usuario usuario, CancellationToken cancellationToken = default);
+
+    // Lo necesita el seed del primer Administrador para ser idempotente: si ya
+    // hay uno, no se crea otro. Es un metodo propio y no un filtro de
+    // BuscarPorCorreoAsync porque la pregunta es "existe alguno", no "este".
+    Task<bool> ExisteAlgunAdministradorAsync(CancellationToken cancellationToken = default);
 }
