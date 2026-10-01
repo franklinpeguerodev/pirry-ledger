@@ -73,6 +73,18 @@ internal sealed class UsuarioEnMemoria : IUserRepository
         return Task.CompletedTask;
     }
 
+    // RF-CA-21. Ordena por correo como el repositorio real, para que las pruebas
+    // no dependan del orden en que se crean los usuarios.
+    public Task<IReadOnlyList<Usuario>> ListarAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Usuario>>(_usuarios
+            .OrderBy(usuario => usuario.Correo)
+            .ToList());
+
+    // RF-CA-20: solo los activos, como el repositorio real.
+    public Task<int> ContarAdministradoresActivosAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_usuarios
+            .Count(usuario => usuario.Rol == Domain.Rol.Administrador && usuario.Activo));
+
     public Task<bool> ExisteAlgunAdministradorAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(_usuarios.Any(usuario => usuario.Rol == Domain.Rol.Administrador));
 

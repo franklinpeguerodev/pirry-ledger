@@ -55,6 +55,14 @@ public static class DependencyInjection
         services.AddScoped<Logout>();
         services.AddScoped<Autenticar>();
 
+        // RF-CA-05, RF-CA-08, RF-CA-20 y RF-CA-21. Los tres casos de uso reciben
+        // Autenticar y no el repositorio de sesiones: el rechazo de rol tiene que
+        // salir del punto unico (ExigenciasDeRol) y no de una comprobacion que
+        // cada endpoint pudiera escribir de su forma.
+        services.AddScoped<ListUsers>();
+        services.AddScoped<ChangeUserRole>();
+        services.AddScoped<DeactivateUser>();
+
         // RF-CA-17. No necesita IPasswordHasher: el reenvio no toca la contrasena.
         services.AddScoped<ResendActivationLink>(proveedor => new ResendActivationLink(
             proveedor.GetRequiredService<IUserRepository>(),

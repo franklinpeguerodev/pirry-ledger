@@ -59,4 +59,17 @@ internal sealed class EscenarioDeSesion
     {
         return await Entrar.EjecutarAsync(CorreoDelUsuario, ContrasenaValida);
     }
+
+    // Devuelve el token con el que quedo abierta la sesion, sin abrir una nueva.
+    // Lo necesitan las pruebas de RF-CA-20: hay que comprobar que la credencial
+    // que YA estaba emitida deja de servir, no que no se pueda emitir otra.
+    public string UltimoToken { get; private set; } = string.Empty;
+
+    // El token que se uso para esta prueba, guardado al abrir sesion.
+    public async Task<string> AbrirSesionYGuardarTokenAsync()
+    {
+        UltimoToken = await Entrar.EjecutarAsync(CorreoDelUsuario, ContrasenaValida);
+
+        return UltimoToken;
+    }
 }

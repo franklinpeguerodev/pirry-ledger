@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using PirryLedger.Core.AccessControl.Application;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;
@@ -42,47 +41,29 @@ public sealed class PruebasDeInicioDeSesion
     }
 
     // Con el hash senuelo cacheado, verificar contra un usuario inexistente cuesta
-    // la MISMA operacion de Argon2 que contra uno real: una sola verificacion. Si
-    // el senuelo se volviera a calcular por intento, el correo inexistente
-    // tardaria el doble y este test fallaria.
+    // la MISMA operacion del hasher que contra uno real: una sola verificacion.
+    // Se comprueba la propiedad directamente en vez de comparar milisegundos,
+    // porque la carga del equipo hace que una medicion temporal sea inestable.
     [Fact]
-    public async Task ElCorreoNoExistenteNoSeDistinguePorElTiempo()
+    public async Task ElCorreoNoExistenteEjecutaElMismoTrabajoDeHash()
     {
         var escenario = new EscenarioDeSesion();
+        var hasher = new HasherContador(escenario.Hasher);
+        var login = new Login(
+            escenario.Usuarios,
+            escenario.Sesiones,
+            hasher,
+            escenario.Reloj,
+            VentanaDeSesion);
 
-        // Calentamiento: la primera llamada paga el JIT y el calculo inicial del
-        // hash senuelo. No es lo que se quiere medir.
-        await CapturarAsync(() => escenario.Entrar.EjecutarAsync("nadie@ejemplo.com", "abc12345"));
-        await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+        await CapturarAsync(() => login.EjecutarAsync("nadie@ejemplo.com", "abc12345"));
+        Assert.Equal(1, hasher.Verificaciones);
+        Assert.Equal(1, hasher.CreacionesDeSenaluelo);
 
-        // Se mide el minimo de varias vueltas porque lo que interesa es el
-        // trabajo hecho, no el ruido del sistema.
-        var conCorreoInexistente = await MinimoDeMillisecondsAsync(
-            () => escenario.Entrar.EjecutarAsync("nadie@ejemplo.com", "abc12345"));
-        var conCorreoReal = await MinimoDeMillisecondsAsync(
-            () => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
-
-        // Margen holgado: mide que se ejecuta la misma cantidad de trabajo, no
-        // que los milisegundos cuadren al instante.
-        Assert.True(
-            Math.Abs(conCorreoInexistente - conCorreoReal) < 60,
-            $"Tiempos muy distintos: inexistente {conCorreoInexistente} ms, real {conCorreoReal} ms.");
-    }
-
-    private static async Task<long> MinimoDeMillisecondsAsync(Func<Task> accion)
-    {
-        long minimo = long.MaxValue;
-
-        for (var vuelta = 0; vuelta < 3; vuelta++)
-        {
-            var cronometro = Stopwatch.StartNew();
-            await CapturarAsync(accion);
-            cronometro.Stop();
-
-            minimo = Math.Min(minimo, cronometro.ElapsedMilliseconds);
-        }
-
-        return minimo;
+        hasher.ReiniciarContadores();
+        await CapturarAsync(() => login.EjecutarAsync(escenario.Correo, "malaclave1"));
+        Assert.Equal(1, hasher.Verificaciones);
+        Assert.Equal(0, hasher.CreacionesDeSenaluelo);
     }
 
     [Fact]
@@ -243,6 +224,33 @@ public sealed class PruebasDeInicioDeSesion
         catch (Exception error)
         {
             return (error.GetType(), error.Message);
+        }
+    }
+
+    private sealed class HasherContador(IPasswordHasher interno) : IPasswordHasher
+    {
+        public int Verificaciones { get; private set; }
+
+        public int CreacionesDeSenaluelo { get; private set; }
+
+        public string Hash(string contrasena) => interno.Hash(contrasena);
+
+        public bool Verificar(string contrasena, string hashGuardado)
+        {
+            Verificaciones++;
+            return interno.Verificar(contrasena, hashGuardado);
+        }
+
+        public string CrearHashSenaluelo()
+        {
+            CreacionesDeSenaluelo++;
+            return interno.CrearHashSenaluelo();
+        }
+
+        public void ReiniciarContadores()
+        {
+            Verificaciones = 0;
+            CreacionesDeSenaluelo = 0;
         }
     }
 }

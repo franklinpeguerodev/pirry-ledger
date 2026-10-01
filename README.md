@@ -3,9 +3,10 @@
 ERP para un negocio de comida rápida. Práctica 1 — Control de acceso.
 
 En este punto el repositorio tiene la cola de correo con su persistencia y un
-comando para enviar lo pendiente, y la API expone el registro con activación más el
-inicio de sesión con su tabla de sesiones. **La recuperación de contraseña y la
-administración de usuarios llegan en las fases siguientes.**
+comando para enviar lo pendiente. La API expone el registro con activación, el
+inicio de sesión con su tabla de sesiones y la administración de usuarios.
+**La recuperación de contraseña y la máquina de estados de negocio llegan en
+las fases siguientes.**
 
 ## Requisitos
 
@@ -145,10 +146,10 @@ Resultado esperado: `10.0.302` y una compilación con 0 errores y 0 advertencias
 dotnet test pirry-ledger.slnx
 ```
 
-Termina con `Correctas!` y el recuento de pruebas superadas. A fecha de hoy hay
-**31 pruebas** en `PirryLedger.Core.AccessControl.Tests`, todas sobre la fase de
-sesión, y ninguna necesita base de datos ni servidor SMTP: usan dobles en
-memoria y un reloj falso, así que corren en unos 10 segundos.
+Termina con el recuento de pruebas superadas. Las pruebas de AccessControl no
+necesitan base de datos ni servidor SMTP: usan dobles en memoria y un reloj
+falso. Las pruebas del módulo de notificaciones se reservan para una iteración
+posterior.
 
 ## Preparar la base de datos
 
@@ -232,9 +233,9 @@ Application started. Press Ctrl+C to shut down.
 ```
 
 Devuelve `404` en cualquier ruta que no exista, porque el resto del sistema
-todavía no está construido. Las seis rutas que sí existen están en la tabla de
-abajo. De esas, `/yo` sin cabecera `Authorization` responde `401` y no `404`: la
-ruta existe, lo que falta es la credencial.
+todavía no está construido. Las diez rutas de esta iteración están en las tablas
+de abajo. De esas, `/yo` sin cabecera `Authorization` responde `401` y no `404`:
+la ruta existe, lo que falta es la credencial.
 
 ## Endpoints de acceso control
 
@@ -246,6 +247,15 @@ ruta existe, lo que falta es la credencial.
 | `POST` | `/api/auth/login` | Devuelve el token de sesión en el cuerpo de la respuesta. |
 | `POST` | `/api/auth/logout` | Cierra la sesión del token que llega en la cabecera. Responde `204` siempre. |
 | `GET` | `/yo` | Nombre, correo y rol del usuario autenticado. Exige `Authorization: Bearer <token>`. |
+
+### Endpoints de administración
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `GET` | `/api/admin/usuarios` | Lista usuarios con rol y estado. Exige Administrador. |
+| `POST` | `/api/admin/usuarios/{id}/rol` | Cambia el rol de otro usuario. Exige Administrador. |
+| `POST` | `/api/admin/usuarios/{id}/desactivar` | Desactiva otro usuario e invalida sus sesiones. Exige Administrador. |
+| `POST` | `/api/admin/usuarios/{id}/reactivar` | Reactiva otro usuario. Exige Administrador. |
 
 Para probarlos a mano con la aplicación en marcha, en otra terminal:
 
@@ -540,6 +550,57 @@ bloqueo se levanta solo y entra con la contraseña correcta.
 La expiración de las ocho horas no se prueba esperando: `IClock` es inyectable y
 las pruebas automatizadas avanzan el reloj.
 
+### RF-CA-21 y RF-CA-05 — listar usuarios y proteger operaciones administrativas
+
+La semilla del primer Administrador descrita arriba permite probar las cuatro
+rutas administrativas. Después de iniciar la aplicación y obtener el token del
+Administrador:
+
+```powershell
+$adminHeaders = @{ Authorization = "Bearer <token del administrador>" }
+Invoke-RestMethod -Uri 'http://localhost:5243/api/admin/usuarios' `
+  -Headers $adminHeaders
+```
+
+El resultado contiene únicamente `id`, `nombre`, `correo`, `rol`, `activo` y
+`fechaDeCreacionUtc`. Nunca contiene hashes, tokens ni `CredencialVersion`.
+
+### RF-CA-08 — cambiar el rol
+
+Usa el `id` de otro usuario obtenido del listado:
+
+```powershell
+Invoke-RestMethod `
+  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/rol' `
+  -Method Post -Headers $adminHeaders -ContentType 'application/json' `
+  -Body '{"rol":"Administrador"}'
+```
+
+Un Administrador no puede cambiarse su propio rol. Un rol inexistente produce
+`400`. Un usuario Estándar recibe `403`, incluso si construye la petición
+manualmente.
+
+### RF-CA-20 — desactivar y reactivar
+
+```powershell
+Invoke-RestMethod `
+  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/desactivar' `
+  -Method Post -Headers $adminHeaders
+
+Invoke-RestMethod `
+  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/reactivar' `
+  -Method Post -Headers $adminHeaders
+```
+
+Desactivar invalida las sesiones abiertas del usuario objetivo. Un
+Administrador no puede desactivarse ni desactivar al último Administrador
+activo. Repetir una operación de estado produce `400`, no un `500`.
+
+Sin `Authorization`, las rutas administrativas responden `401`. La exigencia
+de acceso se declara en un único punto en
+`ExigenciasDeRol.cs`; cada ruta usa `ConAcceso(...)` y el servidor rechaza una
+ruta de negocio que no declare su operación.
+
 ## Qué NO incluye
 
 - **Recuperación de contraseña.** La tabla `ac_codigos_recuperacion` existe, pero
@@ -549,13 +610,9 @@ las pruebas automatizadas avanzan el reloj.
 - **Limpieza de las sesiones vencidas.** Las filas se quedan en `ac_sesiones`.
   El índice sobre `ExpiraUtc` está para hacerlo después; esta fase no borra nada
   por su cuenta.
-- **Operaciones de administración de usuarios.** El primer Administrador ya existe
-  (ver [El primer Administrador](#el-primer-administrador)), pero no hay endpoints
-  para listar usuarios, cambiar un rol ni desactivar a alguien, así que RF-CA-08,
-  RF-CA-20 y RF-CA-21 todavía no se pueden provocar. Llega en el siguiente PR.
-- **Roles en los endpoints.** `Autenticar.EjecutarConRolAsync` ya distingue el
-  `403` del `401` y hay pruebas, pero ningún endpoint exige todavía un rol porque
-  no hay operación de administración a la que restringir.
+- **Regla de último Administrador.** La administración impide dejar la
+  aplicación sin ningún Administrador activo. Es una protección adicional de
+  esta iteración, no un sistema de auditoría.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en `docs/adr/001-credencial-de-sesion.md`.
 - **Reintentos automáticos, estado fallido y escritura de `ultimo_error`** en el

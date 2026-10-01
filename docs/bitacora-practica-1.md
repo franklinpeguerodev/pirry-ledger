@@ -416,6 +416,24 @@ redacta y yo la reviso antes de que se suba.
 
 ---
 
+## Administración de usuarios — RF-CA-04, 05, 06, 08, 20, 21
+
+**Qué se pidió:** completar la administración de usuarios en la rama
+`feature/user-administration`, con autorización del lado del servidor,
+listado, cambio de rol, desactivación y reactivación.
+
+**Qué se implementó:** se centralizó la exigencia de acceso en
+`ExigenciasDeRol`, se añadieron las cuatro rutas administrativas y casos de uso
+separados, y el listado proyecta únicamente datos públicos del usuario. La
+desactivación incrementa `CredencialVersion`, por lo que invalida sesiones
+abiertas. Se confirmaron además las protecciones contra cambiarse el rol,
+desactivarse y dejar la aplicación sin Administrador activo.
+
+**Qué se verificó:** las pruebas de administración y del punto único ejecutan
+sin PostgreSQL. La suite completa debe quedar verde antes de proponer el
+commit; la prueba temporal de login se revisó por separado porque mide el
+trabajo criptográfico de dos caminos.
+
 ## Qué NO incluye todavía
 
 - **Recuperación de contraseña** (RF-CA-09 a 13, 22): la tabla

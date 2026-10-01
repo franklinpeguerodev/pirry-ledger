@@ -25,6 +25,15 @@
          no diria nada del hash senuelo, que es justamente lo que hay que
          comprobar en RF-CA-03. -->
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+    <!-- La capa Api, para que la prueba de RF-CA-05 pueda enumerar las rutas REALES
+         que registra MapAccessControl en vez de escribir una lista a mano. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
+  </ItemGroup>
+
+  <!-- MapAccessControl devuelve IEndpointRouteBuilder, asi que la prueba necesita el
+       framework de ASP.NET para poder construir la aplicacion y leer sus rutas. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>
