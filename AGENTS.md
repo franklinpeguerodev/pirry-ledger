@@ -1,6 +1,6 @@
 # AGENTS.md — Pirry Ledger
 
-Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session. It holds permanent rules and the verified state of the repo. If something here is no longer true, tell Franklin instead of following it blindly.
+Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session. It holds permanent rules only. If something here is no longer true, tell Franklin instead of following it blindly.
 
 ## Project
 
@@ -21,20 +21,19 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 ## Language
 
-All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/logbooks/`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
+All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/` named `bitacora-*.md`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
 
-## Verified repo state
+## Where the state lives
 
-- Modular monolith in .NET 10, structured by layers per module (RD-01, RD-03). `global.json` pins SDK 10.0.302; solution is `pirry-ledger.slnx` (XML format).
-- Projects: `Src/Core/PirryLedger.Core.AccessControl` and `PirryLedger.Core.Notifications`, each with {Domain, Application, Infrastructure, Api}; `Src/Core/PirryLedger.Core.Contracts`; `Src/Business/PirryLedger.Business` {Domain, Application}; `Src/Host/PirryLedger.Host` (composition only); `Tests/PirryLedger.Core.AccessControl.Tests` and `PirryLedger.Core.Notifications.Tests` (xunit).
-- The Core pieces are still stubs: `EndpointRegistration.cs` and `DependencyInjection.cs` register nothing yet. Practice 1 fills them. No DbContexts, migrations or endpoints exist yet.
-- Data stack chosen: both Infrastructure projects already reference `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 and `Microsoft.EntityFrameworkCore.Design` 10.0.4; `dotnet ef` 10.0.12 is installed on the machine. PostgreSQL + EF Core. Migrations pending.
-- Commands (PowerShell; all verified on 2026-09-29, outputs in commit history):
-  - Build: `dotnet build pirry-ledger.slnx` (0 warnings, 0 errors).
-  - Test: `dotnet test pirry-ledger.slnx` (exit 0; still 0 tests until real ones are written).
-  - Run: `dotnet run --project Src/Host/PirryLedger.Host --urls http://127.0.0.1:5099` ("Now listening on").
-- Branch flow (decision 2026-09-29): `main` is the production base and the target base branch for PRs. `develop` held the tested integration state, which was merged into `main` (local merge only, not pushed yet). Work always on `type/...` branches, never directly on `main` or `develop`.
-- Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
+This file holds permanent rules only. It goes stale as soon as code is written, so it does not describe the repo:
+
+- What we are building right now, the scope and how it is graded: `docs/current-iteration.md`. Franklin replaces it at the start of each assignment.
+- What is already built and which commands actually run: `README.md`. It is verified by running them, not by reading.
+- The decisions already taken, with their reasoning and the alternatives that were discarded: `docs/adr/`.
+
+If the agent needs state that is not in those three files, it asks. It never reconstructs it from memory and never writes it here.
+
+Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
 
 ## Truthfulness rules
 
@@ -75,6 +74,14 @@ All development is in English: code, identifiers, comments, commit messages, bra
 - Before proposing a commit, run `git status` and `git diff --staged`. No `bin/`, `obj/`, generated files or secrets. A credential in history is penalized even if deleted later, so check before committing, not after.
 - Pull requests use `.github/PULL_REQUEST_TEMPLATE.md` with exactly its four sections (Qué cambia, Por qué, Cómo probarlo, Qué NO incluye). Do not add sections. Cite requirement IDs. Franklin opens the PR.
 
+## Documentation
+
+Three rules. They exist because this repo already paid for breaking them.
+
+- **Documentation ships in the same pull request.** Every pull request that changes behaviour updates `README.md`, `docs/current-iteration.md` and the ADR in `docs/adr/` in the same PR. Documentation that a change makes wrong is part of that change, not a follow-up. The README section below is the same rule seen from the grading side: what the README does not say will not be looked for.
+- **ADRs need authorization first.** An important decision is documented in an ADR under `docs/adr/`, following the format of `001-credencial-de-sesion.md`. **The agent never writes an ADR on its own initiative.** When it detects a decision that meets the bar, it stops, presents the alternatives with their trade-offs, and waits for Franklin's explicit authorization. Only then does it write the file. A decision is *important* when at least one of these is true: it chooses between alternatives that affect structure, persistence, the protocol or the security model; it contradicts or replaces an earlier decision; or it is the kind of question a reviewer asks as *"why not X?"*. A decision below that bar is explained in the pull request description instead.
+- **The logbook gets an entry in the same pull request.** Every pull request appends its entry to the current logbook in `docs/` (`bitacora-*.md`) in the same PR, as its own commit so the code commit stays atomic: what was asked, what the agent returned, what Franklin verified and with which command, and what changed or was corrected. The agent drafts; Franklin reviews before it is pushed.
+
 ## Workflow
 
 One requirement (or a small group) at a time:
@@ -105,10 +112,11 @@ Any change that affects how the project runs must update the README with exact r
 Franklin will resolve these and update the list. Until then propose options with trade-offs and wait:
 
 1. Frontend (undefined; do not assume Angular). Until decided, the app is consumed as an API.
-2. Session credential mechanism. It must be server-invalidatable (RF-CA-12, 18, 20). Options being compared for Practice 1: server-side sessions with an opaque token, or a JWT with a server-side session version.
+2. How the first Administrator is created. Self-registration only produces an inactive Estándar (`Usuario.Crear` fixes `Rol.Estandar`), and RF-CA-08, 20 and 21 cannot be exercised until an Administrador exists. Options: seed one from environment variables, or promote the first activated user.
 3. The business entity that carries the state machine (RF-NEG-03; the invoice is a candidate, Franklin's choice).
-4. Mail sender shape for the queue (CLI command vs hosted service) and how the first Administrator is created (self-registration is inactive + Estándar: either seed from environment variables or promote the first activated user).
-5. Whether a `Shared` project exists. Do not create one without approval.
+4. Whether a `Shared` project exists. Do not create one without approval.
+
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30) and the shape of the mail sender (a CLI command, `--send-mail`, not a hosted service).
 
 ## Known issues (temporary, delete when fixed)
 
