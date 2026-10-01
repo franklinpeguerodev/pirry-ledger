@@ -67,6 +67,11 @@ public static class ExigenciasDeRol
         // RF-CA-20: desactivar y reactivar los hace un Administrador.
         [Operacion.DesactivarUsuario] = new(NivelAcceso.Administrador),
         [Operacion.ReactivarUsuario] = new(NivelAcceso.Administrador),
+
+        [Operacion.SolicitarRecuperacion] = new(NivelAcceso.Publico),
+        [Operacion.RestablecerContrasena] = new(NivelAcceso.Publico),
+        [Operacion.CambiarContrasenaPropia] = new(NivelAcceso.CualquierSesion),
+        [Operacion.ForzarRestablecimiento] = new(NivelAcceso.Administrador),
     };
 
     // La exigencia completa de una operacion: que nivel pide y si tolera que la

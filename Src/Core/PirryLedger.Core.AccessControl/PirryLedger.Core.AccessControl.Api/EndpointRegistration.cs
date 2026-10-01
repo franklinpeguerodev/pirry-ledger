@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Mvc;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Time;
 
@@ -106,6 +107,35 @@ public static class EndpointRegistration
         })
         .ConAcceso(Operacion.ReenviarActivacion);
 
+        endpoints.MapPost("/api/auth/recuperacion", async (
+            PasswordRecoveryRequest request,
+            [FromServices] PasswordRecovery recovery,
+            CancellationToken cancellationToken) =>
+        {
+            await recovery.RequestAsync(request.Correo, cancellationToken);
+            return Results.Json(new EnviadoResponse(true), statusCode: StatusCodes.Status202Accepted);
+        }).ConAcceso(Operacion.SolicitarRecuperacion);
+
+        endpoints.MapPost("/api/auth/restablecer-contrasena", async (
+            ResetPasswordRequest request,
+            [FromServices] PasswordRecovery recovery,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await recovery.CompleteAsync(request.Codigo, request.Contrasena, cancellationToken);
+                return Results.NoContent();
+            }
+            catch (RecoveryRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (RegistrationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).ConAcceso(Operacion.RestablecerContrasena);
+
         // RF-CA-03: iniciar sesion. Devuelve el token en claro UNA vez; el cliente
         // lo envia en Authorization: Bearer y ya nunca se vuelve a pedir.
         endpoints.MapPost("/api/auth/login", async (
@@ -202,6 +232,31 @@ public static class EndpointRegistration
         .ConAcceso(Operacion.ConsultarSesionPropia);
 
         MapearAdministracionDeUsuarios(endpoints);
+
+        endpoints.MapPost("/api/auth/cambiar-contrasena", async (
+            ChangePasswordRequest request,
+            HttpRequest httpRequest,
+            [FromServices] ChangeOwnPassword changePassword,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await changePassword.ExecuteAsync(
+                    PortadorDelToken.Leer(httpRequest) ?? string.Empty,
+                    request.ContrasenaActual,
+                    request.NuevaContrasena,
+                    cancellationToken);
+                return Results.NoContent();
+            }
+            catch (SesionInvalidaException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (RegistrationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).ConAcceso(Operacion.CambiarContrasenaPropia);
 
         return endpoints;
     }
@@ -312,6 +367,34 @@ public static class EndpointRegistration
             return await CambiarEstadoAsync(peticionHttp, desactivar, id, Operacion.ReactivarUsuario, cancellationToken);
         })
         .ConAcceso(Operacion.ReactivarUsuario);
+
+        endpoints.MapPost("/api/admin/usuarios/{id:guid}/forzar-restablecimiento", async (
+            Guid id,
+            HttpRequest httpRequest,
+            [FromServices] ForcePasswordReset reset,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await reset.ExecuteAsync(
+                    PortadorDelToken.Leer(httpRequest) ?? string.Empty,
+                    id,
+                    cancellationToken);
+                return Results.NoContent();
+            }
+            catch (SesionInvalidaException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (RolInsuficienteException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (OperacionDeAdministracionRechazadaException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).ConAcceso(Operacion.ForzarRestablecimiento);
     }
 
     // El cuerpo de los dos endpoints de estado. Es el unico caso donde un helper

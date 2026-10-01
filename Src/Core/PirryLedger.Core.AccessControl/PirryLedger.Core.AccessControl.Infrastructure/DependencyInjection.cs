@@ -12,6 +12,7 @@ public static class DependencyInjection
 {
     // Decision de Franklin. El ADR justifica por que absoluta y no deslizante.
     private static readonly TimeSpan DuracionDeLaSesion = TimeSpan.FromHours(8);
+    private static readonly TimeSpan DuracionDelCodigoDeRecuperacion = TimeSpan.FromMinutes(15);
 
     public static IServiceCollection AddAccessControl(
         this IServiceCollection services,
@@ -31,6 +32,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IActivationTokenRepository, ActivationTokenRepository>();
+        services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
 
         services.AddScoped<RegisterUser>(proveedor => new RegisterUser(
@@ -75,6 +77,23 @@ public static class DependencyInjection
         // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
         // dispararlo: no es una operacion de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();
+
+        services.AddScoped<PasswordRecovery>(provider => new PasswordRecovery(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IRecoveryCodeRepository>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<IPasswordHasher>(),
+            DuracionDelCodigoDeRecuperacion));
+        services.AddScoped<ForcePasswordReset>(provider => new ForcePasswordReset(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IRecoveryCodeRepository>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<Autenticar>(),
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<IPasswordHasher>(),
+            DuracionDelCodigoDeRecuperacion));
+        services.AddScoped<ChangeOwnPassword>();
 
         return services;
     }
