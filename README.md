@@ -3,8 +3,9 @@
 ERP para un negocio de comida rápida. Práctica 1 — Control de acceso.
 
 En este punto el repositorio tiene la cola de correo con su persistencia y un
-comando para enviar lo pendiente. **La API todavía no expone ningún endpoint**:
-el registro, el inicio de sesión y la recuperación llegan en las fases siguientes.
+comando para enviar lo pendiente, y la API expone el registro con activación más el
+inicio de sesión con su tabla de sesiones. **La recuperación de contraseña y la
+administración de usuarios llegan en las fases siguientes.**
 
 ## Requisitos
 
