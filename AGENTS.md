@@ -21,7 +21,7 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 ## Language
 
-All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/logbooks/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise.
+All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/logbooks/`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
 
 ## Verified repo state
 
