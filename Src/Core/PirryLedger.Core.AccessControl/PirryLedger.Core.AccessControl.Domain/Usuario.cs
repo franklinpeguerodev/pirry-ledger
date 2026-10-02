@@ -51,6 +51,10 @@ public sealed class Usuario
     // el listado de RF-CA-21 y el seed idempotente del primer Administrador.
     public DateTime FechaDeCreacionUtc { get; private set; }
 
+    // Trazabilidad minima: null significa que la contrasena solo ha sido la
+    // inicial; se establece cada vez que CambiarContrasena reemplaza el hash.
+    public DateTime? ContrasenaCambiadaUtc { get; private set; }
+
     // Decision propia: RF-CA-12, RF-CA-18 y RF-CA-20 exige que cambiar la
     // contrasena o desactivar invalide las sesiones abiertas. Subir este numero
     // es lo que invalida todas las credenciales emitidas antes del cambio.
@@ -195,6 +199,7 @@ public sealed class Usuario
         ArgumentException.ThrowIfNullOrWhiteSpace(nuevoHash);
 
         HashDeContrasena = nuevoHash;
+        ContrasenaCambiadaUtc = ahoraUtc;
         CredencialVersion++;
         IntentosFallidos = 0;
         BloqueoHastaUtc = null;

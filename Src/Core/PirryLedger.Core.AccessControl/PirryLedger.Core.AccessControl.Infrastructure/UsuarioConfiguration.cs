@@ -44,6 +44,7 @@ internal sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
 
         builder.Property(usuario => usuario.Activo).IsRequired();
         builder.Property(usuario => usuario.FechaDeCreacionUtc).IsRequired();
+        builder.Property(usuario => usuario.ContrasenaCambiadaUtc);
         builder.Property(usuario => usuario.CredencialVersion).IsRequired();
         builder.Property(usuario => usuario.IntentosFallidos).IsRequired();
     }
