@@ -64,6 +64,10 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
   `Paid` and `Cancelled` states. The transitions and terminal states are
   documented in `docs/maquina-de-estados.md`.
 - Recovery and forced-reset codes are valid for 15 minutes.
+- `Usuario.ContrasenaCambiadaUtc` records in UTC when the password was last
+  replaced. It is nullable for accounts that still use their initial password
+  and provides minimal credential traceability without implementing the audit
+  records reserved for week 14.
 
 Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
 

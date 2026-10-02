@@ -320,6 +320,13 @@ El hash empieza por `$argon2id$v=19$m=...` y **no** contiene la contraseña. Cad
 fila tiene un hash distinto aunque dos usuarios usen la misma contraseña, porque
 el salt es por usuario.
 
+La fecha del último cambio de contraseña se conserva en
+`"ContrasenaCambiadaUtc"`. Es `NULL` para una cuenta que todavía usa la
+contraseña inicial y se actualiza en UTC al cambiarla por recuperación, cambio
+autenticado o restablecimiento forzado. Este campo ofrece trazabilidad mínima
+sin guardar la contraseña ni sustituir la auditoría completa, que queda fuera
+del alcance de esta práctica.
+
 ### RF-CA-14 — la contraseña tiene al menos 8 caracteres, con letras y números
 
 ```powershell

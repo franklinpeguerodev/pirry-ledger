@@ -445,6 +445,27 @@ trabajo criptográfico de dos caminos.
 - El proyecto de pruebas de Notifications existe, pero todavía no contiene
   pruebas detectables.
 
+## Trazabilidad mínima de cambios de contraseña
+
+**Qué se pidió:** conservar una fecha para poder comprobar cuándo se cambió por
+última vez la contraseña del usuario.
+
+**Qué se implementó:** se añadió `Usuario.ContrasenaCambiadaUtc`, un campo UTC
+nullable persistido en `ac_usuarios`. Permanece `NULL` para la contraseña
+inicial y se actualiza desde la única operación de dominio
+`CambiarContrasena`, por lo que cubre recuperación, cambio autenticado y
+restablecimiento forzado sin duplicar lógica. La migración agrega la columna sin
+alterar las filas existentes.
+
+**Por qué:** aporta trazabilidad mínima para diagnosticar cambios de
+credenciales sin almacenar contraseñas ni convertir esta práctica en la
+auditoría completa reservada para la semana 14.
+
+**Qué se verificó:** una prueba de dominio confirma que el valor queda igual al
+reloj UTC inyectado cuando se reemplaza el hash. La migración se aplicó a la
+base local, el build terminó con 0 errores y 0 advertencias, y la suite de
+AccessControl terminó con 84 pruebas superadas y 0 fallidas.
+
 ---
 
 ## Recuperación de contraseña — RF-CA-09 a 13, 22
