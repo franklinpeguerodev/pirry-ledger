@@ -187,7 +187,7 @@ Esta rama/PR de documentación debe corregir únicamente lo que ya esté verific
 - variables y pasos exactos de recuperación;
 - criterios de aceptación faltantes;
 - estado real de administración;
-- `docs/bitacora-practica-1.md`, eliminando contradicciones y agregando la
+- `docs/bitacoras/bitacora-practica-1.md`, eliminando contradicciones y agregando la
   entrada de recuperación y la de la máquina de estados;
 - referencias a `docs/maquina-de-estados.md`;
 - instrucciones de migración y pruebas realmente ejecutadas.

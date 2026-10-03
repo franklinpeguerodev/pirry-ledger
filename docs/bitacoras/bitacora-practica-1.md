@@ -7,10 +7,10 @@
   TDS-007, ITLA, 2026-C-3). Bloque 2, semana 4, 8 puntos, individual.
 - Herramienta: agente de OpenCode corriendo en mi máquina (Windows,
   PowerShell 5.1, `dotnet` SDK 10.0.302).
-- Fechas: del 2026-09-29 al 2026-10-01.
+- Fechas: del 2026-09-29 al 2026-10-02.
 - Rama de trabajo: `develop`, con una rama por funcionalidad.
 
-Esta bitácora no sustituye a `docs/bitacora-asignacion-1.md`, que cubre el
+Esta bitácora no sustituye a `docs/bitacoras/bitacora-asignacion-1.md`, que cubre el
 `.gitignore`, el README inicial y la plantilla de pull request. Aquella dejó la
 lección que rigió en esta: **lo que devuelve el agente es un borrador, no una
 verdad**. Nada se sube sin que yo lo lea y lo ejecute en mi máquina.
@@ -290,11 +290,17 @@ y no se documenta nada sin correrlo antes.
 
 ```
 dotnet build pirry-ledger.slnx     -> 0 errores, 0 advertencias
-dotnet test pirry-ledger.slnx      -> 31 superadas, 0 fallidas
+dotnet test pirry-ledger.slnx      -> 90 superadas, 0 fallidas
 ```
 
-El proyecto de pruebas de Notifications sigue sin pruebas, y por eso `dotnet test`
-advierte que no encuentra ninguna ahí. No es un fallo de esta revisión.
+En la revisión inicial el proyecto de pruebas de Notifications todavía no tenía
+pruebas detectables. Después se añadió una suite unitaria para la entidad de
+cola y el procesador; el envío SMTP real continúa verificándose manualmente.
+
+La suite nueva cubre seis casos: creación pendiente, validación del destinatario,
+bloqueo de re-reclamo de un correo enviado, envío único en ejecuciones sucesivas,
+devolución a `Pendiente` cuando falla el transporte y rechazo de lotes no
+positivos.
 
 **Migraciones.** La base de desarrollo ya estaba al día, así que creé una base
 desechable para ver lo que ve alguien que clona el repositorio por primera vez.
@@ -442,8 +448,9 @@ trabajo criptográfico de dos caminos.
 - Pruebas de la máquina de estados: corresponden a la semana 8.
 - La etiqueta `practica-1` y su publicación: se ejecutan después de la revisión
   final de entrega.
-- El proyecto de pruebas de Notifications existe, pero todavía no contiene
-  pruebas detectables.
+- El proyecto de pruebas de Notifications cubre la entidad de cola y el
+  procesamiento con dobles en memoria; el envío SMTP real sigue siendo una
+  verificación manual.
 
 ## Trazabilidad mínima de cambios de contraseña
 
@@ -466,6 +473,55 @@ reloj UTC inyectado cuando se reemplaza el hash. La migración se aplicó a la
 base local, el build terminó con 0 errores y 0 advertencias, y la suite de
 AccessControl terminó con 84 pruebas superadas y 0 fallidas.
 
+## ADR de trazabilidad y revisión del README — RF-CA-12, RD-09, RD-10, RD-11
+
+**Qué se pidió:** documentar con más detalle la decisión de conservar
+`ContrasenaCambiadaUtc` y comprobar que el README describiera el comportamiento
+real del código, las migraciones, las pruebas, los endpoints y la configuración.
+
+**Qué se implementó:** se creó
+`docs/adr/003-password-change-traceability.md`, con título en inglés y contenido
+académico en español. El ADR documenta el contexto, la decisión, la razón para
+centralizar la fecha en `CambiarContrasena`, las alternativas descartadas, la
+persistencia nullable, la compatibilidad con cuentas existentes, las
+consecuencias, la evidencia de verificación y los límites explícitos: no se
+implementa todavía una auditoría completa, historial de eventos, actor, IP,
+dispositivo ni endpoint administrativo para consultar credenciales.
+
+También se enlazó el ADR desde `docs/current-iteration.md` y desde la sección de
+`ContrasenaCambiadaUtc` del README.
+
+La revisión del README corrigió y alineó con el código real:
+
+- la migración `20261002002636_AgregarFechaDeCambioDeContrasena`;
+- el tipo nullable `timestamptz` de `ContrasenaCambiadaUtc`;
+- el resultado real de las pruebas: 84 pruebas de AccessControl superadas;
+- que Notifications tiene pruebas unitarias para los estados de la cola, el
+  envío único, los fallos del transporte, los intentos y el lote;
+- el uso de `PIRRY_LEDGER_PUBLIC_BASE_URL` en los enlaces de activación;
+- las cinco rutas administrativas disponibles;
+- la cabecera `Authorization` con el esquema `Bearer` del endpoint `/yo`;
+- el nombre real de la entidad de negocio: `Invoice`, no `Factura`.
+
+**Qué se verificó:** se ejecutaron los comandos contra la rama de trabajo:
+
+```text
+dotnet build pirry-ledger.slnx --configuration Release --no-restore
+Resultado: compilación correcta, 0 advertencias, 0 errores.
+
+dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --configuration Release --no-restore
+Resultado: 84 superadas, 0 fallidas.
+
+dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --configuration Release --no-restore
+Resultado: 6 superadas, 0 fallidas.
+
+git diff --check
+Resultado: sin errores.
+```
+
+No se modificó código de ejecución en esta revisión; los cambios fueron
+documentales y quedaron pendientes de commit para revisión de Franklin.
+
 ---
 
 ## Recuperación de contraseña — RF-CA-09 a 13, 22
@@ -487,6 +543,93 @@ Franklin decidió que la entidad central es `Invoice` y que sus estados son
 `InvoiceStateMachine`; `Paid` y `Cancelled` son terminales. La tabla completa se
 encuentra en `docs/maquina-de-estados.md`. Las pruebas se reservan para la
 semana 8 según el alcance de Práctica 1.
+
+## Diagrama de la base de datos
+
+**Qué se pidió:** añadir al README una vista rápida de la base de datos, cerca
+de las instrucciones de migraciones y arranque, sin sustituir la explicación
+detallada de las tablas.
+
+**Qué se implementó:** se añadió un diagrama `mermaid erDiagram` después de la
+sección de preparación de la base de datos. Muestra `ac_usuarios`,
+`ac_codigos_recuperacion`, `ac_tokens_activacion`, `ac_sesiones` y
+`not_correos_en_cola`, con sus columnas principales, claves primarias y
+relaciones de clave foránea.
+
+El diagrama también aclara el límite entre módulos: Notifications comparte la
+base PostgreSQL, pero su cola no tiene una FK hacia `ac_usuarios`. El vínculo
+entre el flujo de AccessControl y la cola ocurre mediante el contrato de
+encolado, no mediante una relación directa entre tablas.
+
+**Qué se verificó:** los nombres de tablas, columnas y relaciones se
+contrastaron con las configuraciones EF Core y las migraciones existentes.
+`git diff --check` terminó sin errores.
+
+## Reorganización guiada del README
+
+**Qué se pidió:** reorganizar el README para que una persona que no conoce el
+proyecto pueda clonarlo, configurarlo, ejecutarlo y probarlo siguiendo un orden
+claro, sin tener que deducir qué sección debe leer primero.
+
+**Qué se implementó:** se añadió una ruta guiada al inicio del README con nueve
+pasos: instalación de requisitos, clonación, preparación de PostgreSQL,
+variables de entorno, build y pruebas, migraciones, arranque de la API, primer
+registro y continuación con los criterios de aceptación. La ruta enlaza las
+secciones detalladas para no duplicar toda la documentación.
+
+También se aclaró:
+
+- qué variables son mínimas para arrancar;
+- cuáles son opcionales para probar SMTP;
+- qué variables permiten crear el primer Administrador;
+- dónde queda disponible la API;
+- qué respuesta esperar del primer registro;
+- cómo obtener una sesión y consultar `/yo`;
+- en qué orden continuar con las pruebas manuales.
+
+**Qué se verificó:** los comandos documentados ya habían sido ejecutados en esta
+revisión: build correcto, 90 pruebas superadas y migraciones comprobadas. En
+esta modificación adicional solo se reorganizó documentación y
+`git diff --check` se mantuvo sin errores.
+
+Después se completó la trazabilidad de criterios que faltaba en la guía:
+RF-CA-04, RF-CA-06, vencimiento de RF-CA-16, reinicio del contador de
+RF-CA-19, separación de RF-CA-09 a RF-CA-12 y la tabla de evidencia de RD-05 a
+RD-12. El plan de ejecución permanece en `docs/`; únicamente las bitácoras se
+concentran en `docs/bitacoras/`.
+
+También se amplió el Paso 3 del README con el SQL para crear el rol de
+PostgreSQL y la base `pirry_ledger`, además del comando `psql` para conectarse
+y la salida de la sesión. Los valores continúan siendo placeholders para no
+documentar credenciales reales.
+
+Después se añadió el Paso opcional 4A para configurar Gmail como servidor SMTP.
+La guía usa `Read-Host -AsSecureString`, convierte la contraseña de aplicación
+solo para guardarla como variable de entorno del usuario, elimina los espacios
+de presentación y limpia las variables de memoria. También explica que se debe
+usar una contraseña de aplicación, no la contraseña normal de Gmail, y abrir una
+terminal nueva antes de iniciar la API o `--send-mail`.
+
+Finalmente se movió la sección `Requisitos` al inicio del README, antes de la
+ruta guiada. Así una persona nueva conoce primero las herramientas y versiones
+necesarias antes de comenzar los pasos de instalación y ejecución.
+
+También se aclaró la diferencia entre la herramienta global `dotnet-ef` y el
+paquete `Microsoft.EntityFrameworkCore.Design`. Este último ya está declarado
+en los dos proyectos de infraestructura, por lo que el usuario no debe
+instalarlo manualmente; `dotnet restore` lo obtiene desde los archivos de
+proyecto.
+
+Se reorganizó la ruta de ejecución para evitar repeticiones y errores por
+configuración duplicada. El README ahora ofrece dos opciones explícitas:
+variables persistentes con alcance `User` o variables temporales de la terminal
+actual. También indica que la creación del rol/base de PostgreSQL y la
+aplicación de migraciones se hacen solo cuando corresponda, y que la opción
+temporal debe repetirse en cada terminal nueva.
+
+La instalación de `dotnet-ef` también quedó centralizada: la sección de
+requisitos solo identifica la herramienta y enlaza al Paso 1, que es el único
+lugar con el comando de instalación y la comprobación de versión.
 
 ---
 
@@ -521,3 +664,119 @@ semana 8 según el alcance de Práctica 1.
 5. **Documentar una salida de consola es copiar la salida, no redactarla.** La
    línea de los correos fallidos la escribí de memoria y el programa imprimía
    otra. Ahora la línea sale de correr el comando y copiar.
+
+---
+
+## Unificación de nombres de columnas a snake_case — ADR 004 (2026-10-03)
+
+**Qué se pidió.** Al revisar la base noté que `not_correos_en_cola` tenía sus
+columnas en minúsculas (`fecha_creacion_utc`) mientras que las tablas de
+AccessControl las tenían en PascalCase (`"Correo"`, `"HashDeContrasena"`).
+Pedí evaluar cuál de los dos estilos era el correcto. Después de presentar las
+alternativas, la decisión fue la **opción A: unificar todo a snake_case**,
+creando un ADR, aplicando el update a la base y sin hacer commits ni tocar los
+README por ahora.
+
+**Qué se decidió y por qué.** El ADR completo está en
+`docs/adr/004-snake-case-column-naming.md`; el resumen del porqué:
+
+- **PostgreSQL pliega los identificadores sin comillas a minúsculas.** Con
+  columnas PascalCase, toda consulta manual exige comillas dobles
+  (`SELECT "Correo" ...`) y `SELECT Correo` falla con *column does not
+  exist*. La comilla deja de ser una elección y se vuelve un requisito
+  perpetuo que solo se puede recordar o equivocar.
+- **Las tablas ya eran snake_case**, así que unificar las columnas deja un
+  solo estilo en toda la base.
+- **El PascalCase de AccessControl no lo decidió nadie**: los
+  `*Configuration.cs` no declaraban `HasColumnName`, así que EF Core aplicó su
+  convención por defecto. Notifications sí lo decidió a mano, con
+  `HasColumnName` explícito en `CorreoEnColaConfiguration.cs`. Es decir, la
+  opción A no introduce nada nuevo: le pone nombre explícito a lo que un
+  módulo ya había elegido.
+- **La opción B (unificar a PascalCase) se descartó** porque habría roto el
+  SQL crudo de `CorreoEnColaRepository.cs` (`UPDATE not_correos_en_cola ...
+  FOR UPDATE SKIP LOCKED`), que es el reclamo atómico de RF-NOT-12, y habría
+  que reescribirlo y revalidar el envío único.
+- Los prefijos `ac_` y `not_` **no se tocan**: son el límite de módulo a nivel
+  de datos (las dos piezas comparten base, no tablas) y ya están documentados
+  en `ConfiguracionDeBaseDeDatos.cs`.
+
+**Qué se implementó.**
+
+- `HasColumnName(...)` explícito para las 30 columnas en las cuatro
+  configuraciones de AccessControl (`UsuarioConfiguration`,
+  `CodigoRecuperacionConfiguration`, `TokenActivacionConfiguration`,
+  `SesionConfiguration`), con un comentario que cita el ADR 004. Cuatro
+  columnas que antes no estaban declaradas en absoluto (`bloqueo_hasta_utc`,
+  `usado_utc` de las dos tablas de un solo uso y `cerrada_utc`) ahora tienen
+  mapeo propio.
+- Migración `20261003142652_UnificarNombresDeColumnas`: 30 `RenameColumn` y
+  la recreación de las tres claves foráneas con nombre nuevo en minúsculas.
+  Sin `DropTable`, sin cambios de tipo. `Down()` completo.
+- `dotnet ef database update` aplicado a la base `pirry_ledger`.
+- ADR 004, con la tabla de alternativas descartadas y las consecuencias.
+
+**Qué verifiqué.**
+
+- **Conteos antes y después, idénticos:** `ac_usuarios` 3,
+  `ac_codigos_recuperacion` 2, `ac_tokens_activacion` 2, `ac_sesiones` 8,
+  `not_correos_en_cola` 4 (psql contra la base real, antes y después del
+  update).
+- **Esquema:** `information_schema.columns` devuelve las cuatro tablas `ac_*`
+  con todas sus columnas en snake_case minúscula.
+- **Consulta estilo README, sin comillas dobles:**
+  `SELECT correo, activo, left(hash_de_contrasena, 25) FROM ac_usuarios` →
+  devuelve las tres filas con los hashes Argon2 intactos.
+- **Runtime:** la API arrancó y su semilla generó
+  `SELECT EXISTS (SELECT 1 FROM ac_usuarios AS a WHERE a.rol = 'Administrador')`
+  (columnas nuevas, sin comillas) y quedó en `http://localhost:5243`; `/yo`
+  sin credencial respondió `401`.
+- **`dotnet build pirry-ledger.slnx --configuration Release`:** 0
+  advertencias, 0 errores.
+- **`dotnet test pirry-ledger.slnx --configuration Release`:** 90 pruebas
+  superadas, 0 con error (las pruebas no referencian nombres de columna).
+
+**Segunda pasada: README corregido y promovido (2026-10-03).** Franklin pidió
+retomar el pendiente de arriba: corregir todo el SQL, la prosa y el diagrama que
+el rename dejó obsoleto, y eliminar `README.md` para promover `readmecopy.md`
+como README principal.
+
+**Qué cambió.**
+
+- Todas las consultas del README pasaron a snake_case sin comillas dobles
+  (`SELECT cuerpo FROM not_correos_en_cola ...`,
+  `UPDATE ac_tokens_activacion SET expira_utc ...`, el `JOIN` de tokens vivos, el
+  listado por `fecha_de_creacion_utc`), más las referencias en prosa
+  (`usado_utc`, `bloqueo_hasta_utc`, `contrasena_cambiada_utc`;
+  `CredencialVersion`/`ContrasenaCambiadaUtc` se conservan donde nombran la
+  propiedad de C#) y las columnas de las cuatro tablas `ac_*` en el diagrama
+  Mermaid.
+- El bloque de "Resultado esperado" de `dotnet ef database update` se contrastó
+  contra una base recién creada: los cuatro `Applying migration` (incluido
+  `20261003142652_UnificarNombresDeColumnas`) y la rama
+  `No migrations were applied. The database is already up to date.`
+- `readmecopy.md` reemplazó a `README.md`; el original quedó respaldado fuera
+  del repositorio. El ejemplo de login dejó de usar credenciales inventadas y
+  ahora referencia `<correo-del-administrador>` y `<contrasena-del-administrador>`.
+- ADR 004 y esta bitácora dejaron de declarar el README como pendiente.
+
+**Qué verifiqué (comandos ejecutados).**
+
+- Los diez SELECT y el UPDATE/INSERT del README, uno por uno con
+  `psql -v ON_ERROR_STOP=1` contra la base real (los de escritura dentro de
+  `BEGIN ... ROLLBACK`): todos responden y los hashes Argon2 siguen intactos.
+- JSON contra la API corriendo en `http://localhost:5243`: `GET /yo` →
+  `correo, nombre, rol`; `GET /api/admin/usuarios` con token de Administrador →
+  `activo, correo, fechaDeCreacionUtc, id, nombre, rol`, sin hashes ni
+  `credencialVersion`.
+- `dotnet ef database update` sobre una base temporal creada desde cero →
+  esquema snake_case en `information_schema.columns`; base temporal eliminada.
+- Conteos finales de la base real: `ac_usuarios` 3, `ac_codigos_recuperacion` 2,
+  `ac_tokens_activacion` 2, `ac_sesiones` 8, `not_correos_en_cola` 4 — los mismos
+  de antes de la pasada; el usuario de prueba y sus filas se borraron.
+
+**Cambio de entorno autorizado por Franklin.** La contraseña del Administrador de
+desarrollo no coincidía con `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` (ocho intentos
+fallidos y bloqueo de quince minutos). Con su autorización se restableció con el
+propio flujo del producto (RF-CA-09 → RF-CA-10) y se actualizó la variable de
+entorno; el valor no aparece ni en este documento ni en el repositorio.

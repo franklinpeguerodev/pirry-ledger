@@ -1,6 +1,650 @@
-@PirryLedger.Host_HostAddress = http://localhost:5243
+# PirryLedger — guion de regresión manual para la API de AccessControl (Práctica 1).
+#
+# Qué es este archivo: una colección ordenada de peticiones HTTP que recorre cada
+# endpoint de AccessControl junto con sus rechazos, encadenadas con variables de
+# modo que una corrida de arriba hacia abajo solo necesita pegar los valores de las
+# pausas del correo en cola (tres pausas, dos valores).
+#
+# Qué NO es este archivo:
+#   - No reemplaza las pruebas unitarias (Tests/): reglas que la API no puede
+#     alcanzar (el último administrador activo) y reglas que dependen del reloj
+#     (expiración de sesión de 8 h) se verifican allí.
+#   - No reemplaza las consultas SQL de las secciones 3.x del README (estados de
+#     la cola, contador de intentos fallidos, hashes almacenados).
+#   - No prueba el enviador de correos: `dotnet run ... -- --send-mail` es un
+#     proceso aparte (RF-NOT-09, RF-NOT-12, RF-NOT-13), documentado en la sección
+#     3.5 del README. Aquí no se abre ninguna conexión SMTP.
+#   - No prueba el módulo de Business: la máquina de estados de la factura no
+#     tiene endpoints HTTP en esta iteración (fuera del alcance de la Práctica 1).
+#
+# Las pausas manuales son inevitables: el token de activación y el código de
+# recuperación existen solo dentro del correo en cola (eso es RF-NOT-08
+# funcionando), así que ninguna respuesta HTTP puede llevarlos. Todos los demás
+# valores — tokens de sesión e ids de usuario — se capturan automáticamente desde
+# las respuestas nombradas de abajo.
+#
+# Cómo ejecutarlo
+#   1. Levantar la API (README, paso 7):
+#        dotnet run --project Src/Host/PirryLedger.Host --launch-profile http
+#   2. Completar el bloque de Entradas una sola vez.
+#   3. Enviar las peticiones de arriba hacia abajo, pausando donde una sección
+#      lo indique.
+#
+# Este archivo espera una primera corrida sobre esta base de datos: la cuenta
+# estándar arranca inactiva. Para volver a empezar una corrida nueva, devolver
+# primero la cuenta a ese estado (la última sección además la bloquea por
+# 15 minutos):
+#
+#   UPDATE ac_usuarios
+#   SET activo = false, intentos_fallidos = 0, bloqueo_hasta_utc = NULL
+#   WHERE correo = 'ana@ejemplo.com';
+#
+# Sintaxis: variables @file, separadores ###, nombres de petición # @name y
+# referencias a respuestas {{name.response.body.$.field}} (REST Client de VS Code
+# y cliente HTTP de JetBrains).
 
-GET {{PirryLedger.Host_HostAddress}}/weatherforecast/
-Accept: application/json
+@host = http://localhost:5243
 
+# --- Entradas (completar una sola vez) ----------------------------------------
+
+# Usuario estándar que usan los flujos públicos (fixtures del README).
+@nombre = Junior
+@correo = juniorpujol0248@gmail.com
+@contrasena = abc12345
+
+# Administrador de PIRRY_LEDGER_FIRST_ADMIN_EMAIL / PIRRY_LEDGER_FIRST_ADMIN_PASSWORD.
+# Cuidado: un valor equivocado aquí cuenta como intento fallido, y cinco de ellos
+# bloquean la cuenta durante quince minutos (RF-CA-19).
+@correoAdmin = franklinpeguero1.dev@gmail.com
+@contrasenaAdmin = Jr@17259020Pirry
+
+# Respuestas que deben ser idénticas exista o no la cuenta (RF-CA-09, RF-CA-17):
+# una cuenta inexistente y una dirección mal formada.
+@correoInexistente = nadie@ejemplo.com
+@correoMalFormado = esto-no-es-correo
+
+# Contraseña que fijan los flujos de recuperación. Debe cumplir RF-CA-14: 8+
+# caracteres con letras y números.
+@contrasenaNueva = claveNueva123
+
+# --- Valores de las pausas manuales -------------------------------------------
+# PAUSA 1 (token de activación) y PAUSA 2 (código de recuperación) no pueden
+# venir de ninguna respuesta HTTP: se entregan solo en el correo en cola. Leerlos
+# con:
+#
+#   SELECT cuerpo FROM not_correos_en_cola
+#   WHERE destinatario = '<correo>'
+#   ORDER BY fecha_creacion_utc DESC LIMIT 1;
+#
+# El correo de activación contiene el enlace (token= + 64 caracteres hex). Los
+# correos de recuperación contienen 64 caracteres hex solos en su propia línea.
+# Usar la fila MÁS RECIENTE para la petición que acabas de enviar; los códigos
+# antiguos dejan de funcionar en cuanto se encola una petición nueva (forzar y
+# recuperar invalidan los códigos pendientes).
+
+@tokenActivacion = <pega-aqui-el-token-de-64-hex-del-correo-de-activacion>
+@codigoRecuperacion = <pega-aqui-el-codigo-de-64-hex-del-correo-de-recuperacion>
+
+# --- Contrato (artefacto de desarrollo, no un caso de negocio) -----------------
+
+### Documento OpenAPI -> 200. Describe el contrato; no ejercita ninguna regla de
+### negocio.
+
+GET {{host}}/openapi/v1.json
+
+# --- Registro y activación: 3.1 (RF-CA-01, 14, 15, 16, 17) --------------------
+
+### Registrar un usuario nuevo -> 202. En una base donde el correo ya existe
+### responde 409; eso es RF-CA-01 funcionando como está diseñado.
+
+# @name registro
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "{{nombre}}",
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### El mismo correo otra vez -> 409 con el mismo cuerpo que un registro nuevo.
+
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "{{nombre}}",
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### Contraseña débil (menos de 8 caracteres) -> 400 (RF-CA-14).
+
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "nombre": "{{nombre}}",
+  "correo": "{{correo}}",
+  "contrasena": "abc12"
+}
+
+### Iniciar sesión antes de activar -> 401 {"mensaje":"La cuenta no esta activada."}
+### (RF-CA-15). Este mensaje solo aparece con la contraseña CORRECTA; una
+### incorrecta recibe el mensaje genérico de credenciales, así que el endpoint no
+### sirve para descubrir correos registrados.
+### Nota para re-ejecutar: si una corrida anterior ya activó esta cuenta, esta
+### petición responde 202 en su lugar — misma petición, estado inicial distinto.
+### El bloque de arriba del archivo restablece el estado.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### Reenviar el enlace de activación -> 202. Misma respuesta para cualquier
+### dirección: desconocida, mal formada y ya activa son invisibles desde fuera
+### (RF-CA-17).
+
+# @name reenviar
+POST {{host}}/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}"
+}
+
+### Reenviar para una cuenta que no existe -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{
+  "correo": "{{correoInexistente}}"
+}
+
+### Reenviar para una dirección mal formada -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{
+  "correo": "{{correoMalFormado}}"
+}
+
+### PAUSA 1: leer el enlace de activación encolado por la petición anterior en
+### @tokenActivacion y abrirlo -> 200 {"activado":true} (RF-CA-15, RF-CA-16).
+
+# @name activar
+GET {{host}}/activar?token={{tokenActivacion}}
+
+### El mismo enlace otra vez -> 400: los enlaces de activación son de un solo
+### uso (RF-CA-16). Al re-ejecutar sobre una cuenta ya activada también responde
+### 400.
+
+GET {{host}}/activar?token={{tokenActivacion}}
+
+# --- Sesión: 3.2 (RF-CA-03, 07, 18, 19) ---------------------------------------
+
+### Iniciar sesión -> 200 {"token":"..."}. 401 si la cuenta está inactiva,
+### bloqueada o la contraseña es incorrecta (RF-CA-03).
+
+# @name loginUsuario
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### Contraseña incorrecta -> 401 con el mismo cuerpo que una cuenta desconocida.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### ¿Quién soy? -> 200 solo con nombre, correo y rol (RF-CA-07).
+
+GET {{host}}/yo
+Authorization: Bearer {{loginUsuario.response.body.$.token}}
+
+### La misma petición sin token -> 401.
+
+GET {{host}}/yo
+
+### Cerrar sesión -> 204 siempre, incluso sin un token válido (RF-CA-18).
+
+# @name logout
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{loginUsuario.response.body.$.token}}
+
+### La credencial cerrada ya no sirve -> 401.
+
+GET {{host}}/yo
+Authorization: Bearer {{loginUsuario.response.body.$.token}}
+
+### Iniciar sesión de nuevo: las secciones de administración y de contraseña
+### necesitan una sesión viva.
+
+# @name loginUsuario2
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+# --- Administración: 3.4 (RF-CA-21, 05, 06, 04, 08, 20, 13) -------------------
+
+### Iniciar sesión como administrador -> 200. Completar antes @correoAdmin y
+### @contrasenaAdmin.
+
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correoAdmin}}",
+  "contrasena": "{{contrasenaAdmin}}"
+}
+
+### Lista de usuarios sin token -> 401. El 401 siempre llega antes que el 403.
+
+GET {{host}}/api/admin/usuarios
+
+### Lista de usuarios con sesión de Estándar -> 403: solo entra un Administrador
+### (RF-CA-06).
+
+GET {{host}}/api/admin/usuarios
+Authorization: Bearer {{loginUsuario2.response.body.$.token}}
+
+### Lista de usuarios con sesión de Administrador -> 200 (RF-CA-21). Las filas
+### vienen ordenadas por correo, así que $[0] es el usuario Estándar y $[1] es
+### el administrador. La lista trae solo id, nombre, correo, rol, activo y
+### fechaDeCreacionUtc — nunca hashes, tokens ni credencialVersion. Si tu cliente
+### no puede resolver el índice, pega un id del cuerpo de la respuesta en las
+### URLs de abajo.
+
+# @name listarUsuarios
+GET {{host}}/api/admin/usuarios
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Cambiar un rol con sesión de Estándar -> 403, incluso con una petición
+### armada a mano: ocultar el botón no bastaría (RF-CA-06, RF-CA-08).
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/rol
+Authorization: Bearer {{loginUsuario2.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "rol": "Administrador"
+}
+
+### Cambiar el rol de otro usuario -> 204 (RF-CA-08).
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/rol
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "rol": "Administrador"
+}
+
+### Cambiar el propio rol -> 400: un Administrador no puede degradarse a sí mismo.
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[1].id}}/rol
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "rol": "Estandar"
+}
+
+### Devolver al primer usuario a Estándar -> 204.
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/rol
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "rol": "Estandar"
+}
+
+### Desactivarse a uno mismo -> 400: un Administrador que desactiva su propia
+### cuenta no puede deshacerlo desde la aplicación (RF-CA-20).
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[1].id}}/desactivar
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Desactivar a otro usuario -> 204; sus sesiones abiertas mueren con él
+### (RF-CA-20).
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/desactivar
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Desactivar el mismo usuario otra vez -> 400 "La cuenta ya esta inactiva." — un
+### rechazo controlado, no un 500.
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/desactivar
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Reactivarlo -> 204, para que el fixture siga siendo utilizable.
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/reactivar
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Reactivar otra vez -> 400 "La cuenta ya esta activa." — el rechazo inverso.
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/reactivar
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+# El rechazo de "último administrador activo" no se puede alcanzar por la API:
+# desactivarse a uno mismo se rechaza antes, y quien llama siempre es un
+# Administrador activo distinto del objetivo, así que mientras el objetivo esté
+# activo hay al menos dos. Es la segunda línea de defensa, cubierta por
+# Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeAdministracionDeUsuarios.cs.
+# Forzar-restablecimiento pasa a su propio escenario más abajo para que su código
+# de recuperación nunca se confunda con la recuperación guiada por el usuario.
+
+# --- Escenario A: recuperación de contraseña guiada por el usuario: 3.3 (RF-CA-09, 10, 11, 12, 22)
+# Este escenario cambia @contrasena y luego lo devuelve, así que una corrida
+# completa deja el fixture como lo encontró. Una sola pausa, después de la
+# primera petición.
+
+### Pedir un código de recuperación -> 202, misma respuesta para una cuenta
+### desconocida (RF-CA-09).
+
+# @name recuperar
+POST {{host}}/api/auth/recuperacion
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}"
+}
+
+### La misma petición para una cuenta que no existe -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/recuperacion
+Content-Type: application/json
+
+{
+  "correo": "{{correoInexistente}}"
+}
+
+### PAUSA 2: leer el código de recuperación encolado por la petición anterior (el
+### correo MÁS RECIENTE de @correo) en @codigoRecuperacion y completar el
+### restablecimiento -> 204 (RF-CA-10).
+
+POST {{host}}/api/auth/restablecer-contrasena
+Content-Type: application/json
+
+{
+  "codigo": "{{codigoRecuperacion}}",
+  "contrasena": "{{contrasenaNueva}}"
+}
+
+### El mismo código otra vez -> 400: los códigos son de un solo uso (RF-CA-10).
+
+POST {{host}}/api/auth/restablecer-contrasena
+Content-Type: application/json
+
+{
+  "codigo": "{{codigoRecuperacion}}",
+  "contrasena": "{{contrasenaNueva}}"
+}
+
+### Iniciar sesión con la contraseña anterior -> 401: la recuperación la reemplazó
+### (RF-CA-11).
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### Iniciar sesión con la contraseña nueva -> 200.
+
+# @name loginRecuperado
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasenaNueva}}"
+}
+
+### Cambiar con la contraseña actual INCORRECTA -> 400 con un rechazo controlado
+### (RF-CA-22). El código devuelve 400 (RegistrationRejectedException), no 401:
+### la sesión es válida, solo la contraseña actual proporcionada no lo es.
+
+POST {{host}}/api/auth/cambiar-contrasena
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "contrasenaActual": "esta-no-es-la-contrasena",
+  "nuevaContrasena": "{{contrasenaNueva}}"
+}
+
+### Cambiar con la contraseña actual correcta -> 204. Esto devuelve
+### @contrasena, así que se restablece el fixture (RF-CA-22, RF-CA-14, RF-CA-12).
+
+POST {{host}}/api/auth/cambiar-contrasena
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "contrasenaActual": "{{contrasenaNueva}}",
+  "nuevaContrasena": "{{contrasena}}"
+}
+
+### La sesión que hizo el cambio ya no sirve -> 401 (RF-CA-12).
+
+GET {{host}}/yo
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+
+### Iniciar sesión con la contraseña restablecida -> 200: el escenario cerró el
+### círculo.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+# --- Escenario B: restablecimiento forzado por el administrador: RF-CA-13, RF-CA-12
+# Mantenido aparte del escenario A a propósito: aquí el código de recuperación es
+# el que ENCOLA ESTE escenario (forzar invalida todo código pendiente anterior),
+# así que no hay duda de qué correo leer. También termina devolviendo
+# @contrasena.
+
+### Forzar un restablecimiento de contraseña -> 204. La contraseña actual del
+### objetivo muere de inmediato y se le encola un código de recuperación
+### (RF-CA-13).
+
+POST {{host}}/api/admin/usuarios/{{listarUsuarios.response.body.$[0].id}}/forzar-restablecimiento
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Iniciar sesión con la contraseña que antes servía -> 401 (RF-CA-13).
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### PAUSA 3: leer el código de recuperación encolado por el restablecimiento
+### FORZADO de arriba (el correo más reciente de @correo) en
+### @codigoRecuperacion y completarlo -> 204. Entre las dos no va ninguna
+### petición de recuperacion: forzar ya encoló el único código válido.
+
+POST {{host}}/api/auth/restablecer-contrasena
+Content-Type: application/json
+
+{
+  "codigo": "{{codigoRecuperacion}}",
+  "contrasena": "{{contrasenaNueva}}"
+}
+
+### Iniciar sesión con la contraseña nueva forzada -> 200.
+
+# @name loginForzada
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasenaNueva}}"
+}
+
+### Devolver @contrasena -> 204 (RF-CA-22), y la sesión que la cambió deja de
+### servir -> 401 (RF-CA-12).
+
+POST {{host}}/api/auth/cambiar-contrasena
+Authorization: Bearer {{loginForzada.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "contrasenaActual": "{{contrasenaNueva}}",
+  "nuevaContrasena": "{{contrasena}}"
+}
+
+GET {{host}}/yo
+Authorization: Bearer {{loginForzada.response.body.$.token}}
+
+### Inicio de sesión final con la contraseña restablecida -> 200: el fixture queda
+### listo para la corrida siguiente.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+# --- RF-CA-19: cinco intentos fallidos bloquean la cuenta durante quince minutos -
+# Ejecutar esta sección AL FINAL: bloquea @correo durante 15 minutos, así que
+# una re-ejecución de este archivo dentro de esa ventana recibe 401 en la sección
+# de sesión. El bloqueo se levanta solo; nada en la API puede acortarlo. Entrar a
+# esta sección con el contador en cero — todos los escenarios de arriba terminan
+# con un inicio de sesión exitoso, y un inicio exitoso reinicia el contador (igual
+# que cualquier cambio de contraseña).
+
+### Intento fallido 1 de 5 -> 401 con el mensaje genérico.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### Intento 2 -> 401.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### Intento 3 -> 401.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### Intento 4 -> 401.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### Intento 5 -> 401. La cuenta queda bloqueada 15 minutos.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### Sexto intento, esta vez con la contraseña CORRECTA -> 401 con el MISMO
+### mensaje genérico ("Correo o contrasena incorrectos."): confirmar el bloqueo
+### confirmaría que el correo existe (RF-CA-19, RF-CA-03).
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### ESPERAR QUINCE MINUTOS AQUÍ. El bloqueo se levanta solo. Luego:
+
+### Iniciar sesión con la contraseña correcta -> 200. Este éxito devuelve el
+### contador a cero. Para ver los números (sección 3.2 del README):
 ###
+###   SELECT intentos_fallidos, bloqueo_hasta_utc
+###   FROM ac_usuarios WHERE correo = 'ana@ejemplo.com';
+###
+### Esperado después de este inicio: intentos_fallidos = 0, bloqueo_hasta_utc
+### vacío.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
+
+### Un fallo nuevo -> 401 pero NO un bloqueo nuevo (el contador reinició en cero,
+### no en cuatro).
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "malaclave1"
+}
+
+### Y la contraseña correcta sigue entrando -> 200: prueba de que el contador se
+### reinició.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correo}}",
+  "contrasena": "{{contrasena}}"
+}
