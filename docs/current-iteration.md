@@ -36,7 +36,7 @@ Deliver the first working Core piece, Access control, from registration with ema
 
 ## Constraints specific to this iteration
 
-- The session credential must be invalidatable on the server. Logging out (RF-CA-18), deactivating a user (RF-CA-20) and changing a password (RF-CA-12) invalidate sessions already issued. A purely self-contained credential with no server-side check does not meet this. Propose options and wait for Franklin's decision.
+- The session credential must be invalidatable on the server. Logging out (RF-CA-18), deactivating a user (RF-CA-20) and changing a password (RF-CA-12) invalidate sessions already issued. A purely self-contained credential with no server-side check does not meet this. **Decided on 2026-09-30:** an opaque token with a `Sesion` table and a `CredencialVersion` copied per session, recorded in `docs/adr/001-credencial-de-sesion.md`.
 - Lockout: 5 consecutive failures block the account for 15 minutes; the counter is persisted and resets on a successful login (RF-CA-19).
 - Forced password reset by an Administrator (RF-CA-13): the old password stops working and the user receives, through the queue, the email with the code to set a new one.
 - Operations never send mail directly. They write a `CorreoEnCola` row as pending and finish successfully even with no SMTP server. A separate process or command sends pending mail over SMTP and marks it sent; running it twice must not duplicate sends. SMTP credentials come from environment variables.
@@ -58,8 +58,24 @@ The repo is cloned, the tag checked out, and the README followed to the letter. 
 
 From Practice 2 on, two of the eight points in each practice re-verify this work: registration with activation, login, role rejection and password recovery. Do not break what is delivered here.
 
-## Open decisions for this iteration
+## Decisions resolved for this iteration
 
-- Session credential mechanism.
-- Database and data access.
-- Which entity carries the business state machine.
+- The business state machine is carried by `Invoice`, with `Draft`, `Issued`,
+  `Paid` and `Cancelled` states. The transitions and terminal states are
+  documented in `docs/maquina-de-estados.md`.
+- Recovery and forced-reset codes are valid for 15 minutes.
+- `Usuario.ContrasenaCambiadaUtc` records in UTC when the password was last
+  replaced. It is nullable for accounts that still use their initial password
+  and provides minimal credential traceability without implementing the audit
+  records reserved for week 14. The decision is documented in
+  `docs/adr/003-password-change-traceability.md`.
+
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
+
+Administration decisions confirmed for the `feature/user-administration` work:
+
+- An Administrator cannot change their own role.
+- An Administrator cannot deactivate their own account.
+- The last active Administrator cannot be deactivated.
+- Logout is idempotent and responds successfully even when its credential is
+  missing, invalid or expired.

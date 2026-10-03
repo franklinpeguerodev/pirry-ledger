@@ -1,6 +1,6 @@
 # AGENTS.md — Pirry Ledger
 
-Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session. It holds permanent rules and the verified state of the repo. If something here is no longer true, tell Franklin instead of following it blindly.
+Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session. It holds permanent rules only. If something here is no longer true, tell Franklin instead of following it blindly.
 
 ## Project
 
@@ -21,13 +21,19 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 ## Language
 
-All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/logbooks/`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
+All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/bitacoras/` named `bitacora-*.md`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
 
-## Verified repo state
+## Where the state lives
 
-- Scaffold only. There is no `.sln`, `.csproj`, `package.json`, `global.json`, `.editorconfig` or CI, so no build, test or run command exists yet. Update this section as they are created.
-- Folders: `Src/Core`, `Src/Business`, `Src/Host`, `docs/`, `.github/`.
-- Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.x, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
+This file holds permanent rules only. It goes stale as soon as code is written, so it does not describe the repo:
+
+- What we are building right now, the scope and how it is graded: `docs/current-iteration.md`. Franklin replaces it at the start of each assignment.
+- What is already built and which commands actually run: `README.md`. It is verified by running them, not by reading.
+- The decisions already taken, with their reasoning and the alternatives that were discarded: `docs/adr/`.
+
+If the agent needs state that is not in those three files, it asks. It never reconstructs it from memory and never writes it here.
+
+Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
 
 ## Truthfulness rules
 
@@ -68,6 +74,14 @@ All development is in English: code, identifiers, comments, commit messages, bra
 - Before proposing a commit, run `git status` and `git diff --staged`. No `bin/`, `obj/`, generated files or secrets. A credential in history is penalized even if deleted later, so check before committing, not after.
 - Pull requests use `.github/PULL_REQUEST_TEMPLATE.md` with exactly its four sections (Qué cambia, Por qué, Cómo probarlo, Qué NO incluye). Do not add sections. Cite requirement IDs. Franklin opens the PR.
 
+## Documentation
+
+Three rules. They exist because this repo already paid for breaking them.
+
+- **Documentation ships in the same pull request.** Every pull request that changes behaviour updates `README.md`, `docs/current-iteration.md` and the ADR in `docs/adr/` in the same PR. Documentation that a change makes wrong is part of that change, not a follow-up. The README section below is the same rule seen from the grading side: what the README does not say will not be looked for.
+- **ADRs need authorization first.** An important decision is documented in an ADR under `docs/adr/`, following the format of `001-credencial-de-sesion.md`. **The agent never writes an ADR on its own initiative.** When it detects a decision that meets the bar, it stops, presents the alternatives with their trade-offs, and waits for Franklin's explicit authorization. Only then does it write the file. A decision is *important* when at least one of these is true: it chooses between alternatives that affect structure, persistence, the protocol or the security model; it contradicts or replaces an earlier decision; or it is the kind of question a reviewer asks as *"why not X?"*. A decision below that bar is explained in the pull request description instead.
+- **The logbook gets an entry in the same pull request.** Every pull request appends its entry to the current logbook in `docs/bitacoras/` (`bitacora-*.md`) in the same PR, as its own commit so the code commit stays atomic: what was asked, what the agent returned, what Franklin verified and with which command, and what changed or was corrected. The agent drafts; Franklin reviews before it is pushed.
+
 ## Workflow
 
 One requirement (or a small group) at a time:
@@ -97,18 +111,17 @@ Any change that affects how the project runs must update the README with exact r
 
 Franklin will resolve these and update the list. Until then propose options with trade-offs and wait:
 
-1. Base branch for PRs (`main` and `develop` both exist).
-2. Frontend (undefined; do not assume Angular).
-3. Database and data access.
-4. Session credential mechanism.
-5. Project naming prefix (see known issues).
-6. Whether a `Shared` project exists. Do not create one without approval.
+1. Frontend (undefined; do not assume Angular). Until decided, the app is consumed as an API.
+2. How the first Administrator is created. Self-registration only produces an inactive Estándar (`Usuario.Crear` fixes `Rol.Estandar`), and RF-CA-08, 20 and 21 cannot be exercised until an Administrador exists. Options: seed one from environment variables, or promote the first activated user.
+3. The business entity that carries the state machine (RF-NEG-03; the invoice is a candidate, Franklin's choice).
+4. Whether a `Shared` project exists. Do not create one without approval.
+
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30) and the shape of the mail sender (a CLI command, `--send-mail`, not a hosted service).
 
 ## Known issues (temporary, delete when fixed)
 
 - The `.gitignore` header says ".NET (microservices) + Angular", which contradicts the modular monolith and the undefined frontend. Do not assume that stack. Franklin will fix it in its own PR.
 - The `.gitignore` has unanchored patterns that match at any depth. Before adding a file, run `git check-ignore -v <path>`:
-  - `core.*` ignores any name starting with `core.`. On Windows matching can be case-insensitive, so projects or folders like `Core.Contracts` may be silently ignored. Verify before creating projects; a prefix such as `PirryLedger.Core.Contracts` avoids it.
   - `server/` ignores any directory with that name.
   - `Debug/`, `Release/`, `logs/`, `dist/`, `artifacts/`, `publish/`, `output/` are ignored at any level.
   - `appsettings.Development.json`, `appsettings.Staging.json` and `appsettings.*.local.json` are ignored on purpose. Do not "fix" that.

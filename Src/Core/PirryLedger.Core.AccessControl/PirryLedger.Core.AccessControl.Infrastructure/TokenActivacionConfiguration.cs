@@ -10,14 +10,30 @@ internal sealed class TokenActivacionConfiguration : IEntityTypeConfiguration<To
     {
         builder.ToTable("ac_tokens_activacion");
 
+        // Columnas en snake_case (ADR 004), igual que en el resto de tablas ac_.
         builder.HasKey(token => token.Id);
 
+        builder.Property(token => token.Id)
+            .HasColumnName("id");
+
+        builder.Property(token => token.UsuarioId)
+            .HasColumnName("usuario_id");
+
         builder.Property(token => token.HashDelToken)
+            .HasColumnName("hash_del_token")
             .HasMaxLength(128)
             .IsRequired();
 
-        builder.Property(token => token.EmitidoUtc).IsRequired();
-        builder.Property(token => token.ExpiraUtc).IsRequired();
+        builder.Property(token => token.EmitidoUtc)
+            .HasColumnName("emitido_utc")
+            .IsRequired();
+
+        builder.Property(token => token.ExpiraUtc)
+            .HasColumnName("expira_utc")
+            .IsRequired();
+
+        builder.Property(token => token.UsadoUtc)
+            .HasColumnName("usado_utc");
 
         // Un indice unico sobre el hash hace imposible guardar dos veces el
         // mismo token, que es lo que haria que un enlace de un solo uso se

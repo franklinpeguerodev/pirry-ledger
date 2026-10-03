@@ -12,6 +12,7 @@ public static class DependencyInjection
 {
     // Decision de Franklin. El ADR justifica por que absoluta y no deslizante.
     private static readonly TimeSpan DuracionDeLaSesion = TimeSpan.FromHours(8);
+    private static readonly TimeSpan DuracionDelCodigoDeRecuperacion = TimeSpan.FromMinutes(15);
 
     public static IServiceCollection AddAccessControl(
         this IServiceCollection services,
@@ -31,6 +32,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IActivationTokenRepository, ActivationTokenRepository>();
+        services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
 
         services.AddScoped<RegisterUser>(proveedor => new RegisterUser(
@@ -55,6 +57,14 @@ public static class DependencyInjection
         services.AddScoped<Logout>();
         services.AddScoped<Autenticar>();
 
+        // RF-CA-05, RF-CA-08, RF-CA-20 y RF-CA-21. Los tres casos de uso reciben
+        // Autenticar y no el repositorio de sesiones: el rechazo de rol tiene que
+        // salir del punto unico (ExigenciasDeRol) y no de una comprobacion que
+        // cada endpoint pudiera escribir de su forma.
+        services.AddScoped<ListUsers>();
+        services.AddScoped<ChangeUserRole>();
+        services.AddScoped<DeactivateUser>();
+
         // RF-CA-17. No necesita IPasswordHasher: el reenvio no toca la contrasena.
         services.AddScoped<ResendActivationLink>(proveedor => new ResendActivationLink(
             proveedor.GetRequiredService<IUserRepository>(),
@@ -62,6 +72,28 @@ public static class DependencyInjection
             proveedor.GetRequiredService<IEmailQueue>(),
             proveedor.GetRequiredService<IClock>(),
             urlBase));
+
+        // Primer Administrador (docs/adr/002-primer-administrador.md). El Host lo
+        // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
+        // dispararlo: no es una operacion de negocio, es parte del despliegue.
+        services.AddScoped<SeedFirstAdministrator>();
+
+        services.AddScoped<PasswordRecovery>(provider => new PasswordRecovery(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IRecoveryCodeRepository>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<IPasswordHasher>(),
+            DuracionDelCodigoDeRecuperacion));
+        services.AddScoped<ForcePasswordReset>(provider => new ForcePasswordReset(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IRecoveryCodeRepository>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<Autenticar>(),
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<IPasswordHasher>(),
+            DuracionDelCodigoDeRecuperacion));
+        services.AddScoped<ChangeOwnPassword>();
 
         return services;
     }

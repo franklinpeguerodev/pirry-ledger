@@ -61,8 +61,37 @@ internal sealed class UsuarioEnMemoria : IUserRepository
     {
         // El doble guarda la misma instancia, asi que las mutaciones de la entidad
         // ya estan visibles. No hace falta persistir nada.
+        //
+        // Aun asi hay que registrar la fila si no estaba: hay casos de uso (como
+        // el seed del primer Administrador) que crean la entidad y la guardan
+        // sin pasar antes por Crear, y sin esto no se podrian volver a buscar.
+        if (!_usuarios.Any(registrado => registrado.Id == usuario.Id))
+        {
+            _usuarios.Add(usuario);
+        }
+
         return Task.CompletedTask;
     }
+
+    // RF-CA-21. Ordena por correo como el repositorio real, para que las pruebas
+    // no dependan del orden en que se crean los usuarios.
+    public Task<IReadOnlyList<Usuario>> ListarAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Usuario>>(_usuarios
+            .OrderBy(usuario => usuario.Correo)
+            .ToList());
+
+    // RF-CA-20: solo los activos, como el repositorio real.
+    public Task<int> ContarAdministradoresActivosAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_usuarios
+            .Count(usuario => usuario.Rol == Domain.Rol.Administrador && usuario.Activo));
+
+    public Task<bool> ExisteAlgunAdministradorAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_usuarios.Any(usuario => usuario.Rol == Domain.Rol.Administrador));
+
+    // Solo para pruebas: el repositorio real no necesita listar Administradores.
+    // Sirve para comprobar que el seed no creo dos.
+    public Task<List<Usuario>> BuscarTodosLosAdministradoresAsync() =>
+        Task.FromResult(_usuarios.Where(usuario => usuario.Rol == Domain.Rol.Administrador).ToList());
 }
 
 internal sealed class SesionEnMemoria : ISessionRepository

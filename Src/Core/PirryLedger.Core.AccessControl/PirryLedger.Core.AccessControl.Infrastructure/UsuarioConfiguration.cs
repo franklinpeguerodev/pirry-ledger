@@ -17,14 +17,22 @@ internal sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
     {
         builder.ToTable("ac_usuarios");
 
+        // Columnas en snake_case (ADR 004). PostgreSQL pliega los identificadores
+        // sin comillas a minusculas: con este nombre ninguna consulta manual
+        // necesita comillas dobles y las columnas quedan igual que las tablas.
         builder.HasKey(usuario => usuario.Id);
 
+        builder.Property(usuario => usuario.Id)
+            .HasColumnName("id");
+
         builder.Property(usuario => usuario.Nombre)
+            .HasColumnName("nombre")
             .HasMaxLength(150)
             .IsRequired();
 
         // RF-CA-01: correo unico garantizado por la base, no solo por el codigo.
         builder.Property(usuario => usuario.Correo)
+            .HasColumnName("correo")
             .HasMaxLength(320)
             .IsRequired();
 
@@ -34,17 +42,36 @@ internal sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
 
         // RF-CA-02: el hash no se lista en ningun endpoint (RF-CA-21).
         builder.Property(usuario => usuario.HashDeContrasena)
+            .HasColumnName("hash_de_contrasena")
             .HasMaxLength(512)
             .IsRequired();
 
         builder.Property(usuario => usuario.Rol)
+            .HasColumnName("rol")
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();
 
-        builder.Property(usuario => usuario.Activo).IsRequired();
-        builder.Property(usuario => usuario.FechaDeCreacionUtc).IsRequired();
-        builder.Property(usuario => usuario.CredencialVersion).IsRequired();
-        builder.Property(usuario => usuario.IntentosFallidos).IsRequired();
+        builder.Property(usuario => usuario.Activo)
+            .HasColumnName("activo")
+            .IsRequired();
+
+        builder.Property(usuario => usuario.FechaDeCreacionUtc)
+            .HasColumnName("fecha_de_creacion_utc")
+            .IsRequired();
+
+        builder.Property(usuario => usuario.ContrasenaCambiadaUtc)
+            .HasColumnName("contrasena_cambiada_utc");
+
+        builder.Property(usuario => usuario.CredencialVersion)
+            .HasColumnName("credencial_version")
+            .IsRequired();
+
+        builder.Property(usuario => usuario.IntentosFallidos)
+            .HasColumnName("intentos_fallidos")
+            .IsRequired();
+
+        builder.Property(usuario => usuario.BloqueoHastaUtc)
+            .HasColumnName("bloqueo_hasta_utc");
     }
 }

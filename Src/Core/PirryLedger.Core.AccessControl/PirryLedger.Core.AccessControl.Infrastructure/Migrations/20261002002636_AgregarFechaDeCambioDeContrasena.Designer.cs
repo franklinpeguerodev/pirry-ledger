@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PirryLedger.Core.AccessControl.Infrastructure;
@@ -11,9 +12,11 @@ using PirryLedger.Core.AccessControl.Infrastructure;
 namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
 {
     [DbContext(typeof(AccessControlDbContext))]
-    partial class AccessControlDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261002002636_AgregarFechaDeCambioDeContrasena")]
+    partial class AgregarFechaDeCambioDeContrasena
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -26,30 +29,24 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("EmitidoUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("emitido_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("ExpiraUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expira_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("HashDelCodigo")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("hash_del_codigo");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime?>("UsadoUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("usado_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UsuarioId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("usuario_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -67,34 +64,27 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("CerradaUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("cerrada_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("CredencialVersion")
-                        .HasColumnType("integer")
-                        .HasColumnName("credencial_version");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("EmitidaUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("emitida_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("ExpiraUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expira_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("HashDelToken")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("hash_del_token");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<Guid>("UsuarioId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("usuario_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -115,30 +105,24 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("EmitidoUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("emitido_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("ExpiraUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expira_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("HashDelToken")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("hash_del_token");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime?>("UsadoUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("usado_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UsuarioId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("usuario_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -156,56 +140,45 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("Activo")
-                        .HasColumnType("boolean")
-                        .HasColumnName("activo");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("BloqueoHastaUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("bloqueo_hasta_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("ContrasenaCambiadaUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("contrasena_cambiada_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Correo")
                         .IsRequired()
                         .HasMaxLength(320)
-                        .HasColumnType("character varying(320)")
-                        .HasColumnName("correo");
+                        .HasColumnType("character varying(320)");
 
                     b.Property<int>("CredencialVersion")
-                        .HasColumnType("integer")
-                        .HasColumnName("credencial_version");
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("FechaDeCreacionUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("fecha_de_creacion_utc");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("HashDeContrasena")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("hash_de_contrasena");
+                        .HasColumnType("character varying(512)");
 
                     b.Property<int>("IntentosFallidos")
-                        .HasColumnType("integer")
-                        .HasColumnName("intentos_fallidos");
+                        .HasColumnType("integer");
 
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("nombre");
+                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("Rol")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("rol");
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 

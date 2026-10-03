@@ -89,9 +89,12 @@ public sealed class PruebasDeInvalidacionDeCredencial
     {
         var escenario = new EscenarioDeSesion();
         var tokenAntiguo = await escenario.AbrirSesionAsync();
+        var cambioUtc = escenario.Reloj.UtcNow;
 
         // RF-CA-12: el cambio sube CredencialVersion.
-        escenario.Usuario.CambiarContrasena(escenario.Hasher.Hash("nueva12345"), escenario.Reloj.UtcNow);
+        escenario.Usuario.CambiarContrasena(escenario.Hasher.Hash("nueva12345"), cambioUtc);
+
+        Assert.Equal(cambioUtc, escenario.Usuario.ContrasenaCambiadaUtc);
 
         await Assert.ThrowsAsync<SesionInvalidaException>(
             () => escenario.Autenticar.EjecutarAsync(tokenAntiguo));

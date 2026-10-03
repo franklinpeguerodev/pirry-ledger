@@ -34,3 +34,19 @@ public sealed record LoginRequest(
 
     [property: Required(ErrorMessage = "La contrasena es obligatoria.")]
     string Contrasena);
+
+public sealed record PasswordRecoveryRequest(
+    [property: Required(ErrorMessage = "El correo es obligatorio.")]
+    string Correo);
+
+public sealed record ResetPasswordRequest(
+    [property: Required(ErrorMessage = "El codigo es obligatorio.")]
+    string Codigo,
+    [property: Required(ErrorMessage = "La contrasena es obligatoria.")]
+    string Contrasena);
+
+public sealed record ChangePasswordRequest(
+    [property: Required(ErrorMessage = "La contrasena actual es obligatoria.")]
+    string ContrasenaActual,
+    [property: Required(ErrorMessage = "La nueva contrasena es obligatoria.")]
+    string NuevaContrasena);

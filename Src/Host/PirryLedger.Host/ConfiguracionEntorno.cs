@@ -23,6 +23,16 @@ internal static class ConfiguracionEntorno
     // activacion y de recuperacion, para que funcionen al abrirse en un navegador.
     public const string VariableBaseUrl = "PIRRY_LEDGER_PUBLIC_BASE_URL";
 
+    // Primer Administrador (docs/adr/002-primer-administrador.md). El registro
+    // publico siempre crea Estándares, asi que sin estas dos variables no existe
+    // ningun Administrador y la administracion de usuarios no se puede probar.
+    //
+    // La contrasena es la de esa cuenta, no la de aplicacion de un servidor de
+    // correo. Al ser una variable de entorno cumple RD-10 como las de SMTP.
+    public const string VariableAdministradorCorreo = "PIRRY_LEDGER_FIRST_ADMIN_EMAIL";
+    public const string VariableAdministradorContrasena = "PIRRY_LEDGER_FIRST_ADMIN_PASSWORD";
+    public const string VariableAdministradorNombre = "PIRRY_LEDGER_FIRST_ADMIN_NAME";
+
     // Devuelve null y no lanza si no hay ninguna variable de correo definida. El
     // emisor decide entonces que avisar, y las demas operaciones ni se enteran:
     // encolar un correo no necesita servidor de correo (RF-NOT-08).
