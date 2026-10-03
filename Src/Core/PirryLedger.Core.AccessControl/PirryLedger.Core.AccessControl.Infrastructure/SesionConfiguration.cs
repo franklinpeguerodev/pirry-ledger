@@ -10,18 +10,37 @@ internal sealed class SesionConfiguration : IEntityTypeConfiguration<Sesion>
     {
         builder.ToTable("ac_sesiones");
 
+        // Columnas en snake_case (ADR 004), igual que en el resto de tablas ac_.
         builder.HasKey(sesion => sesion.Id);
+
+        builder.Property(sesion => sesion.Id)
+            .HasColumnName("id");
+
+        builder.Property(sesion => sesion.UsuarioId)
+            .HasColumnName("usuario_id");
 
         // El token en claro SI va en base64url, pero lo que se guarda es su SHA-256 en
         // hexadecimal: 64 caracteres. Se deja margen como en el resto de hashes del
         // proyecto.
         builder.Property(sesion => sesion.HashDelToken)
+            .HasColumnName("hash_del_token")
             .HasMaxLength(128)
             .IsRequired();
 
-        builder.Property(sesion => sesion.EmitidaUtc).IsRequired();
-        builder.Property(sesion => sesion.ExpiraUtc).IsRequired();
-        builder.Property(sesion => sesion.CredencialVersion).IsRequired();
+        builder.Property(sesion => sesion.EmitidaUtc)
+            .HasColumnName("emitida_utc")
+            .IsRequired();
+
+        builder.Property(sesion => sesion.ExpiraUtc)
+            .HasColumnName("expira_utc")
+            .IsRequired();
+
+        builder.Property(sesion => sesion.CerradaUtc)
+            .HasColumnName("cerrada_utc");
+
+        builder.Property(sesion => sesion.CredencialVersion)
+            .HasColumnName("credencial_version")
+            .IsRequired();
 
         // Unico sobre el hash: dos sesiones con el mismo token no pueden existir.
         // El token sale de 32 bytes del generador del sistema, asi que la
