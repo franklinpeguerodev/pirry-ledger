@@ -21,7 +21,7 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 ## Language
 
-All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/` named `bitacora-*.md`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
+All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/bitacoras/` named `bitacora-*.md`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that they are written in Spanish because they are read as course deliverables.
 
 ## Where the state lives
 
@@ -80,7 +80,7 @@ Three rules. They exist because this repo already paid for breaking them.
 
 - **Documentation ships in the same pull request.** Every pull request that changes behaviour updates `README.md`, `docs/current-iteration.md` and the ADR in `docs/adr/` in the same PR. Documentation that a change makes wrong is part of that change, not a follow-up. The README section below is the same rule seen from the grading side: what the README does not say will not be looked for.
 - **ADRs need authorization first.** An important decision is documented in an ADR under `docs/adr/`, following the format of `001-credencial-de-sesion.md`. **The agent never writes an ADR on its own initiative.** When it detects a decision that meets the bar, it stops, presents the alternatives with their trade-offs, and waits for Franklin's explicit authorization. Only then does it write the file. A decision is *important* when at least one of these is true: it chooses between alternatives that affect structure, persistence, the protocol or the security model; it contradicts or replaces an earlier decision; or it is the kind of question a reviewer asks as *"why not X?"*. A decision below that bar is explained in the pull request description instead.
-- **The logbook gets an entry in the same pull request.** Every pull request appends its entry to the current logbook in `docs/` (`bitacora-*.md`) in the same PR, as its own commit so the code commit stays atomic: what was asked, what the agent returned, what Franklin verified and with which command, and what changed or was corrected. The agent drafts; Franklin reviews before it is pushed.
+- **The logbook gets an entry in the same pull request.** Every pull request appends its entry to the current logbook in `docs/bitacoras/` (`bitacora-*.md`) in the same PR, as its own commit so the code commit stays atomic: what was asked, what the agent returned, what Franklin verified and with which command, and what changed or was corrected. The agent drafts; Franklin reviews before it is pushed.
 
 ## Workflow
 
