@@ -551,6 +551,7 @@ ni servidor SMTP.
 ---
 
 ## 3. Cómo probar cada criterio de aceptación
+Tambien puedes hacer pruebas manuales desde el PirryLedger.Host.http, alojado en Src/Host/PirryLedger.Host .
 
 ### Pruebas automatizadas
 
