@@ -962,5 +962,7 @@ actualizar README, docs y bitácora.
 
 **Qué NO se hizo.** No cambió ninguna lógica de negocio, ninguna variable ni su
 nombre, ni las pruebas. No se tocaron `ConfiguracionEntorno` ni los mensajes de
-error. Todavía no hay ADR: la decisión de configuración queda pendiente de que
-Franklin autorice escribirlo (la regla del ADR es suya, no mía).
+error. La decisión quedó documentada en `docs/adr/006-local-env-configuration.md`
+tras la autorización de Franklin (2026-10-04), con las alternativas descartadas:
+loader propio, script de PowerShell, mantener `SetEnvironmentVariable`,
+`appsettings.*.local.json` y `dotnet user-secrets`.
