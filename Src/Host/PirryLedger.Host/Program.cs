@@ -94,7 +94,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// No hay UseHttpsRedirection: la direccion de escucha sale de
+// PIRRY_LEDGER_PUBLIC_BASE_URL (hoy http) y no existe ningun endpoint https al
+// que redirigir, asi que el middleware no redirige nada y solo imprime un aviso.
+// Si se decide HTTPS, va en un ADR (docs/adr/005-direccion-de-escucha-desde-variable.md).
 
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.

@@ -46,6 +46,14 @@ construyen los enlaces de activación.
    el código de salida.
 4. `--send-mail` no cambia: la validación corre antes de la rama del comando,
    decisión que ya estaba documentada como intencional en el bug (punto 4).
+5. `app.UseHttpsRedirection()` se **retira** de `Program.cs`. La dirección de
+   escucha sale de la variable y en esta iteración es `http`: no existe ningún
+   endpoint HTTPS al que redirigir, así que el middleware no redirige nada y
+   solo imprime `warn: Failed to determine the https port for redirect.` en la
+   primera petición. Ningún requisito menciona HTTPS, TLS, certificados o
+   redirecciones (`grep` en `docs/requirements/` sin coincidencias); lo único
+   parecido es `PIRRY_LEDGER_SMTP_SECURITY`, que cifra el correo saliente y no
+   tiene relación con esto.
 
 Si la variable es `http://localhost:5243`, Kestrel se ata a ese host y ese
 puerto. Si es `http://192.168.1.10:5243`, la API escucha en esa IP y los
@@ -61,6 +69,7 @@ ambas cosas, que es exactamente lo que hace falta para abrirlo desde la tablet.
 | Derivar la URL de la petición entrante y prescindir de la variable (opción C del bug) | El enlace se construye al encolar el correo, en una operación que no siempre tiene una petición delante (reenvío de activación, por ejemplo) y el correo se envía mucho después, por otro proceso. Además eliminaría una variable obligatoria documentada: es cambio de diseño. |
 | Escuchar en todos los interfaces (`+:{puerto}`) | Abriría el puerto en todas las interfaces aunque la variable diga `localhost`, y los enlaces seguirían diciendo `localhost`, que no sirve desde la tablet. Contradice la idea de una sola fuente. |
 | Mantener `applicationUrl` y confiar en que `UseUrls` gana | Verificado: `UseUrls` gana hoy sobre `ASPNETCORE_URLS`. Pero dejaría una segunda fuente que podría volver a mandar en una versión futura del framework. Quitarla elimina la pregunta. |
+| Mantener `app.UseHttpsRedirection()` | Con la variable en `http` no hay endpoint HTTPS, así que no redirige nada: solo emite un aviso que invita a leerlo como un error. Se comprobó con `git stash` que el aviso ya salía antes del cambio con el perfil `http`, es decir, existía desde antes. Se retira en lugar de documentar un aviso inútil. |
 
 ## Verificación
 
@@ -91,6 +100,12 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
   cambio (6 de Notifications + 84 de AccessControl).
 - `git diff` limitado a `Src/Host/PirryLedger.Host/`: no hay ningún cambio en
   `Src/Core`, `Src/Business` ni en `Tests/`.
+- **Aviso de redirección:** con el código anterior y el perfil `http`,
+  `GET /yo` imprimía
+  `warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3] Failed
+  to determine the https port for redirect.` (comprobado con `git stash`, es
+  decir, antes de este cambio). Retirado `UseHttpsRedirection()`, la misma
+  petición responde `401` sin ningún aviso.
 
 ## Consecuencias
 
@@ -108,7 +123,10 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
 
 - El perfil `https` de `launchSettings.json` deja de escuchar en 7258: ahora
   escucha lo que diga la variable. Ese perfil no estaba documentado en el
-  README. Si en el futuro hace falta HTTPS, se decide en otra ADR.
+  README, y además `UseHttpsRedirection()` se retiró (punto 5 de la decisión),
+  así que hoy no hay ninguna redirección HTTP → HTTPS. Si en el futuro hace
+  falta HTTPS, se decide en otra ADR: certificado, puerto y si la variable puede
+  decir `https://`.
 - Cambiar el puerto exige cambiar la variable de entorno (antes bastaba con otro
   perfil). Es el precio de que no haya dos sitios donde cambiarlo.
 - Si la variable trae un host que no pertenece a la máquina o un puerto ya
@@ -120,5 +138,7 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
 
 Esta ADR no toca la lógica de negocio, autenticación, correo ni pruebas; no
 cambia el texto de los correos ni las rutas; no añade validaciones nuevas ni
-avisos de arranque; no decide nada sobre HTTPS ni sobre el frontend; y no
-modifica ninguna variable obligatoria existente.
+avisos de arranque; no decide nada sobre certificados ni sobre el frontend; y no
+modifica ninguna variable obligatoria existente. Lo único que retira del
+pipeline es `app.UseHttpsRedirection()`, que no podía redirigir nada sin un
+endpoint HTTPS.
