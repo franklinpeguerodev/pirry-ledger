@@ -595,8 +595,8 @@ esta modificación adicional solo se reorganizó documentación y
 Después se completó la trazabilidad de criterios que faltaba en la guía:
 RF-CA-04, RF-CA-06, vencimiento de RF-CA-16, reinicio del contador de
 RF-CA-19, separación de RF-CA-09 a RF-CA-12 y la tabla de evidencia de RD-05 a
-RD-12. El plan de ejecución permanece en `docs/`; únicamente las bitácoras se
-concentran en `docs/bitacoras/`.
+RD-12. El plan de ejecución que había en `docs/` se eliminó el 2026-10-04 por
+decisión de Franklin; las bitácoras se concentran en `docs/bitacoras/`.
 
 También se amplió el Paso 3 del README con el SQL para crear el rol de
 PostgreSQL y la base `pirry_ledger`, además del comando `psql` para conectarse
