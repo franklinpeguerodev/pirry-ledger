@@ -780,3 +780,84 @@ desarrollo no coincidía con `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` (ocho intentos
 fallidos y bloqueo de quince minutos). Con su autorización se restableció con el
 propio flujo del producto (RF-CA-09 → RF-CA-10) y se actualizó la variable de
 entorno; el valor no aparece ni en este documento ni en el repositorio.
+
+---
+
+## Puerto de escucha desde la variable de entorno — bug 001 y ADR 005 (2026-10-04)
+
+**Qué se pidió.** Franklin me pidió analizar el proyecto y confirmar si el bug
+documentado en `docs/bugs/001-puerto-escucha-vs-public-base-url.md` era real tal
+como estaba planteado. Lo es: lo verifiqué leyendo el código y corriendo la
+aplicación. Después pidió arreglarlo con una indicación concreta:
+`PIRRY_LEDGER_PUBLIC_BASE_URL` pasa a ser la única fuente de verdad — define el
+host:puerto donde escucha la API y la dirección de los enlaces de activación —,
+sin dañar, romper ni cambiar lógica, y creando la rama pertinente.
+
+Antes de tocar código presenté el plan y cuatro decisiones; las resolvió así:
+ADR para la decisión, quitar `applicationUrl` de `launchSettings.json`, escuchar
+exactamente lo que diga la variable (no todos los interfaces) y actualizar bug +
+bitácora + `current-iteration.md` además del README.
+
+**Qué devolvió el agente.**
+
+- Rama `fix/standardize-listen-url-on-base-env-var` desde `develop`.
+- `Program.cs`: la variable se lee una sola vez y ese `urlBase` alimenta
+  `builder.WebHost.UseUrls(urlBase)` (escucha) y
+  `AddAccessControl(conexion, urlBase)` (enlaces). Una sola fuente.
+- `launchSettings.json`: `applicationUrl` fuera de los dos perfiles; solo quedan
+  `ASPNETCORE_ENVIRONMENT=Development`.
+- Corrección de comentarios que repetían el error del README: la recuperación no
+  usa la variable (`Program.cs`, `ConfiguracionEntorno.cs`).
+- `README.md`: tabla de variables (`PIRRY_LEDGER_PUBLIC_BASE_URL` fija host y
+  puerto y ya no menciona enlaces de recuperación), paso 7 (de dónde sale el
+  puerto, que el perfil solo fija el entorno, y cómo usarlo desde otra tablet),
+  descripción del Host y el índice de `docs/`.
+- `docs/adr/005-direccion-de-escucha-desde-variable.md`, con la tabla de
+  alternativas descartadas (las opciones A, B y C del bug y la de escuchar en
+  todos los interfaces).
+- `docs/bugs/001` pasa a **Resuelto**, conserva lo observado como histórico y
+  marca los cuatro criterios de aceptación como cumplidos con su evidencia.
+- Entrada de bitácora (esta) y línea en `docs/current-iteration.md`.
+
+**Qué verifiqué, y con qué comando.**
+
+- *Antes del cambio*, `PIRRY_LEDGER_PUBLIC_BASE_URL=http://localhost:5999` +
+  `dotnet run --launch-profile http` → `Now listening on: http://localhost:5243`:
+  la variable se ignoraba para el puerto. Ese es el bug.
+- *Después*, `dotnet run --project Src/Host/PirryLedger.Host --no-build
+  --launch-profile http` → `Now listening on: http://localhost:5243`,
+  `Hosting environment: Development` (el recorrido del README no cambia).
+- *Después*, `dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`
+  → `Now listening on: http://localhost:5243`; antes decía 5000.
+- *Después*, variable de proceso `http://localhost:5999` →
+  `Now listening on: http://localhost:5999`, `GET /yo` → `401` en ese puerto y
+  `GET http://localhost:5243/yo` → sin respuesta: la API sigue a la variable.
+- Sonda de precedencia: `ASPNETCORE_URLS=http://localhost:5888` junto con la
+  variable en 5243 → escucha 5243. `UseUrls` manda sobre `ASPNETCORE_URLS`.
+- `dotnet run ... -- --send-mail` → salida idéntica a la de antes
+  (`Correos tomados: 0`, `No habia correos pendientes de enviar.`).
+- Sin la variable → `Falta la variable de entorno
+  PIRRY_LEDGER_PUBLIC_BASE_URL. El README explica como definirla.` y código de
+  salida 1, sin traza.
+- `dotnet build pirry-ledger.slnx` → 0 errores, 0 advertencias.
+- `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+  AccessControl), las mismas que el baseline de antes de empezar.
+- `git diff --stat` → solo tres archivos de `Src/Host/PirryLedger.Host/`; nada
+  en `Src/Core`, `Src/Business` ni en `Tests/`.
+
+**Qué verificó Franklin, y con qué comando.** Pendiente: revisa este trabajo y
+los comandos anteriores antes de que se suba.
+
+**Qué no incluye.** Nada de lógica de negocio, autenticación, correo ni pruebas;
+no cambia textos de correos ni rutas; no añade validaciones ni avisos nuevos;
+no decide HTTPS (el perfil `https` dejó de escuchar en 7258, queda anotado en el
+ADR 005); no toca `docs/requirements/`, `.gitignore` ni bitácoras anteriores. El
+arreglo no se commitea ni se sube sin su aprobación.
+
+**Qué cambió de lo que pidió.** Nada esencial. Dos desviaciones menores que
+conviene saber: (1) para poder verificar, tuve que recompilar, porque el DLL en
+`bin/` estaba desactualizado respecto a la migración snake_case y la aplicación
+se caía al arrancar con `no existe la columna a.Rol` — era un artefacto local,
+`dotnet build` lo resolvió y no forma parte del arreglo; (2) la sonda de
+precedencia confirmó que `UseUrls` gana sobre `ASPNETCORE_URLS`, así que el
+README no necesita advertencia sobre esa variable.
