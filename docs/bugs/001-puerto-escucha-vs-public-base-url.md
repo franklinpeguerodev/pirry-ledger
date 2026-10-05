@@ -2,23 +2,25 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | **Abierto — congelado** |
+| Estado | **Resuelto** — Franklin pidió el arreglo el 2026-10-04 |
 | Creado | 2026-10-03 |
+| Resuelto | 2026-10-04, rama `fix/standardize-listen-url-on-base-env-var` |
 | Detectado por | Agente, durante la verificación del README tras el rename snake_case |
 | Archivos afectados | `README.md`, `Src/Host/PirryLedger.Host/Program.cs`, `Src/Host/PirryLedger.Host/Properties/launchSettings.json` |
 
-## Condición de cierre (obligatoria)
+## Condición de cierre (levantada por Franklin el 2026-10-04)
 
-**Este bug solo se arregla cuando Franklin lo pida, de forma explícita.**
+Este bug estaba congelado: solo se arreglaba si Franklin lo pedía de forma
+explicita, y ningún rama, commit o PR podía incluir el arreglo sin esa petición.
+Franklin lo pidió el 2026-10-04 ("`PIRRY_LEDGER_PUBLIC_BASE_URL` pasa a ser la
+única fuente de verdad: define el host:puerto donde escucha la API y la
+dirección de los enlaces de activación"), junto con las decisiones de
+estandarizar en la variable, quitar `applicationUrl` de `launchSettings.json` y
+documentarlo en un ADR.
 
-- El agente **no** lo corrige por su cuenta, aunque esté tocando un archivo
-  relacionado en otra tarea.
-- Si otro trabajo lo cruza (por ejemplo, una tarea que modifique el README o
-  `Program.cs`), se avisa y se espera; no se aprovecha para "meterlo de paso".
-- Ninguna rama, commit o PR debe incluir este arreglo sin esa petición previa.
-- Quitar esta condición solo corresponde a Franklin al decidir abordarlo.
+La sección siguiente conserva lo que se observó, tal como quedó escrito.
 
-## Qué se observó
+## Qué se observó (2026-10-03, histórico)
 
 El README presenta como una sola cosa lo que son dos configuraciones
 independientes, y no avisa de que pueden desincronizarse:
@@ -84,7 +86,7 @@ es `http://localhost:5243`, el perfil escucha en 5243 y los enlaces salen
 correctos. Ninguna verificación del README falla por esto. Por eso el bug es de
 claridad y de robustez, no una falla activa.
 
-## Opciones de arreglo (pendientes de la decisión de Franklin)
+## Opciones de arreglo que se plantearon (2026-10-03)
 
 - **A. Solo documentar.** En la tabla de variables y en el paso 7 del README:
   el puerto de escucha viene del perfil de launchSettings y no de la variable;
@@ -100,13 +102,57 @@ claridad y de robustez, no una falla activa.
 
 A y B son compatibles entre sí.
 
-## Criterios de aceptación cuando Franklin autorice
+**Decisión de Franklin (2026-10-04):** ninguna de las tres literalmente. Elige
+estandarizar en la variable, de modo que haya **una sola fuente de verdad**:
+`PIRRY_LEDGER_PUBLIC_BASE_URL` fija el host:puerto de escucha *y* la dirección
+de los enlaces. Detalle y alternativas descartadas en
+`docs/adr/005-direccion-de-escucha-desde-variable.md`.
 
-1. La tabla de variables del README describe la variable sin decir que
-   determine el puerto, y sin afirmar que la recuperación use enlaces.
-2. El README indica de dónde sale el puerto de escucha y qué hacer si se usará
-   desde otro dispositivo.
-3. Si el arreglo incluye código (opción B o C): aviso verificado con la
-   variable apuntando a un puerto distinto del escuchado, y `dotnet test` en
-   verde.
-4. El cambio se documenta en el mismo PR (README y, si aplica, ADR).
+## Resolución (2026-10-04)
+
+- `Program.cs`: la variable se lee una sola vez (`urlBase`) y ese valor alimenta
+  `builder.WebHost.UseUrls(urlBase)` (puerto de escucha) y
+  `AddAccessControl(conexion, urlBase)` (enlaces). Sin cambios de lógica.
+- `launchSettings.json`: `applicationUrl` fuera de los dos perfiles; solo
+  aportan `ASPNETCORE_ENVIRONMENT=Development`.
+- `README.md`: la tabla de variables (`README.md:107`) y el paso 7 explican que
+  la variable fija host y puerto, de dónde sale el puerto y cómo usarlo desde
+  otra tablet; desaparece la referencia a enlaces de recuperación.
+- Comentarios de `Program.cs` y `ConfiguracionEntorno.cs`: la recuperación no
+  usa esta variable.
+- `docs/adr/005-direccion-de-escucha-desde-variable.md` documenta la decisión.
+
+Evidencia (comandos ejecutados el 2026-10-04 en la rama
+`fix/standardize-listen-url-on-base-env-var`):
+
+- **Antes del cambio**, variable `http://localhost:5999` + `dotnet run
+  --launch-profile http` → `Now listening on: http://localhost:5243` (la
+  variable se ignoraba: el bug).
+- **Después**, DLL compilada → `Now listening on: http://localhost:5243`
+  (antes `5000`).
+- **Después**, variable `http://localhost:5999` →
+  `Now listening on: http://localhost:5999`, `GET /yo` → `401` en ese puerto y
+  5243 sin responder.
+- Sonda de precedencia: `ASPNETCORE_URLS=http://localhost:5888` con la variable
+  en 5243 → escucha 5243 (`UseUrls` manda).
+- Sin la variable → `Falta la variable de entorno
+  PIRRY_LEDGER_PUBLIC_BASE_URL. El README explica como definirla.`, salida 1,
+  sin traza.
+- `dotnet build pirry-ledger.slnx`: 0 errores, 0 advertencias.
+- `dotnet test pirry-ledger.slnx`: 90 pruebas en verde, las mismas que antes
+  (6 Notifications + 84 AccessControl).
+- `git diff` limitado a `Src/Host/PirryLedger.Host/`.
+
+## Criterios de aceptación (cumplidos el 2026-10-04)
+
+1. La tabla de variables del README describe la variable como la que fija el
+   host y el puerto de escucha y la dirección de los enlaces de **activación**,
+   sin afirmar que la recuperación use enlaces. → `README.md:107`.
+2. El README indica de dónde sale el puerto de escucha (de la variable, no del
+   perfil) y qué hacer si se usará desde otro dispositivo
+   (`http://<IP-del-equipo>:5243`). → paso 7.
+3. El arreglo incluye código: con una sola fuente ya no puede haber variable
+   apuntando a un puerto distinto del escuchado; se verificó con la variable en
+   5999 → escucha 5999, y `dotnet test` en verde.
+4. El cambio se documenta en el mismo PR: `README.md` y
+   `docs/adr/005-direccion-de-escucha-desde-variable.md`.
