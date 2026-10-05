@@ -138,7 +138,7 @@ contraseña correcta, se rechazó (RF-CA-19).
 
 ## Decisiones
 
-`docs/adr/001-credencial-de-sesion.md`, aceptada el 2026-09-30: credencial
+`docs/adr/001-session-credential.md`, aceptada el 2026-09-30: credencial
 opaca, tabla `Sesion` y `CredencialVersion` copiada por sesión.
 
 El ADR guarda el razonamiento entero, incluida la comparación con JWT y una lista
@@ -812,7 +812,7 @@ registro de bug, la bitácora y `current-iteration.md` además del README.
   puerto y ya no menciona enlaces de recuperación), paso 7 (de dónde sale el
   puerto, que el perfil solo fija el entorno, y cómo usarlo desde otra tablet),
   descripción del Host y el índice de `docs/`.
-- `docs/adr/005-direccion-de-escucha-desde-variable.md`, con la tabla de
+- `docs/adr/005-listen-address-from-public-base-url.md`, con la tabla de
   alternativas descartadas (las opciones A, B y C que se plantearon y la de
   escuchar en todos los interfaces).
 - El registro del bug pasó a **Resuelto** con sus cuatro criterios de

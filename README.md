@@ -340,7 +340,7 @@ ejecutar.
 
 La solución es una semilla que corre en el arranque y lee las tres variables
 `PIRRY_LEDGER_FIRST_ADMIN_*`. La decisión y las alternativas están en
-`docs/adr/002-primer-administrador.md`.
+`docs/adr/002-first-administrator.md`.
 
 Cómo se comporta:
 
@@ -523,7 +523,7 @@ pirry-ledger/
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
-│   ├── adr/                        Decisiones tecnicas 001 a 005
+│   ├── adr/                        Decisiones técnicas 001 a 005: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -557,13 +557,15 @@ ni servidor SMTP.
 
 ### Decisiones documentadas
 
+Convención de los ADR: nombre de archivo y título en inglés, contenido en español.
+
 | Decisión | ADR |
 |---|---|
-| Credencial de sesión: token opaco, tabla `ac_sesiones` y `CredencialVersion` | `docs/adr/001-credencial-de-sesion.md` |
-| Primer Administrador: semilla desde variables de entorno en el arranque | `docs/adr/002-primer-administrador.md` |
+| Credencial de sesión: token opaco, tabla `ac_sesiones` y `CredencialVersion` | `docs/adr/001-session-credential.md` |
+| Primer Administrador: semilla desde variables de entorno en el arranque | `docs/adr/002-first-administrator.md` |
 | Trazabilidad del cambio de contraseña (`ContrasenaCambiadaUtc`) sin auditoría completa | `docs/adr/003-password-change-traceability.md` |
 | Columnas de AccessControl en snake_case, declaradas con `HasColumnName` | `docs/adr/004-snake-case-column-naming.md` |
-| Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-direccion-de-escucha-desde-variable.md` |
+| Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-listen-address-from-public-base-url.md` |
 
 ---
 
@@ -1250,7 +1252,7 @@ todavía no se escribe: llega en la semana 11.
   por su cuenta.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
-  `docs/adr/001-credencial-de-sesion.md`.
+  `docs/adr/001-session-credential.md`.
 - **Reintentos automáticos, estado fallido y escritura de `ultimo_error`** en el
   envío de correo. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.

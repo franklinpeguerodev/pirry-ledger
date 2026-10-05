@@ -25,7 +25,7 @@ internal static class ConfiguracionEntorno
     // lleva un codigo suelto, asi que esa variable no se usa ahi.
     public const string VariableBaseUrl = "PIRRY_LEDGER_PUBLIC_BASE_URL";
 
-    // Primer Administrador (docs/adr/002-primer-administrador.md). El registro
+    // Primer Administrador (docs/adr/002-first-administrator.md). El registro
     // publico siempre crea Estándares, asi que sin estas dos variables no existe
     // ningun Administrador y la administracion de usuarios no se puede probar.
     //

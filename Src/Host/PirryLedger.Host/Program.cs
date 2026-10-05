@@ -26,7 +26,7 @@ var conexion = LeerConexionObligatoria(builder.Configuration);
 
 // La misma variable fija el puerto donde escucha la API y la direccion de los
 // enlaces de activacion. Una sola fuente para las dos cosas: no hay forma de
-// que se desincronicen (docs/adr/005-direccion-de-escucha-desde-variable.md).
+// que se desincronicen (docs/adr/005-listen-address-from-public-base-url.md).
 // Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
 var urlBase = LeerUrlBaseObligatoria(builder.Configuration);
 builder.WebHost.UseUrls(urlBase);
@@ -38,7 +38,7 @@ builder.Services.AddNotifications(
 
 var app = builder.Build();
 
-// Primer Administrador (docs/adr/002-primer-administrador.md). Se ejecuta en el
+// Primer Administrador (docs/adr/002-first-administrator.md). Se ejecuta en el
 // arranque y es idempotente: si ya hay un Administrador, no hace nada y la
 // aplicacion sigue igual. Solo corre si estan las variables, para que una base
 // de desarrollo sin ellas no produzca ruido en cada arranque.
@@ -97,7 +97,7 @@ if (app.Environment.IsDevelopment())
 // No hay UseHttpsRedirection: la direccion de escucha sale de
 // PIRRY_LEDGER_PUBLIC_BASE_URL (hoy http) y no existe ningun endpoint https al
 // que redirigir, asi que el middleware no redirige nada y solo imprime un aviso.
-// Si se decide HTTPS, va en un ADR (docs/adr/005-direccion-de-escucha-desde-variable.md).
+// Si se decide HTTPS, va en un ADR (docs/adr/005-listen-address-from-public-base-url.md).
 
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.

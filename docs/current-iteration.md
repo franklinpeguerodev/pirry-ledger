@@ -36,7 +36,7 @@ Deliver the first working Core piece, Access control, from registration with ema
 
 ## Constraints specific to this iteration
 
-- The session credential must be invalidatable on the server. Logging out (RF-CA-18), deactivating a user (RF-CA-20) and changing a password (RF-CA-12) invalidate sessions already issued. A purely self-contained credential with no server-side check does not meet this. **Decided on 2026-09-30:** an opaque token with a `Sesion` table and a `CredencialVersion` copied per session, recorded in `docs/adr/001-credencial-de-sesion.md`.
+- The session credential must be invalidatable on the server. Logging out (RF-CA-18), deactivating a user (RF-CA-20) and changing a password (RF-CA-12) invalidate sessions already issued. A purely self-contained credential with no server-side check does not meet this. **Decided on 2026-09-30:** an opaque token with a `Sesion` table and a `CredencialVersion` copied per session, recorded in `docs/adr/001-session-credential.md`.
 - Lockout: 5 consecutive failures block the account for 15 minutes; the counter is persisted and resets on a successful login (RF-CA-19).
 - Forced password reset by an Administrator (RF-CA-13): the old password stops working and the user receives, through the queue, the email with the code to set a new one.
 - Operations never send mail directly. They write a `CorreoEnCola` row as pending and finish successfully even with no SMTP server. A separate process or command sends pending mail over SMTP and marks it sent; running it twice must not duplicate sends. SMTP credentials come from environment variables.
@@ -73,9 +73,9 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
   same environment variable that builds the activation links: one source for
   both, so they cannot drift apart. The `launchSettings.json` profiles no longer
   define a port (they only set the environment). Documented in
-  `docs/adr/005-direccion-de-escucha-desde-variable.md`.
+  `docs/adr/005-listen-address-from-public-base-url.md`.
 
-Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-first-administrator.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
 
 Administration decisions confirmed for the `feature/user-administration` work:
 

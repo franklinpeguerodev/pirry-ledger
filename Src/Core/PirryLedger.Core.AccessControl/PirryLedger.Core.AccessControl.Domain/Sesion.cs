@@ -1,6 +1,6 @@
 namespace PirryLedger.Core.AccessControl.Domain;
 
-// RF-CA-03 y RF-CA-18. Decision documentada en docs/adr/001-credencial-de-sesion.md.
+// RF-CA-03 y RF-CA-18. Decision documentada en docs/adr/001-session-credential.md.
 //
 // La credencial es opaca: 32 bytes del generador del sistema en base64url. En la
 // base solo queda su SHA-256, asi que leer la tabla no permite autenticarse.

@@ -71,7 +71,7 @@ public sealed class Usuario
     // con un rol.
     //
     // Esta es la UNICA excepcion a esa regla, y hay dos: CrearComoAdministrador.
-    // Se llego a esta forma tras comparar tres, en docs/adr/002-primer-administrador.md.
+    // Se llego a esta forma tras comparar tres, en docs/adr/002-first-administrator.md.
     public static Usuario Crear(string nombre, string correo, string hashDeContrasena, DateTime ahoraUtc)
     {
         if (string.IsNullOrWhiteSpace(nombre))
@@ -106,7 +106,7 @@ public sealed class Usuario
     // La segunda puerta, y la unica que no es el registro publico. La necesita el
     // seed del primer Administrador, porque Crear fija Rol.Estandar de forma
     // fija y no hay forma de llegar a Administrador por el camino normal
-    // (docs/adr/002-primer-administrador.md).
+    // (docs/adr/002-first-administrator.md).
     //
     // Nace ACTIVO, al contrario que Crear. No es un descuido: este usuario no
     // llega por correo, asi que no tiene enlace de activacion que nadie pueda
