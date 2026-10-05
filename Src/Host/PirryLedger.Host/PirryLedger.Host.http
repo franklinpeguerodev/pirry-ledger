@@ -51,16 +51,24 @@
 
 # --- Entradas (completar una sola vez) ----------------------------------------
 
-# Usuario estándar que usan los flujos públicos (fixtures del README).
-@nombre = Junior
-@correo = juniorpujol0248@gmail.com
+# Usuario estándar que usan los flujos públicos. Es el fixture que usan las
+# secciones 3.1, 3.2, 3.3 y 3.4 del README (ana@ejemplo.com), y su orden de
+# correo es el que asumen los comentarios de administración: $[0] el estándar,
+# $[1] el administrador. Nunca pongas aquí una cuenta real tuya: esta sección
+# desactiva, cambia el rol y bloquea esa cuenta durante la corrida.
+@nombre = Ana
+@correo = ana@ejemplo.com
 @contrasena = abc12345
 
-# Administrador de PIRRY_LEDGER_FIRST_ADMIN_EMAIL / PIRRY_LEDGER_FIRST_ADMIN_PASSWORD.
-# Cuidado: un valor equivocado aquí cuenta como intento fallido, y cinco de ellos
-# bloquean la cuenta durante quince minutos (RF-CA-19).
-@correoAdmin = franklinpeguero1.dev@gmail.com
-@contrasenaAdmin = Jr@17259020Pirry
+# Administrador creado por la semilla (README, "El primer Administrador"). Sus
+# valores viven en tu `.env` (PIRRY_LEDGER_FIRST_ADMIN_EMAIL y
+# PIRRY_LEDGER_FIRST_ADMIN_PASSWORD, README paso 4): cópialos aquí para la
+# corrida y no los subas al repositorio. No los escribas en ningún sitio
+# compartido, ni siquiera en un comentario de este archivo.
+# Cuidado: un valor equivocado aquí cuenta como intento fallido, y cinco de
+# ellos bloquean la cuenta durante quince minutos (RF-CA-19).
+@correoAdmin = <correo-de-PIRRY_LEDGER_FIRST_ADMIN_EMAIL>
+@contrasenaAdmin = <contrasena-de-PIRRY_LEDGER_FIRST_ADMIN_PASSWORD>
 
 # Respuestas que deben ser idénticas exista o no la cuenta (RF-CA-09, RF-CA-17):
 # una cuenta inexistente y una dirección mal formada.
