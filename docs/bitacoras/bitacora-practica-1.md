@@ -898,3 +898,69 @@ relación con la entrada HTTP de la API.
   `fail` o `https` en la salida (antes salía la del middleware).
 - `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
   AccessControl).
+
+## Variables de entorno desde un archivo `.env` — DotNetEnv (2026-10-04)
+
+**Qué se pidió.** Franklin planteó si no sería mejor tener un `.env` con todas
+las variables de entorno en lugar de los once comandos
+`SetEnvironmentVariable(..., 'User')` que el README pidió hasta ahora. Presenté
+tres caminos con sus contras (paquete `DotNetEnv`, loader propio o script de
+PowerShell) y él eligió el primero, autorizó **solo** ese paquete y pidió
+actualizar README, docs y bitácora.
+
+**Qué se decidió y por qué.**
+
+- El `.env` se carga **antes** de `WebApplication.CreateBuilder`, así que las
+  variables entran por el mismo camino de siempre: `IConfiguration` →
+  `ConfiguracionEntorno`. RD-10 sigue cumplido porque al final siguen siendo
+  variables de entorno, no un mecanismo de configuración distinto.
+- **El entorno real manda:** `Env.NoClobber()`, de modo que una variable ya
+  definida en la terminal o en el sistema no la pisa el archivo. Un despliegue
+  con variables de verdad sigue funcionando igual.
+- **Si no hay `.env` no es error.** El loader busca el archivo desde el
+  directorio de trabajo hacia arriba y, si no lo encuentra, sigue sin más: la
+  aplicación queda como estaba antes, con las variables del entorno.
+- El `.gitignore` ya lo tenía previsto (`.env`, `.env.*`, `!.env.example`), así
+  que `.env` nunca se sube y sí se sube `.env.example` con nombres y
+  descripciones, sin valores reales.
+
+**Qué hizo el agente.**
+
+- `dotnet add ... package DotNetEnv` (3.2.0, paquete único autorizado; arrastra
+  `Superpower` 3.0.0, que es dependencia suya).
+- `Program.cs`: `using DotNetEnv;`, la llamada `CargarArchivoEnv()` antes de
+  construir el `builder` y la función local que busca el `.env` hacia arriba y
+  lo carga con `Env.NoClobber().Load(archivo)`.
+- `.env.example` con las once variables agrupadas en obligatorias, primer
+  Administrador y SMTP, con su explicación.
+- `README.md`: el paso 4 se reescribe (Opción A `.env`, Opción B1 usuario de
+  Windows, Opción B2 `$env:` en la terminal), se actualizan las referencias a
+  esas opciones en migraciones, arranque, semilla, enviador y el paso SMTP, y el
+  árbol del repositorio pasa a mostrar `.env.example`.
+- La plantilla SMTP del README añade un bloque que escribe las seis variables en
+  el `.env` con `Add-Content`, con la contraseña entre comillas dobles.
+
+**Qué verifiqué, y con qué comando.**
+
+- `git check-ignore -v .env` → `.gitignore:153:.env`; `git status --short` →
+  `?? .env.example`, es decir, el ejemplo se puede versionar y el `.env` real no.
+- `dotnet build pirry-ledger.slnx` → 0 errores y 0 advertencias;
+  `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 + 84).
+- **Solo `.env`, sin ninguna variable de entorno en el proceso** (se borraron
+  las once con `Remove-Item Env:` antes de lanzar) →
+  `Now listening on: http://localhost:5243`, `GET /yo` → `401`, `stderr` vacío.
+- **Precedencia:** `$env:PIRRY_LEDGER_PUBLIC_BASE_URL = 'http://localhost:5999'`
+  con el `.env` en 5243 → `Now listening on: http://localhost:5999`,
+  `GET :5999/yo` → `401` y `GET :5243/yo` → sin respuesta.
+- **Sin `.env` y sin variables:** renombrado el archivo, `ExitCode: 1` y
+  `Falta la variable de entorno ConnectionStrings__PirryLedger. El README
+  explica como definirla.` sin traza (RD-08), igual que antes del cambio.
+- **Parseo del bloque SMTP del README**, con `dotnet fsi` y el paquete instalado,
+  sobre un archivo temporal con `PIRRY_LEDGER_SMTP_PASSWORD="clave de prueba
+  12345"` → `SMTP_PASSWORD parseado = [clave de prueba 12345]`, es decir, el
+  valor con espacios llega completo y sin comillas.
+
+**Qué NO se hizo.** No cambió ninguna lógica de negocio, ninguna variable ni su
+nombre, ni las pruebas. No se tocaron `ConfiguracionEntorno` ni los mensajes de
+error. Todavía no hay ADR: la decisión de configuración queda pendiente de que
+Franklin autorice escribirlo (la regla del ADR es suya, no mía).
