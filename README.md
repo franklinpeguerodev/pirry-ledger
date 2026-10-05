@@ -130,63 +130,31 @@ tres del primer Administrador también son opcionales; sin ellas no se crea
 automáticamente ningún Administrador.
 
 Al arrancar, la aplicación busca un archivo `.env` desde el directorio desde el
-que lanzas el comando hacia arriba y carga sus variables. **No pisa** lo que ya
-esté definido en la terminal o en el sistema: si una variable existe en el
-entorno real, manda la del entorno. Elige **una sola** de estas dos opciones.
-
-#### Opción A (recomendada): el archivo `.env`
+que lanzas el comando hacia arriba y carga sus variables. Ese archivo es la
+**única** forma de definirlas que documenta este README. Si todavía no tienes
+uno, créalo desde la plantilla (si ya existe, déjalo como está):
 
 ```powershell
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
 Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
 
-- Vale para cualquier terminal y para cualquier comando: la API (`dotnet run`),
-  el DLL compilado y el enviador de correo. No hay que repetir nada en cada sesión.
+- Vale para cualquier terminal y para cualquier comando: las migraciones (paso
+  6), la API (paso 7), el DLL compilado y el enviador de correo. No hay que
+  repetir nada en cada sesión ni guardar nada en Windows.
 - Si no existe el `.env`, no es un error: la aplicación sigue buscando las
-  variables en el entorno, y si tampoco están, avisa por el nombre de la que
-  falta y se detiene.
+  variables en el entorno del sistema, y si tampoco están, avisa por el nombre
+  de la que falta y se detiene (RD-08).
 - `.env` está en el `.gitignore`: **nunca** se sube al repositorio. Sí se sube
   `.env.example`, la plantilla con las once variables, sus descripciones y
   valores de ejemplo. Nunca pongas un valor real en `.env.example`.
 - Si un valor tiene espacios o el carácter `#`, ponlo entre comillas dobles.
-
-#### Opción B: variables de entorno de Windows
-
-Nada de archivos: las variables viven en Windows. Hay dos formas.
-
-**B1 — entorno persistente del usuario.** Guarda **las cinco** variables a nivel
-Usuario. Cada terminal nueva que abras después ya las hereda:
-
-```powershell
-[Environment]::SetEnvironmentVariable('ConnectionStrings__PirryLedger', 'Host=127.0.0.1;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contraseña>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_PUBLIC_BASE_URL', 'http://localhost:5243', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_EMAIL', '<correo-del-administrador>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_PASSWORD', '<contraseña-del-administrador>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_NAME', 'Administrador', 'User')
-```
-
-No copies estos valores literalmente: reemplaza los textos entre `<` y `>` con
-los valores de tu entorno. **Cierra y abre una terminal nueva** después de
-ejecutarla. No vuelvas a ejecutar ese bloque en cada arranque. Las variables
-SMTP se agregan aparte en el paso [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail).
-
-**B2 — entorno temporal de la terminal actual.** Nada se guarda en Windows: todo
-vive en la terminal actual y muere con ella. Define **las mismas cinco**
-variables, la cadena de conexión también como variable de proceso:
-
-```powershell
-$env:ConnectionStrings__PirryLedger = 'Host=127.0.0.1;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contraseña>'
-$env:PIRRY_LEDGER_PUBLIC_BASE_URL = 'http://localhost:5243'
-$env:PIRRY_LEDGER_FIRST_ADMIN_EMAIL = '<correo-del-administrador>'
-$env:PIRRY_LEDGER_FIRST_ADMIN_PASSWORD = '<contraseña-del-administrador>'
-$env:PIRRY_LEDGER_FIRST_ADMIN_NAME = 'Administrador'
-```
-
-Si abres otra terminal, repite el bloque allí: una terminal nueva no hereda las
-variables de la anterior. Ejecuta en esta misma terminal las migraciones (paso
-6), la API (paso 7) y el enviador de correo.
+- Si una variable ya está definida en el entorno del sistema (por ejemplo, un
+  residuo de una versión anterior de este README), manda la del entorno y el
+  `.env` no la pisa: bórrala de Windows para que mande el archivo. En un equipo
+  limpio no hay ninguna definida.
+- Las seis SMTP se agregan en el paso [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail).
 
 ### Paso 5: compilar y ejecutar las pruebas
 
@@ -219,10 +187,8 @@ Esto crea las tablas de AccessControl (`ac_usuarios`, `ac_codigos_recuperacion`,
 (`not_correos_en_cola`) en la misma base, manteniendo la propiedad de cada
 módulo.
 
-Con la Opción A da igual la terminal: el `.env` está en el repositorio y la
-aplicación lo carga al arrancar. Con la Opción B1, en cualquier terminal nueva;
-con la Opción B2, en la **misma** terminal donde definiste `$env:`. No cargues
-desde el alcance `User` una variable que definiste como temporal.
+Da igual la terminal: el `.env` está en la raíz del repositorio y la aplicación
+lo carga al arrancar, en cualquier terminal y en cualquier comando.
 
 Resultado esperado:
 
@@ -291,8 +257,7 @@ también se detiene y el mensaje del sistema indica cuál de los dos es.
 
 Al arrancar, la semilla crea el primer Administrador si las variables
 `PIRRY_LEDGER_FIRST_ADMIN_*` están definidas y todavía no existe ningún
-Administrador. Con la Opción A da igual la terminal; con la Opción B1, desde una
-terminal nueva, y con la Opción B2, desde la misma terminal del paso 4.
+Administrador. Las lee del `.env`, así que funciona desde cualquier terminal.
 
 Devuelve `404` en cualquier ruta que no exista, porque el resto del sistema
 todavía no está construido. De las rutas de esta iteración, `/yo` sin cabecera
@@ -301,8 +266,7 @@ credencial.
 
 ### Paso 8: comprobar que funciona
 
-En una segunda terminal, registra un usuario Estándar (con la Opción B2, define
-antes en esa terminal las mismas variables):
+En una segunda terminal, registra un usuario Estándar:
 
 ```powershell
 $cuenta = @{
@@ -411,9 +375,7 @@ operación que los encola. Se lanza con un comando, no arranca solo:
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Con la Opción A funciona en cualquier terminal. Con la Opción B2, en la misma
-terminal donde definiste las variables (con la B1, en cualquier terminal nueva).
-La terminal puede tener la API detenida o en marcha, da igual.
+Funciona en cualquier terminal, con la API detenida o en marcha, da igual.
 
 Imprime siempre un resumen y una línea final que depende del resultado. Sin
 credenciales SMTP válidas, un correo pendiente produce esto:
@@ -439,11 +401,10 @@ recibir la contraseña normal de tu cuenta: necesitas una **contraseña de
 aplicación** creada en la configuración de seguridad de Google. Usa una cuenta
 de prueba, si es posible. [Documentación de Google](https://support.google.com/mail/answer/185833?hl=es-419).
 
-**Con la Opción A (`.env`)**, añade las seis líneas al final de tu `.env`.
-`Read-Host` lee la contraseña de aplicación de forma segura, el
-`-replace '\s', ''` elimina los espacios que Google puede mostrar entre grupos
-de caracteres y `Add-Content` las añade al archivo sin que la contraseña aparezca
-en el historial de la terminal:
+Añade las seis líneas al final de tu `.env`. `Read-Host` lee la contraseña de
+aplicación de forma segura, el `-replace '\s', ''` elimina los espacios que
+Google puede mostrar entre grupos de caracteres y `Add-Content` las añade al
+archivo sin que la contraseña aparezca en el historial de la terminal:
 
 ```powershell
 $segura = Read-Host -Prompt 'Contrasena de aplicacion SMTP' -AsSecureString
@@ -469,44 +430,6 @@ $lineas = $null
 
 La contraseña va entre comillas dobles dentro del `.env` porque puede contener
 espacios. Vuelve a arrancar la API después de editar el archivo.
-
-**Con la Opción B1**, guarda las variables para tu usuario de Windows:
-
-```powershell
-$segura = Read-Host -Prompt 'Contrasena de aplicacion SMTP' -AsSecureString
-$credencial = New-Object System.Net.NetworkCredential('', $segura)
-$plana = $credencial.Password -replace '\s', ''
-
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_PASSWORD', $plana, 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_HOST', 'smtp.gmail.com', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_PORT', '587', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_SECURITY', 'StartTls', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_USER', '<tu-cuenta-de-prueba@gmail.com>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_FROM', '<tu-cuenta-de-prueba@gmail.com>', 'User')
-
-$segura = $null
-$credencial = $null
-$plana = $null
-```
-
-**Con la Opción B2**, usa asignaciones temporales en la misma terminal:
-
-```powershell
-$segura = Read-Host -Prompt 'Contrasena de aplicacion SMTP' -AsSecureString
-$credencial = New-Object System.Net.NetworkCredential('', $segura)
-$plana = $credencial.Password -replace '\s', ''
-
-$env:PIRRY_LEDGER_SMTP_PASSWORD = $plana
-$env:PIRRY_LEDGER_SMTP_HOST = 'smtp.gmail.com'
-$env:PIRRY_LEDGER_SMTP_PORT = '587'
-$env:PIRRY_LEDGER_SMTP_SECURITY = 'StartTls'
-$env:PIRRY_LEDGER_SMTP_USER = '<tu-cuenta-de-prueba@gmail.com>'
-$env:PIRRY_LEDGER_SMTP_FROM = '<tu-cuenta-de-prueba@gmail.com>'
-
-$segura = $null
-$credencial = $null
-$plana = $null
-```
 
 Reemplaza los dos valores `<tu-cuenta-de-prueba@gmail.com>` por la dirección de
 la cuenta que creó la contraseña de aplicación. No escribas la contraseña de
@@ -1101,21 +1024,26 @@ toma cero.
 
 #### RF-NOT-13 — las credenciales vienen de variables de entorno
 
-Borra o cambia `PIRRY_LEDGER_SMTP_PASSWORD` en esa terminal, deja un correo
-pendiente y ejecuta el enviador:
+Deja un correo pendiente (el registro de un usuario deja pendiente su correo de
+activación) y quita la contraseña SMTP de la configuración: borra o vacía la
+línea `PIRRY_LEDGER_SMTP_PASSWORD` de tu `.env`. Si en algún momento la
+definiste además como variable de entorno de Windows, bórrala también de ahí:
+el entorno manda sobre el `.env` y el archivo se quedaría sin efecto.
 
 ```powershell
-$env:PIRRY_LEDGER_SMTP_PASSWORD = ''
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Definida en la terminal, la variable manda sobre el `.env` (y sobre cualquier
-otro valor), así que la prueba sirve con las dos opciones del paso 4.
-
-El correo vuelve a `Pendiente` con `intentos = 1`, y el proceso informa:
+Con la contraseña sin definir, `SmtpConfiguracion.EstaConfigurada` es `false` y
+el transporte se niega a enviar. El correo sigue en la cola como pendiente y el
+proceso informa:
 
 ```
+Correos tomados: 1
+Correos enviados: 0
 Correos fallidos: 1
+  - <destinatario>: Faltan las variables de entorno del servidor de correo (RF-NOT-13). Revisa el README.
+Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
 ```
 
 Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
