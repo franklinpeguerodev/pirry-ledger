@@ -24,7 +24,14 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 // tablas separadas por prefijo. Ninguna de las dos ve los contextos de la otra.
 var conexion = LeerConexionObligatoria(builder.Configuration);
 
-builder.Services.AddAccessControl(conexion, LeerUrlBaseObligatoria(builder.Configuration));
+// La misma variable fija el puerto donde escucha la API y la direccion de los
+// enlaces de activacion. Una sola fuente para las dos cosas: no hay forma de
+// que se desincronicen (docs/bugs/001-puerto-escucha-vs-public-base-url.md).
+// Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
+var urlBase = LeerUrlBaseObligatoria(builder.Configuration);
+builder.WebHost.UseUrls(urlBase);
+
+builder.Services.AddAccessControl(conexion, urlBase);
 builder.Services.AddNotifications(
     conexion,
     ConfiguracionEntorno.LeerSmtp(builder.Configuration) ?? SmtpConfiguracion.Vacia);
@@ -136,8 +143,10 @@ static string LeerConexionObligatoria(IConfiguration configuracion)
     return valor;
 }
 
-// Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de activacion
-// y de recuperacion. Sin ella los enlaces saldrian con una direccion que no
+// Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de
+// activacion y con la que se fija el puerto de escucha de la API. La
+// recuperacion no lleva enlace: lleva un codigo suelto, y por eso esta variable
+// no entra en ese correo. Sin ella los enlaces saldrian con una direccion que no
 // existe, asi que es obligatoria igual que la cadena de conexion.
 static string LeerUrlBaseObligatoria(IConfiguration configuracion)
 {

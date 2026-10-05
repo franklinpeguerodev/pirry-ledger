@@ -20,7 +20,9 @@ internal static class ConfiguracionEntorno
     public const string VariableCorreoRemitente = "PIRRY_LEDGER_SMTP_FROM";
 
     // Direccion publica de la aplicacion. Es con la que se arman los enlaces de
-    // activacion y de recuperacion, para que funcionen al abrirse en un navegador.
+    // activacion, para que funcionen al abrirse en un navegador, y con la que se
+    // fija el host:puerto donde escucha la API. La recuperacion no lleva enlace:
+    // lleva un codigo suelto, asi que esa variable no se usa ahi.
     public const string VariableBaseUrl = "PIRRY_LEDGER_PUBLIC_BASE_URL";
 
     // Primer Administrador (docs/adr/002-primer-administrador.md). El registro
