@@ -15,7 +15,7 @@ The requirement tables live in other files:
 - Correo saliente, cola mínima (RF-NOT-08, 09, 12, 13): `notifications.md`.
 - Estructura de la máquina de estados de negocio (RF-NEG-03, 04, 05): `business-module.md`.
 
-Además aplican los requisitos de diseño que tocan esta pieza (`design-rules.md`): RD-05, RD-06, RD-07 (un correo vacío o mal formado produce un rechazo controlado, no una excepción sin manejar), RD-08 (ningún mensaje al usuario expone trazas ni consultas), RD-09 (los usuarios registrados sobreviven a reiniciar la aplicación) y RD-10.
+Además aplican los requisitos de diseño que tocan esta pieza (`design-rules.md`): RD-05, RD-06, RD-07 (un correo vacío o mal formado produce un rechazo controlado, no una excepción sin manejar), RD-08 (ningún mensaje al usuario expone trazas ni consultas), RD-09 (los usuarios registrados sobreviven a reiniciar la aplicación), RD-10, RD-11 (fechas y horas en UTC a través de un único reloj inyectable, sin llamar a `DateTime.UtcNow` directamente) y RD-12 (cada pieza del Core es verificable sin levantar la aplicación completa: su proyecto de pruebas la monta sola).
 
 Los registros de auditoría de RF-CA-08, RF-CA-13 y RF-CA-20 se exigen en la semana 14, con la pieza 6; aquí no se califican.
 
