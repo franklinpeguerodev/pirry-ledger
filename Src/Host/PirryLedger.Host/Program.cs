@@ -1,5 +1,6 @@
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
 // cada pieza expone los suyos (RD-01).
+using DotNetEnv;
 using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
@@ -11,6 +12,14 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Host;
 
 const string ComandoEnviarCorreo = "--send-mail";
+
+// Archivo .env de desarrollo local: si existe, se cargan sus variables ANTES de
+// construir la configuracion, que las lee del entorno (RD-10: al final siguen
+// siendo variables de entorno, no un mecanismo distinto). NoClobber: una
+// variable ya definida en la terminal o en el sistema no la toca el archivo,
+// asi que un despliegue con variables reales sigue mandando. Si no hay archivo,
+// no pasa nada y siguen mandando las definidas de otra forma (README, paso 4).
+CargarArchivoEnv();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -127,6 +136,27 @@ app.MapAccessControl();
 app.MapNotifications();
 
 app.Run();
+
+// Busca un .env desde el directorio de trabajo hacia arriba y lo carga en el
+// proceso. No es un error que falte: no encontrarlo significa que las variables
+// vienen de otro sitio (entorno del usuario o de la terminal).
+static void CargarArchivoEnv()
+{
+    var directorio = Directory.GetCurrentDirectory();
+
+    while (!string.IsNullOrWhiteSpace(directorio))
+    {
+        var archivo = Path.Combine(directorio, ".env");
+
+        if (File.Exists(archivo))
+        {
+            Env.NoClobber().Load(archivo);
+            return;
+        }
+
+        directorio = Directory.GetParent(directorio)?.FullName;
+    }
+}
 
 // Lee la cadena de conexion de ConnectionStrings__PirryLedger. Si falta, avisa
 // por el nombre de la variable y para: un error de configuracion no puede ser
