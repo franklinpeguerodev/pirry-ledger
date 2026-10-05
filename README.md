@@ -244,6 +244,13 @@ no sale de ahí. Por eso la API escucha en el mismo sitio aunque se lance el DLL
 compilado directamente (`dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`)
 o con otro perfil.
 
+El proyecto del Host incluye un `appsettings.Development.json` local con la
+configuración de logs para `ASPNETCORE_ENVIRONMENT=Development`. El archivo
+**no se versiona**: lo ignora el `.gitignore` por diseño (mismo trato que
+`appsettings.Staging.json` y los `appsettings.*.local.json`), para que nadie
+termine subiendo al repositorio overrides de configuración pensados solo para
+su máquina. Si necesitas uno, créalo a mano y mantenlo fuera del historial.
+
 Si se va a abrir desde otra tablet o equipo, la variable debe ser la dirección
 de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:5243`: la API
 escucha en esa dirección y los enlaces del correo salen con ella. Cambia el
