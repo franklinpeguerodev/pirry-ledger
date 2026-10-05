@@ -74,6 +74,12 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
   both, so they cannot drift apart. The `launchSettings.json` profiles no longer
   define a port (they only set the environment). Documented in
   `docs/adr/005-listen-address-from-public-base-url.md`.
+- Local development reads its environment variables from a `.env` file at the
+  repo root, loaded with `DotNetEnv` before the configuration is built. The
+  environment always wins (`NoClobber`: a variable already defined in the
+  terminal or in the system is never overwritten) and a missing `.env` is not an
+  error. Only `.env.example` (names and descriptions, no values) is committed.
+  Documented in the README, step 4.
 
 Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-first-administrator.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
 
