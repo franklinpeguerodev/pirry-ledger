@@ -104,7 +104,7 @@ valores reales.
 | Variable | Para qué sirve |
 |---|---|
 | `ConnectionStrings__PirryLedger` | **Obligatoria.** Cadena de conexión a PostgreSQL: host, puerto, base de datos, usuario y contraseña. |
-| `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública de la aplicación. Se usa para construir los enlaces de activación y recuperación. |
+| `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública de la aplicación. Fija a la vez el host y el puerto donde escucha la API y la dirección con la que se construyen los enlaces de activación. |
 | `PIRRY_LEDGER_SMTP_HOST` | Servidor SMTP saliente, por ejemplo `smtp.gmail.com`. |
 | `PIRRY_LEDGER_SMTP_PORT` | Puerto SMTP. Con `StartTls` suele ser `587`. |
 | `PIRRY_LEDGER_SMTP_SECURITY` | Cómo se cifra el transporte: `StartTls`, `Ssl` o `Ninguno`. |
@@ -233,17 +233,33 @@ Done.
 dotnet run --project Src/Host/PirryLedger.Host --launch-profile http
 ```
 
-Mantén esta terminal abierta. La API queda disponible en
-`http://localhost:5243`. Se comprueba en la salida de la consola:
+Mantén esta terminal abierta. El host y el puerto los fija
+`PIRRY_LEDGER_PUBLIC_BASE_URL` (paso 4): es la misma variable que da la
+dirección de los enlaces de activación, así que **una sola fuente** decide dónde
+escucha la API y qué dirección llevan los enlaces. Con el valor del paso 4, la
+API queda en `http://localhost:5243`. Se comprueba en la salida de la consola:
 
 ```
 Now listening on: http://localhost:5243
 Application started. Press Ctrl+C to shut down.
 ```
 
-Si falta una de las dos variables obligatorias, la aplicación se detiene y
-avisa por consola el nombre exacto de la variable que falta; no imprime ninguna
-traza (RD-08).
+El perfil `--launch-profile http` solo fija el entorno de desarrollo; el puerto
+no sale de ahí. Por eso la API escucha en el mismo sitio aunque se lance el DLL
+compilado directamente (`dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`)
+o con otro perfil.
+
+Si se va a abrir desde otra tablet o equipo, la variable debe ser la dirección
+de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:5243`: la API
+escucha en esa dirección y los enlaces del correo salen con ella. Cambia el
+valor en el paso 4 y vuelve a arrancar.
+
+Si falta cualquiera de las dos variables obligatorias
+(`ConnectionStrings__PirryLedger` o `PIRRY_LEDGER_PUBLIC_BASE_URL`), la
+aplicación se detiene y avisa por consola el nombre exacto de la variable que
+falta; no imprime ninguna traza (RD-08). Si el puerto ya está ocupado por otro
+programa o el host de la variable no pertenece a esta máquina, la aplicación
+también se detiene y el mensaje del sistema indica cuál de los dos es.
 
 Al arrancar, la semilla crea el primer Administrador si las variables
 `PIRRY_LEDGER_FIRST_ADMIN_*` están definidas y todavía no existe ningún
@@ -495,7 +511,8 @@ Reglas que se ven en ese diagrama:
 Cada módulo se capa igual: `Domain` (entidades y reglas), `Application` (casos
 de uso), `Infrastructure` (PostgreSQL, migraciones, SMTP) y `Api` (endpoints).
 `PirryLedger.Host` es composición y nada más: arranca la aplicación, registra
-los módulos, lee la configuración obligatoria y sirve el comando `--send-mail`.
+los módulos, lee la configuración obligatoria, fija la dirección de escucha con
+`PIRRY_LEDGER_PUBLIC_BASE_URL` y sirve el comando `--send-mail`.
 
 ### Estructura del repositorio
 
@@ -506,8 +523,8 @@ pirry-ledger/
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
-│   ├── adr/                        Decisiones tecnicas 001 a 004
-│   ├── bugs/                       Bugs abiertos y congelados
+│   ├── adr/                        Decisiones tecnicas 001 a 005
+│   ├── bugs/                       Bugs registrados: abiertos, congelados y resueltos
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -547,6 +564,7 @@ ni servidor SMTP.
 | Primer Administrador: semilla desde variables de entorno en el arranque | `docs/adr/002-primer-administrador.md` |
 | Trazabilidad del cambio de contraseña (`ContrasenaCambiadaUtc`) sin auditoría completa | `docs/adr/003-password-change-traceability.md` |
 | Columnas de AccessControl en snake_case, declaradas con `HasColumnName` | `docs/adr/004-snake-case-column-naming.md` |
+| Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-direccion-de-escucha-desde-variable.md` |
 
 ---
 
