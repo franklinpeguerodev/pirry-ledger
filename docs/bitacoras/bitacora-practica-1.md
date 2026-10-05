@@ -861,3 +861,33 @@ se caía al arrancar con `no existe la columna a.Rol` — era un artefacto local
 `dotnet build` lo resolvió y no forma parte del arreglo; (2) la sonda de
 precedencia confirmó que `UseUrls` gana sobre `ASPNETCORE_URLS`, así que el
 README no necesita advertencia sobre esa variable.
+
+**Segunda pasada: las dos observaciones del análisis final (2026-10-04).** Al
+preguntar si completarlas rompía algún requisito, la respuesta fue que no:
+`grep` en `docs/requirements/` sobre `https|TLS|SSL|cifrad|redirec|transporte|puerto|certific`
+no devuelve ninguna coincidencia. Lo más parecido que existe es
+`PIRRY_LEDGER_SMTP_SECURITY`, que cifra el correo saliente por SMTP y no tiene
+relación con la entrada HTTP de la API.
+
+- **`app.UseHttpsRedirection()` retirado de `Program.cs`.** Con la variable en
+  `http` no hay ningún endpoint HTTPS al que redirigir, así que el middleware no
+  redirigía nada: solo imprimía
+  `warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3] Failed to
+  determine the https port for redirect.` en la primera petición. Se comprobó
+  con `git stash` (código anterior, perfil `http`) que ese aviso ya salía antes
+  de este trabajo, es decir, era preexistente y no una regresión. Queda como
+  decisión y alternativa descartada en el ADR 005, punto 5.
+- **`PirryLedger.Host.http`**: comentario sobre `@host` indicando que debe
+  coincidir con `PIRRY_LEDGER_PUBLIC_BASE_URL`, para que la guía de regresión no
+  se quede con un puerto que ya no decide launchSettings.
+
+**Qué verifiqué en la segunda pasada, y con qué comando.**
+
+- `dotnet build pirry-ledger.slnx` → 0 errores, 0 advertencias.
+- `dotnet run --project Src/Host/PirryLedger.Host --no-build --launch-profile
+  http` → `Now listening on: http://localhost:5243`,
+  `Hosting environment: Development`; `GET /yo` → `401`; y
+  `POST /api/auth/login` con credenciales malas → sin ninguna línea `warn`,
+  `fail` o `https` en la salida (antes salía la del middleware).
+- `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+  AccessControl).
