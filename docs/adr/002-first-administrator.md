@@ -68,7 +68,9 @@ arranque del Host, y sus credenciales vienen de variables de entorno (RD-10).
 
 6. **Segunda puerta de entrada en la entidad**, `Usuario.CrearComoAdministrador`,
    que fija `Rol.Administrador` y `activo: true`. `Usuario.Crear` no cambia: sigue
-   dando `Estandar` e inactivo.
+   dando `Estandar` e inactivo. Esta fabrica la consume el caso de uso de la
+   capa de aplicacion `SeedFirstAdministrator`, que es el unico llamador:
+   nadie mas puede construir un `Usuario` con `Rol.Administrador`.
 
 ## Por que una segunda fabrica y no un parametro
 
