@@ -579,7 +579,37 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 ---
 
 ## 3. Cómo probar cada criterio de aceptación
-Tambien puedes hacer pruebas manuales desde el PirryLedger.Host.http, alojado en Src/Host/PirryLedger.Host .
+
+Hay tres formas de probar: las pruebas automatizadas, la guía HTTP manual y las
+consultas SQL que cada sección indica.
+
+### Guía HTTP manual
+
+`Src/Host/PirryLedger.Host/PirryLedger.Host.http` es una guía de regresión
+manual que recorre los 14 endpoints de AccessControl con sus rechazos, en el
+orden de las secciones 3.1 a 3.4 y con el bloqueo de RF-CA-19 al final. Se
+ejecuta con el cliente HTTP de VS Code (extensión REST Client) o con el de
+JetBrains.
+
+Para usarla:
+
+1. Levanta la API (paso 7).
+2. Completa una sola vez el bloque `--- Entradas ---` del archivo. El usuario
+   estándar ya viene fijado en `ana@ejemplo.com`; el correo y la contraseña del
+   Administrador se copian de tu `.env` (`PIRRY_LEDGER_FIRST_ADMIN_*`, paso 4).
+   No los escribas en el archivo ni en ningún sitio compartido.
+3. Envía las peticiones de arriba hacia abajo. Hay **tres pausas**: el token de
+   activación y los dos códigos de recuperación no llegan en ninguna respuesta
+   HTTP, porque existen solo dentro del correo en cola (RF-NOT-08). La guía
+   indica la consulta SQL con la que se leen.
+4. La última sección bloquea la cuenta quince minutos; ejecútala al final.
+
+La guía no cubre tres cosas, a propósito: las reglas que la API no puede
+alcanzar (el último Administrador activo) y las que dependen del reloj
+(expiración de sesión de 8 h) están en las pruebas unitarias; el enviador de
+correos se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
+contadores y los estados de la cola se comprueban con las consultas SQL de cada
+sección.
 
 ### Pruebas automatizadas
 
