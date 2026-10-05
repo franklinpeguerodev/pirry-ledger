@@ -40,7 +40,7 @@ Deliver the first working Core piece, Access control, from registration with ema
 - Lockout: 5 consecutive failures block the account for 15 minutes; the counter is persisted and resets on a successful login (RF-CA-19).
 - Forced password reset by an Administrator (RF-CA-13): the old password stops working and the user receives, through the queue, the email with the code to set a new one.
 - Operations never send mail directly. They write a `CorreoEnCola` row as pending and finish successfully even with no SMTP server. A separate process or command sends pending mail over SMTP and marks it sent; running it twice must not duplicate sends. SMTP credentials come from environment variables.
-- Business state machine: the central domain entity with a state attribute; 3 to 5 states declared in one place; allowed transitions declared in one place, with at least one explicitly forbidden transition and one terminal state; `docs/maquina-de-estados.md` (exact name required by the assignment) with the table (from, to, who executes, condition). The invoice is the candidate entity (for example Draft → Issued → Paid, with Cancelled as terminal), but the choice is Franklin's.
+- Business state machine: the central domain entity with a state attribute; 3 to 5 states declared in one place; allowed transitions declared in one place, with at least one explicitly forbidden transition and one terminal state; `docs/maquina-de-estados.md` (exact name required by the assignment) with the table (from, to, who executes, condition). **Decided:** the entity is `Invoice` (see "Decisions resolved for this iteration" below).
 
 ## Definition of done
 
@@ -78,7 +78,7 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
   repo root, loaded with `DotNetEnv` before the configuration is built. The
   environment always wins (`NoClobber`: a variable already defined in the
   terminal or in the system is never overwritten) and a missing `.env` is not an
-  error.   Only `.env.example` (names and descriptions, no values) is committed.
+  error. Only `.env.example` (names and descriptions, no values) is committed.
   Documented in `docs/adr/006-local-env-configuration.md`.
 
 Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-first-administrator.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).

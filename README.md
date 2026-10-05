@@ -40,6 +40,10 @@ ejecute el contexto de diseño de cada módulo. No tienes que instalarlo a mano:
 `dotnet-ef` y el paquete `Design` son cosas distintas y se necesitan ambas para
 trabajar con las migraciones.
 
+El Host además usa el paquete `DotNetEnv` para leer el archivo `.env` del paso
+4. Tampoco hay que instalarlo a mano: `dotnet restore` (y el propio
+`dotnet run`) lo baja desde `PirryLedger.Host.csproj`.
+
 ### Paso 1: instalar las herramientas
 
 Instala .NET SDK `10.0.302`, PostgreSQL 18 y Git. Después instala la herramienta
@@ -63,8 +67,12 @@ comando de instalación para él.
 ```powershell
 git clone https://github.com/franklinpeguerodev/pirry-ledger.git
 Set-Location pirry-ledger
-git checkout main
+git checkout develop
 ```
+
+`develop` es la rama donde vive el trabajo: `main` queda detrás y solo se
+actualiza cuando se integra. Para una entrega concreta, comprueba el tag
+(`git tag`) y haz `git checkout practica-1` si es lo que pide la entrega.
 
 ### Paso 3: preparar PostgreSQL
 

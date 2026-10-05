@@ -112,11 +112,9 @@ Any change that affects how the project runs must update the README with exact r
 Franklin will resolve these and update the list. Until then propose options with trade-offs and wait:
 
 1. Frontend (undefined; do not assume Angular). Until decided, the app is consumed as an API.
-2. How the first Administrator is created. Self-registration only produces an inactive Estándar (`Usuario.Crear` fixes `Rol.Estandar`), and RF-CA-08, 20 and 21 cannot be exercised until an Administrador exists. Options: seed one from environment variables, or promote the first activated user.
-3. The business entity that carries the state machine (RF-NEG-03; the invoice is a candidate, Franklin's choice).
-4. Whether a `Shared` project exists. Do not create one without approval.
+2. Whether a `Shared` project exists. Do not create one without approval.
 
-Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30) and the shape of the mail sender (a CLI command, `--send-mail`, not a hosted service).
+Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30), the shape of the mail sender (a CLI command, `--send-mail`, not a hosted service), how the first Administrator is created (`docs/adr/002-first-administrator.md`, accepted 2026-10-01: a seed from environment variables that runs on startup), and the entity carrying the state machine (`Invoice`, decided in `docs/current-iteration.md` and declared in `docs/maquina-de-estados.md`).
 
 ## Known issues (temporary, delete when fixed)
 
