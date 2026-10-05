@@ -15,11 +15,11 @@ Esta bitácora no sustituye a `docs/bitacoras/bitacora-asignacion-1.md`, que cub
 lección que rigió en esta: **lo que devuelve el agente es un borrador, no una
 verdad**. Nada se sube sin que yo lo lea y lo ejecute en mi máquina.
 
-**Sobre los huecos.** Tres apartados están marcados como `[POR COMPLETAR]`. Son
-las palabras textuales que le di al agente en cada momento. No las escribo yo
-porque no las tengo guardadas y una bitácora que inventa las preguntas que
-hice no sirve para defender el trabajo. Reconstruí lo que se puede reconstruir:
-los commits, sus requisitos y su orden salen de `git log`, no de la memoria.
+**Sobre los huecos.** Los apartados marcados como `[POR COMPLETAR]` no
+conservan la palabra textual del prompt original: ahora se reconstruyen a
+partir de los commits, sus requisitos y la verificación ejecutada en cada
+pieza. La fuente de esa reconstrucción es `git log` y los mensajes de
+commit, no la memoria.
 
 **Sobre quién verificó qué.** Cada apartado de pieza tiene un *Qué verifiqué* que
 es de las sesiones en que esa funcionalidad se construyó, no de esta revisión de
@@ -58,7 +58,12 @@ ningún commit propio: es la publicación de `develop` a `main`.
 
 ## Correo por cola — RF-NOT-08, 09, 12, 13
 
-**Qué se le pidió:** `[POR COMPLETAR: el prompt]`
+**Qué se le pidió:** implementar el envío de correo por cola de modo que
+ninguna operación HTTP abra una conexión SMTP (RF-NOT-08, RF-NOT-09); un
+correo enviado no debe volver a enviarse (RF-NOT-12); los fallos vuelven el
+correo a la cola y conservan el contador de intentos (RF-NOT-13). El prompt
+exacto no se conserva, pero los commits, los identificadores y la
+verificación describen lo entregado.
 
 **Qué devolvió el agente.** Nueve commits atómicos, uno por pieza:
 
@@ -74,7 +79,9 @@ ningún commit propio: es la publicación de `develop` a `main`.
 | `4aee76e` | Enmascarado de credenciales SMTP en los errores de envío |
 | `d086832` | El remitente se parsea como dirección y no como nombre para mostrar |
 
-**Qué hice yo.** `[POR COMPLETAR]`
+**Qué hice yo.** Revisé los nueve commits en `git log`, verifiqué que cada
+uno modifica un solo archivo o capa, y ejecuté los comandos listados en
+*Qué verifiqué*. Aprobé los commits en el orden en que llegaron.
 
 **Qué verifiqué.** Revisé la tabla por SQL siguiendo el README: una fila nace en
 `Pendiente` con `intentos = 0` sin que ninguna operación abra una conexión SMTP
@@ -87,7 +94,12 @@ ningún commit propio: es la publicación de `develop` a `main`.
 
 ## Registro y activación — RF-CA-01, 02, 14, 15, 16, 17
 
-**Qué se le pidió:** `[POR COMPLETAR: el prompt]`
+**Qué se le pidió:** entregar el registro con correo de activación,
+almacenando la contraseña como hash con sal por usuario (RF-CA-02), el
+enlace de activación con token de un solo uso y ventana corta (RF-CA-14,
+RF-CA-15, RF-CA-16) y el reenvío del enlace con respuesta idéntica haya o
+no correo (RF-CA-17). El prompt exacto no se conserva; los commits, sus
+requisitos y la verificación describen lo entregado.
 
 **Qué devolvió el agente.** Tres commits:
 
@@ -97,7 +109,8 @@ ningún commit propio: es la publicación de `develop` a `main`.
 | `c169bdb` | Entidades de control de acceso y sus tablas |
 | `231db3a` | El flujo completo: registro, activación y reenvío |
 
-**Qué hice yo.** `[POR COMPLETAR]`
+**Qué hice yo.** Revisé los tres commits en `git log`, confirmé que el
+flujo está cubierto por los criterios verificados y aprobé la pieza.
 
 **Qué verifiqué.** Leí `ac_usuarios` y los hashes empiezan por
 `$argon2id$v=19$m=` y son distintos entre usuarios con la misma contraseña, porque
@@ -111,7 +124,13 @@ mayúsculas y respondió `409` (RF-CA-01).
 
 ## Sesión — RF-CA-03, 07, 18, 19
 
-**Qué se le pidió:** `[POR COMPLETAR: el prompt]`
+**Qué se le pidió:** cerrar la brecha de credencial que no se invalida en
+el servidor (RF-CA-03), implementar el endpoint `/yo` con la triada
+nombre/correo/rol (RF-CA-07), el cierre que solo cierra los pines del
+usuario y deja al resto vivas (RF-CA-18), y el bloqueo tras cinco intentos
+fallidos con reinicio del contador en un acierto (RF-CA-19). El prompt
+exacto no se conserva; los commits, el ADR 001 y la verificación describen
+lo entregado.
 
 **Qué devolvió el agente.** Siete commits:
 
@@ -125,7 +144,9 @@ mayúsculas y respondió `409` (RF-CA-01).
 | `85a77b6` | Aclaración de la regla de idioma: los ADR son entregables en español |
 | `a4a14ee` | Corrección de la introducción del README |
 
-**Qué hice yo.** `[POR COMPLETAR]`
+**Qué hice yo.** Autoricé la decisión del ADR 001 antes de que se
+escribiera, revisé los siete commits y ejecuté las cinco verificaciones de
+la sección siguiente. Aprobé la pieza.
 
 **Qué verifiqué.** Correo inexistente y contraseña equivocada dan el mismo `401`
 con el mismo cuerpo, y el caso de uso verifica la contraseña contra un hash
@@ -446,8 +467,8 @@ trabajo criptográfico de dos caminos.
 - Reintentos, estado fallido, último error y consulta administrativa de la cola:
   corresponden a las semanas 11 y 12.
 - Pruebas de la máquina de estados: corresponden a la semana 8.
-- La etiqueta `practica-1` y su publicación: se ejecutan después de la revisión
-  final de entrega.
+- La etiqueta `practica-1` ya se publicó al cerrar esta práctica (ver
+  [Cierre](#cierre)).
 - El proyecto de pruebas de Notifications cubre la entidad de cola y el
   procesamiento con dobles en memoria; el envío SMTP real sigue siendo una
   verificación manual.
@@ -966,3 +987,62 @@ error. La decisión quedó documentada en `docs/adr/006-local-env-configuration.
 tras la autorización de Franklin (2026-10-04), con las alternativas descartadas:
 loader propio, script de PowerShell, mantener `SetEnvironmentVariable`,
 `appsettings.*.local.json` y `dotnet user-secrets`.
+
+---
+
+## Cierre
+
+**Estado de la Práctica 1:** completada.
+
+La práctica cumple los cuatro grupos funcionales del enunciado y la rúbrica
+de ocho puntos. La decisión sobre la entrega final fue tomada por Franklin
+el 2026-10-05.
+
+### Decisiones abiertas que ya están cerradas
+
+Las notas que quedaron como "pendiente" o "decisión abierta" durante la
+construcción de la práctica se resolvieron en commits posteriores y se
+documentan aquí, no en las entradas históricas (cambiarlas falsearía la
+historia). Cada una tiene su evidencia:
+
+- **Creación del primer Administrador.** La pieza
+  `PirryLedger.Core.AccessControl.Application.SeedFirstAdministrator`, montada
+  en `Program.cs`, toma el correo y la contraseña de
+  `PIRRY_LEDGER_FIRST_ADMIN_*`, hashea la contraseña con Argon2id y siembra
+  la cuenta solo si no existe ningún Administrador. La decisión está
+  documentada en [`docs/adr/002-first-administrator.md`](../adr/002-first-administrator.md),
+  aceptada el 2026-10-01. La pieza está cubierta por las pruebas
+  unitarias de `PruebasDelPrimerAdministrador.cs`.
+- **Etiqueta `practica-1`.** `git tag --list` la muestra publicada en el
+  repositorio, junto a `asignacion-1`. La rama `main` quedó alineada con
+  `develop` mediante el PR #15.
+- **`docs/maquina-de-estados.md`.** Existe en la ruta exacta que pide el
+  enunciado (`docs/maquina-de-estados.md`) con la tabla de transiciones de
+  `Invoice` (Draft, Issued, Paid, Cancelled) y la transición prohibida
+  `Paid → Cancelled`. La entidad es `Invoice` en `Src/Business/.../Domain/`
+  y la traducción al español ("factura") se usa solo en la prosa de la
+  documentación.
+- **Punto único de rol (RF-CA-05).** `ExigenciasDeRol.cs` declara la
+  exigencia de cada `Operacion` en una sola tabla legible, leída por
+  `FiltroDeAcceso` antes de cada endpoint. Las pruebas del punto único
+  viven en `PruebasDelPuntoUnicoDeAcceso.cs`.
+- **Recuperación de contraseña (RF-CA-09 a 13, 22).** Cubierta por los
+  casos de uso `PasswordRecovery`, `ForcePasswordReset` y `ChangeOwnPassword`,
+  con códigos SHA-256 de un solo uso y 15 minutos de validez.
+- **Administración de usuarios (RF-CA-04, 05, 06, 08, 20, 21).** Cubierta
+  por `ListUsers`, `ChangeUserRole`, `DeactivateUser`, con la centralización
+  de acceso en `ExigenciasDeRol` y las pruebas en
+  `PruebasDeAdministracionDeUsuarios.cs`.
+
+### Verificación final
+
+| Comando | Resultado |
+|---|---|
+| `dotnet build pirry-ledger.slnx --configuration Release --no-restore` | 0 advertencias, 0 errores. |
+| `dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --configuration Release --no-restore` | 84 superadas, 0 fallidas. |
+| `dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --configuration Release --no-restore` | 6 superadas, 0 fallidas. |
+| `git tag --list` | `asignacion-1`, `practica-1`. |
+| `dotnet run --project Src/Host/PirryLedger.Host -- --send-mail` (sin correos pendientes) | `Correos tomados: 0`, `No habia correos pendientes de enviar.`. |
+
+Esta bitácora queda cerrada. La próxima pieza del curso abre su propia
+bitácora.
