@@ -114,7 +114,15 @@ Franklin will resolve these and update the list. Until then propose options with
 1. Frontend (undefined; do not assume Angular). Until decided, the app is consumed as an API.
 2. Whether a `Shared` project exists. Do not create one without approval.
 
-Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30), the shape of the mail sender (a CLI command, `--send-mail`, not a hosted service), how the first Administrator is created (`docs/adr/002-first-administrator.md`, accepted 2026-10-01: a seed from environment variables that runs on startup), and the entity carrying the state machine (`Invoice`, decided in `docs/current-iteration.md` and declared in `docs/maquina-de-estados.md`).
+Resolved and therefore no longer listed:
+- the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30);
+- the shape of the mail sender, documented as `docs/adr/007-mail-sender-cli-command.md` (a CLI command, `--send-mail`, not a hosted service);
+- how the first Administrator is created (`docs/adr/002-first-administrator.md`, accepted 2026-10-01: a seed from environment variables that runs on startup);
+- the entity carrying the state machine (`Invoice`, decided in `docs/current-iteration.md` and declared in `docs/maquina-de-estados.md`);
+- minimal password-change traceability via a nullable UTC timestamp (`docs/adr/003-password-change-traceability.md`, accepted 2026-10-02);
+- PostgreSQL column naming (`docs/adr/004-snake-case-column-naming.md`, accepted 2026-10-03);
+- the listen address coming from `PIRRY_LEDGER_PUBLIC_BASE_URL` (`docs/adr/005-listen-address-from-public-base-url.md`, accepted 2026-10-04);
+- loading local environment variables from a `.env` file with `DotNetEnv` (`docs/adr/006-local-env-configuration.md`, accepted 2026-10-04).
 
 ## Known issues (temporary, delete when fixed)
 
