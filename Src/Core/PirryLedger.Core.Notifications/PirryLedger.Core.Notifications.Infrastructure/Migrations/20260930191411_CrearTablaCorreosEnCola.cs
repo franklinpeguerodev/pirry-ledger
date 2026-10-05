@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace PirryLedger.Core.Notifications.Infrastructure.Persistence.Migrations
+namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class CrearTablaCorreosEnCola : Migration
