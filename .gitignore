@@ -1,5 +1,5 @@
 # ============================================================
-#  .GITIGNORE — Proyecto .NET (Microservicios) + Angular
+#  .GITIGNORE — Proyecto .NET (Modular Monolith)
 #  Muy bien - maxwelkn
 #  Ignora artefactos de build, configs locales, secretos,
 #  resultados de tests, logs y archivos generados por IDEs.
@@ -232,69 +232,7 @@ logs/
 *.etl
 
 # ------------------------------------------------------------
-# 7) ANGULAR / NODE (FRONTEND)
-# ------------------------------------------------------------
-
-# Dependencias instaladas — SIEMPRE se regeneran con npm install
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.lerna/
-.npm/
-.yarn/
-.pnp/
-.pnp.*
-
-# Compilación y bundle producido por ng build
-dist/
-out-tsc/
-bazel-out/
-.tmp/
-
-# Cache de compilación de Angular (NGCC / ngcc)
-.angular/
-.angular/cache
-
-# Server-Side Rendering (Angular Universal / Express)
-server/
-main.server.ts
-*.server.js
-*.server.mjs
-
-# Caché de TypeScript y metadatos de compilación incremental
-*.tsbuildinfo
-*.tsbuildindex
-
-# Coverage de tests Angular (Karma/Jasmine)
-nyc_output/
-coverage-html-report/
-.lighthouseci/
-
-# Envoltorios de framework (Vite/Webpack/Other)
-.vite/
-.webpack-cache/
-
-# ------------------------------------------------------------
-# 8) DOCKER / KUBERNETES / CONTENEDORES
-# ------------------------------------------------------------
-# El .dockerignore de cada servicio SÍ se versiona (no se ignora).
-
-# Cachés y volúmenes locales de contenedores
-.docker-cache/
-.docker/volumes/
-*.local.yml
-docker-compose.override.yml
-docker-compose.*.override.yml
-kubeconfig
-.kube/
-.helm/cache/
-values.local.yaml
-values-dev.yaml
-
-# ------------------------------------------------------------
-# 9) HERRAMIENTAS Y GENERADOS
+# 7) HERRAMIENTAS Y GENERADOS
 # ------------------------------------------------------------
 
 # Carpeta de empaquetado / publicación
