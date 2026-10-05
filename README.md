@@ -40,6 +40,10 @@ ejecute el contexto de diseño de cada módulo. No tienes que instalarlo a mano:
 `dotnet-ef` y el paquete `Design` son cosas distintas y se necesitan ambas para
 trabajar con las migraciones.
 
+El Host además usa el paquete `DotNetEnv` para leer el archivo `.env` del paso
+4. Tampoco hay que instalarlo a mano: `dotnet restore` (y el propio
+`dotnet run`) lo baja desde `PirryLedger.Host.csproj`.
+
 ### Paso 1: instalar las herramientas
 
 Instala .NET SDK `10.0.302`, PostgreSQL 18 y Git. Después instala la herramienta
@@ -63,8 +67,12 @@ comando de instalación para él.
 ```powershell
 git clone https://github.com/franklinpeguerodev/pirry-ledger.git
 Set-Location pirry-ledger
-git checkout main
+git checkout develop
 ```
+
+`develop` es la rama donde vive el trabajo: `main` queda detrás y solo se
+actualiza cuando se integra. Para una entrega concreta, comprueba el tag
+(`git tag`) y haz `git checkout practica-1` si es lo que pide la entrega.
 
 ### Paso 3: preparar PostgreSQL
 
@@ -97,14 +105,14 @@ PostgreSQL. Después de ejecutar el SQL, sal con `\q`.
 
 ### Paso 4: definir las variables de entorno
 
-La aplicación lee todo de variables de entorno. **Ninguna va en el repositorio**
-(RD-10). Esta tabla es el nombre de cada una y para qué sirve; nunca contiene
-valores reales.
+La aplicación lee todo de variables de entorno (RD-10). **Ninguna va en el
+repositorio**: esta tabla es el nombre de cada una y para qué sirve; nunca
+contiene valores reales.
 
 | Variable | Para qué sirve |
 |---|---|
 | `ConnectionStrings__PirryLedger` | **Obligatoria.** Cadena de conexión a PostgreSQL: host, puerto, base de datos, usuario y contraseña. |
-| `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública de la aplicación. Se usa para construir los enlaces de activación y recuperación. |
+| `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública de la aplicación. Fija a la vez el host y el puerto donde escucha la API y la dirección con la que se construyen los enlaces de activación. |
 | `PIRRY_LEDGER_SMTP_HOST` | Servidor SMTP saliente, por ejemplo `smtp.gmail.com`. |
 | `PIRRY_LEDGER_SMTP_PORT` | Puerto SMTP. Con `StartTls` suele ser `587`. |
 | `PIRRY_LEDGER_SMTP_SECURITY` | Cómo se cifra el transporte: `StartTls`, `Ssl` o `Ninguno`. |
@@ -121,44 +129,33 @@ registro funcionan igual, pero el enviador no podrá entregar correos reales. La
 tres del primer Administrador también son opcionales; sin ellas no se crea
 automáticamente ningún Administrador.
 
-Elige **una sola** opción. No ejecutes las dos: las variables de proceso de la
-opción B sobrescriben, mientras esa terminal viva, las de la opción A.
-
-#### Opción A: entorno persistente del usuario de Windows
-
-Guarda **las siete** variables a nivel Usuario. Cada terminal nueva que abras
-después ya las hereda:
+Al arrancar, la aplicación busca un archivo `.env` desde el directorio desde el
+que lanzas el comando hacia arriba y carga sus variables. Ese archivo es la
+**única** forma de definirlas que documenta este README. Si todavía no tienes
+uno, créalo desde la plantilla (si ya existe, déjalo como está):
 
 ```powershell
-[Environment]::SetEnvironmentVariable('ConnectionStrings__PirryLedger', 'Host=127.0.0.1;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contraseña>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_PUBLIC_BASE_URL', 'http://localhost:5243', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_EMAIL', '<correo-del-administrador>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_PASSWORD', '<contraseña-del-administrador>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_FIRST_ADMIN_NAME', 'Administrador', 'User')
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-No copies estos valores literalmente: reemplaza los textos entre `<` y `>` con
-los valores de tu entorno. **Cierra y abre una terminal nueva** después de
-ejecutarla. No vuelvas a ejecutar ese bloque en cada arranque. Las variables
-SMTP se agregan aparte en el paso [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail).
+Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
 
-#### Opción B: entorno temporal de la terminal actual
-
-Nada se guarda en Windows: todo vive en la terminal actual y muere con ella.
-Define **las mismas siete** variables, la cadena de conexión también como
-variable de proceso:
-
-```powershell
-$env:ConnectionStrings__PirryLedger = 'Host=127.0.0.1;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contraseña>'
-$env:PIRRY_LEDGER_PUBLIC_BASE_URL = 'http://localhost:5243'
-$env:PIRRY_LEDGER_FIRST_ADMIN_EMAIL = '<correo-del-administrador>'
-$env:PIRRY_LEDGER_FIRST_ADMIN_PASSWORD = '<contraseña-del-administrador>'
-$env:PIRRY_LEDGER_FIRST_ADMIN_NAME = 'Administrador'
-```
-
-Si abres otra terminal, repite el bloque allí: una terminal nueva no hereda las
-variables de la anterior. Ejecuta en esta misma terminal las migraciones (paso
-6), la API (paso 7) y el enviador de correo.
+- Vale para cualquier terminal y para cualquier comando: las migraciones (paso
+  6), la API (paso 7), el DLL compilado y el enviador de correo. No hay que
+  repetir nada en cada sesión ni guardar nada en Windows.
+- Si no existe el `.env`, no es un error: la aplicación sigue buscando las
+  variables en el entorno del sistema, y si tampoco están, avisa por el nombre
+  de la que falta y se detiene (RD-08).
+- `.env` está en el `.gitignore`: **nunca** se sube al repositorio. Sí se sube
+  `.env.example`, la plantilla con las once variables, sus descripciones y
+  valores de ejemplo. Nunca pongas un valor real en `.env.example`.
+- Si un valor tiene espacios o el carácter `#`, ponlo entre comillas dobles.
+- Si una variable ya está definida en el entorno del sistema (por ejemplo, un
+  residuo de una versión anterior de este README), manda la del entorno y el
+  `.env` no la pisa: bórrala de Windows para que mande el archivo. En un equipo
+  limpio no hay ninguna definida.
+- Las seis SMTP también viven en el `.env`: se completan en el paso
+  [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail).
 
 ### Paso 5: compilar y ejecutar las pruebas
 
@@ -191,10 +188,8 @@ Esto crea las tablas de AccessControl (`ac_usuarios`, `ac_codigos_recuperacion`,
 (`not_correos_en_cola`) en la misma base, manteniendo la propiedad de cada
 módulo.
 
-Con la Opción A, ejecuta los comandos en una terminal **nueva** (hereda las
-variables persistentes). Con la Opción B, en la **misma** terminal donde
-definiste `$env:`. No cargues desde el alcance `User` una variable que definiste
-como temporal.
+Da igual la terminal: el `.env` está en la raíz del repositorio y la aplicación
+lo carga al arrancar, en cualquier terminal y en cualquier comando.
 
 Resultado esperado:
 
@@ -233,22 +228,37 @@ Done.
 dotnet run --project Src/Host/PirryLedger.Host --launch-profile http
 ```
 
-Mantén esta terminal abierta. La API queda disponible en
-`http://localhost:5243`. Se comprueba en la salida de la consola:
+Mantén esta terminal abierta. El host y el puerto los fija
+`PIRRY_LEDGER_PUBLIC_BASE_URL` (paso 4): es la misma variable que da la
+dirección de los enlaces de activación, así que **una sola fuente** decide dónde
+escucha la API y qué dirección llevan los enlaces. Con el valor del paso 4, la
+API queda en `http://localhost:5243`. Se comprueba en la salida de la consola:
 
 ```
 Now listening on: http://localhost:5243
 Application started. Press Ctrl+C to shut down.
 ```
 
-Si falta una de las dos variables obligatorias, la aplicación se detiene y
-avisa por consola el nombre exacto de la variable que falta; no imprime ninguna
-traza (RD-08).
+El perfil `--launch-profile http` solo fija el entorno de desarrollo; el puerto
+no sale de ahí. Por eso la API escucha en el mismo sitio aunque se lance el DLL
+compilado directamente (`dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`)
+o con otro perfil.
+
+Si se va a abrir desde otra tablet o equipo, la variable debe ser la dirección
+de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:5243`: la API
+escucha en esa dirección y los enlaces del correo salen con ella. Cambia el
+valor en el paso 4 y vuelve a arrancar.
+
+Si falta cualquiera de las dos variables obligatorias
+(`ConnectionStrings__PirryLedger` o `PIRRY_LEDGER_PUBLIC_BASE_URL`), la
+aplicación se detiene y avisa por consola el nombre exacto de la variable que
+falta; no imprime ninguna traza (RD-08). Si el puerto ya está ocupado por otro
+programa o el host de la variable no pertenece a esta máquina, la aplicación
+también se detiene y el mensaje del sistema indica cuál de los dos es.
 
 Al arrancar, la semilla crea el primer Administrador si las variables
 `PIRRY_LEDGER_FIRST_ADMIN_*` están definidas y todavía no existe ningún
-Administrador. Con la Opción A, arranca desde una terminal nueva; con la
-Opción B, desde la misma terminal del paso 4.
+Administrador. Las lee del `.env`, así que funciona desde cualquier terminal.
 
 Devuelve `404` en cualquier ruta que no exista, porque el resto del sistema
 todavía no está construido. De las rutas de esta iteración, `/yo` sin cabecera
@@ -257,8 +267,7 @@ credencial.
 
 ### Paso 8: comprobar que funciona
 
-En una segunda terminal, registra un usuario Estándar (con la Opción B, repite
-antes allí el bloque temporal del paso 4):
+En una segunda terminal, registra un usuario Estándar:
 
 ```powershell
 $cuenta = @{
@@ -324,7 +333,7 @@ ejecutar.
 
 La solución es una semilla que corre en el arranque y lee las tres variables
 `PIRRY_LEDGER_FIRST_ADMIN_*`. La decisión y las alternativas están en
-`docs/adr/002-primer-administrador.md`.
+`docs/adr/002-first-administrator.md`.
 
 Cómo se comporta:
 
@@ -367,9 +376,7 @@ operación que los encola. Se lanza con un comando, no arranca solo:
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Con la Opción A funciona en cualquier terminal nueva. Con la Opción B, en la
-misma terminal donde definiste las variables. La terminal puede tener la API
-detenida o en marcha, da igual.
+Funciona en cualquier terminal, con la API detenida o en marcha, da igual.
 
 Imprime siempre un resumen y una línea final que depende del resultado. Sin
 credenciales SMTP válidas, un correo pendiente produce esto:
@@ -395,50 +402,66 @@ recibir la contraseña normal de tu cuenta: necesitas una **contraseña de
 aplicación** creada en la configuración de seguridad de Google. Usa una cuenta
 de prueba, si es posible. [Documentación de Google](https://support.google.com/mail/answer/185833?hl=es-419).
 
-Si elegiste la Opción A, guarda las variables para tu usuario de Windows.
-`Read-Host` lee la contraseña de aplicación de forma segura y el
-`-replace '\s', ''` elimina los espacios que Google puede mostrar entre grupos
-de caracteres:
+Las seis variables SMTP se definen, como todas las demás, **en el `.env`** y en
+ningún otro sitio: no tocas Windows ni la terminal. La plantilla del paso 4 ya
+las trae con valores de ejemplo, así que solo te queda lo tuyo:
+
+| Variable | Qué poner |
+|---|---|
+| `PIRRY_LEDGER_SMTP_HOST` | Déjalo en `smtp.gmail.com`. |
+| `PIRRY_LEDGER_SMTP_PORT` | Déjalo en `587`. |
+| `PIRRY_LEDGER_SMTP_SECURITY` | Déjalo en `StartTls`. |
+| `PIRRY_LEDGER_SMTP_USER` | Tu cuenta de prueba, dos veces (aquí y en `FROM`). |
+| `PIRRY_LEDGER_SMTP_PASSWORD` | La contraseña de aplicación, **entre comillas dobles**, porque puede contener espacios. |
+| `PIRRY_LEDGER_SMTP_FROM` | La misma cuenta de prueba: es la dirección que aparece como remitente. |
+
+En el `.env` teórico, esas seis líneas se ven así:
+
+```env
+PIRRY_LEDGER_SMTP_HOST=smtp.gmail.com
+PIRRY_LEDGER_SMTP_PORT=587
+PIRRY_LEDGER_SMTP_SECURITY=StartTls
+PIRRY_LEDGER_SMTP_USER=<tu-cuenta-de-prueba@gmail.com>
+PIRRY_LEDGER_SMTP_PASSWORD="<contrasena-de-aplicacion>"
+PIRRY_LEDGER_SMTP_FROM=<tu-cuenta-de-prueba@gmail.com>
+```
+
+Si prefieres no escribir la contraseña a mano, este bloque la lee sin mostrarla
+ni dejarla en el historial de la terminal y la escribe en `.env`, reemplazando
+la línea si ya existe (no la duplica) o añadiéndola al final si falta:
 
 ```powershell
 $segura = Read-Host -Prompt 'Contrasena de aplicacion SMTP' -AsSecureString
 $credencial = New-Object System.Net.NetworkCredential('', $segura)
 $plana = $credencial.Password -replace '\s', ''
 
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_PASSWORD', $plana, 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_HOST', 'smtp.gmail.com', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_PORT', '587', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_SECURITY', 'StartTls', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_USER', '<tu-cuenta-de-prueba@gmail.com>', 'User')
-[Environment]::SetEnvironmentVariable('PIRRY_LEDGER_SMTP_FROM', '<tu-cuenta-de-prueba@gmail.com>', 'User')
+$clave = 'PIRRY_LEDGER_SMTP_PASSWORD'
+$linea = '{0}="{1}"' -f $clave, $plana
+$ruta = Join-Path (Get-Location) '.env'
+$lineas = [System.Collections.Generic.List[string]]::new()
+[System.IO.File]::ReadAllLines($ruta) | ForEach-Object {
+    if ($_ -match "^$clave=") { $lineas.Add($linea) } else { $lineas.Add($_) }
+}
+if ($lineas -notcontains $linea) { $lineas.Add($linea) }
+[System.IO.File]::WriteAllLines($ruta, $lineas, (New-Object System.Text.UTF8Encoding($false)))
 
 $segura = $null
 $credencial = $null
 $plana = $null
+$lineas = $null
+$linea = $null
 ```
 
-Si elegiste la Opción B, usa asignaciones temporales en la misma terminal:
+Vuelve a arrancar la API después de editar el archivo: las variables se leen al
+arrancar, no en cada petición.
 
-```powershell
-$segura = Read-Host -Prompt 'Contrasena de aplicacion SMTP' -AsSecureString
-$credencial = New-Object System.Net.NetworkCredential('', $segura)
-$plana = $credencial.Password -replace '\s', ''
+Dos avisos:
 
-$env:PIRRY_LEDGER_SMTP_PASSWORD = $plana
-$env:PIRRY_LEDGER_SMTP_HOST = 'smtp.gmail.com'
-$env:PIRRY_LEDGER_SMTP_PORT = '587'
-$env:PIRRY_LEDGER_SMTP_SECURITY = 'StartTls'
-$env:PIRRY_LEDGER_SMTP_USER = '<tu-cuenta-de-prueba@gmail.com>'
-$env:PIRRY_LEDGER_SMTP_FROM = '<tu-cuenta-de-prueba@gmail.com>'
-
-$segura = $null
-$credencial = $null
-$plana = $null
-```
-
-Reemplaza los dos valores `<tu-cuenta-de-prueba@gmail.com>` por la dirección de
-la cuenta que creó la contraseña de aplicación. No escribas la contraseña de
-aplicación en el README, en el código, en comandos guardados ni en commits.
+- Si alguna de esas seis variables quedara definida como variable de entorno de
+  Windows (versión antigua de este README), bórrala: el entorno manda sobre el
+  `.env` y esa variable ignoraría el archivo.
+- No escribas la contraseña de aplicación en el README, en el código, en
+  comandos guardados ni en commits.
 
 ---
 
@@ -495,7 +518,8 @@ Reglas que se ven en ese diagrama:
 Cada módulo se capa igual: `Domain` (entidades y reglas), `Application` (casos
 de uso), `Infrastructure` (PostgreSQL, migraciones, SMTP) y `Api` (endpoints).
 `PirryLedger.Host` es composición y nada más: arranca la aplicación, registra
-los módulos, lee la configuración obligatoria y sirve el comando `--send-mail`.
+los módulos, lee la configuración obligatoria, fija la dirección de escucha con
+`PIRRY_LEDGER_PUBLIC_BASE_URL` y sirve el comando `--send-mail`.
 
 ### Estructura del repositorio
 
@@ -503,11 +527,11 @@ los módulos, lee la configuración obligatoria y sirve el comando `--send-mail`
 pirry-ledger/
 ├── global.json                     Fija el SDK .NET 10.0.302
 ├── pirry-ledger.slnx               Solución con todos los proyectos
+├── .env.example                    Plantilla de variables de entorno (el .env real no se sube)
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
-│   ├── adr/                        Decisiones tecnicas 001 a 004
-│   ├── bugs/                       Bugs abiertos y congelados
+│   ├── adr/                        Decisiones técnicas 001 a 006: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -541,16 +565,51 @@ ni servidor SMTP.
 
 ### Decisiones documentadas
 
+Convención de los ADR: nombre de archivo y título en inglés, contenido en español.
+
 | Decisión | ADR |
 |---|---|
-| Credencial de sesión: token opaco, tabla `ac_sesiones` y `CredencialVersion` | `docs/adr/001-credencial-de-sesion.md` |
-| Primer Administrador: semilla desde variables de entorno en el arranque | `docs/adr/002-primer-administrador.md` |
+| Credencial de sesión: token opaco, tabla `ac_sesiones` y `CredencialVersion` | `docs/adr/001-session-credential.md` |
+| Primer Administrador: semilla desde variables de entorno en el arranque | `docs/adr/002-first-administrator.md` |
 | Trazabilidad del cambio de contraseña (`ContrasenaCambiadaUtc`) sin auditoría completa | `docs/adr/003-password-change-traceability.md` |
 | Columnas de AccessControl en snake_case, declaradas con `HasColumnName` | `docs/adr/004-snake-case-column-naming.md` |
+| Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-listen-address-from-public-base-url.md` |
+| Variables de entorno de desarrollo local desde un archivo `.env` cargado con `DotNetEnv` | `docs/adr/006-local-env-configuration.md` |
 
 ---
 
 ## 3. Cómo probar cada criterio de aceptación
+
+Hay tres formas de probar: las pruebas automatizadas, la guía HTTP manual y las
+consultas SQL que cada sección indica.
+
+### Guía HTTP manual
+
+`Src/Host/PirryLedger.Host/PirryLedger.Host.http` es una guía de regresión
+manual que recorre los 14 endpoints de AccessControl con sus rechazos, en el
+orden de las secciones 3.1 a 3.4 y con el bloqueo de RF-CA-19 al final. Se
+ejecuta con el cliente HTTP de VS Code (extensión REST Client) o con el de
+JetBrains.
+
+Para usarla:
+
+1. Levanta la API (paso 7).
+2. Completa una sola vez el bloque `--- Entradas ---` del archivo. El usuario
+   estándar ya viene fijado en `ana@ejemplo.com`; el correo y la contraseña del
+   Administrador se copian de tu `.env` (`PIRRY_LEDGER_FIRST_ADMIN_*`, paso 4).
+   No los escribas en el archivo ni en ningún sitio compartido.
+3. Envía las peticiones de arriba hacia abajo. Hay **tres pausas**: el token de
+   activación y los dos códigos de recuperación no llegan en ninguna respuesta
+   HTTP, porque existen solo dentro del correo en cola (RF-NOT-08). La guía
+   indica la consulta SQL con la que se leen.
+4. La última sección bloquea la cuenta quince minutos; ejecútala al final.
+
+La guía no cubre tres cosas, a propósito: las reglas que la API no puede
+alcanzar (el último Administrador activo) y las que dependen del reloj
+(expiración de sesión de 8 h) están en las pruebas unitarias; el enviador de
+correos se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
+contadores y los estados de la cola se comprueban con las consultas SQL de cada
+sección.
 
 ### Pruebas automatizadas
 
@@ -626,15 +685,6 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Bod
 # Solo letras -> 400
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; correo='b@ejemplo.com'; contrasena='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1023,18 +1073,26 @@ toma cero.
 
 #### RF-NOT-13 — las credenciales vienen de variables de entorno
 
-Borra o cambia `PIRRY_LEDGER_SMTP_PASSWORD` en esa terminal, deja un correo
-pendiente y ejecuta el enviador:
+Deja un correo pendiente (el registro de un usuario deja pendiente su correo de
+activación) y quita la contraseña SMTP de la configuración: borra o vacía la
+línea `PIRRY_LEDGER_SMTP_PASSWORD` de tu `.env`. Si en algún momento la
+definiste además como variable de entorno de Windows, bórrala también de ahí:
+el entorno manda sobre el `.env` y el archivo se quedaría sin efecto.
 
 ```powershell
-$env:PIRRY_LEDGER_SMTP_PASSWORD = ''
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-El correo vuelve a `Pendiente` con `intentos = 1`, y el proceso informa:
+Con la contraseña sin definir, `SmtpConfiguracion.EstaConfigurada` es `false` y
+el transporte se niega a enviar. El correo sigue en la cola como pendiente y el
+proceso informa:
 
 ```
+Correos tomados: 1
+Correos enviados: 0
 Correos fallidos: 1
+  - <destinatario>: Faltan las variables de entorno del servidor de correo (RF-NOT-13). Revisa el README.
+Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
 ```
 
 Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
@@ -1232,7 +1290,7 @@ todavía no se escribe: llega en la semana 11.
   por su cuenta.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
-  `docs/adr/001-credencial-de-sesion.md`.
+  `docs/adr/001-session-credential.md`.
 - **Reintentos automáticos, estado fallido y escritura de `ultimo_error`** en el
   envío de correo. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.

@@ -138,7 +138,7 @@ contraseña correcta, se rechazó (RF-CA-19).
 
 ## Decisiones
 
-`docs/adr/001-credencial-de-sesion.md`, aceptada el 2026-09-30: credencial
+`docs/adr/001-session-credential.md`, aceptada el 2026-09-30: credencial
 opaca, tabla `Sesion` y `CredencialVersion` copiada por sesión.
 
 El ADR guarda el razonamiento entero, incluida la comparación con JWT y una lista
@@ -595,8 +595,8 @@ esta modificación adicional solo se reorganizó documentación y
 Después se completó la trazabilidad de criterios que faltaba en la guía:
 RF-CA-04, RF-CA-06, vencimiento de RF-CA-16, reinicio del contador de
 RF-CA-19, separación de RF-CA-09 a RF-CA-12 y la tabla de evidencia de RD-05 a
-RD-12. El plan de ejecución permanece en `docs/`; únicamente las bitácoras se
-concentran en `docs/bitacoras/`.
+RD-12. El plan de ejecución que había en `docs/` se eliminó el 2026-10-04 por
+decisión de Franklin; las bitácoras se concentran en `docs/bitacoras/`.
 
 También se amplió el Paso 3 del README con el SQL para crear el rol de
 PostgreSQL y la base `pirry_ledger`, además del comando `psql` para conectarse
@@ -780,3 +780,189 @@ desarrollo no coincidía con `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` (ocho intentos
 fallidos y bloqueo de quince minutos). Con su autorización se restableció con el
 propio flujo del producto (RF-CA-09 → RF-CA-10) y se actualizó la variable de
 entorno; el valor no aparece ni en este documento ni en el repositorio.
+
+---
+
+## Puerto de escucha desde la variable de entorno — bug 001 y ADR 005 (2026-10-04)
+
+**Qué se pidió.** Franklin me pidió analizar el proyecto y confirmar si el bug
+del puerto de escucha, registrado el 2026-10-03, era real tal
+como estaba planteado. Lo es: lo verifiqué leyendo el código y corriendo la
+aplicación. Después pidió arreglarlo con una indicación concreta:
+`PIRRY_LEDGER_PUBLIC_BASE_URL` pasa a ser la única fuente de verdad — define el
+host:puerto donde escucha la API y la dirección de los enlaces de activación —,
+sin dañar, romper ni cambiar lógica, y creando la rama pertinente.
+
+Antes de tocar código presenté el plan y cuatro decisiones; las resolvió así:
+ADR para la decisión, quitar `applicationUrl` de `launchSettings.json`, escuchar
+exactamente lo que diga la variable (no todos los interfaces) y actualizar el
+registro de bug, la bitácora y `current-iteration.md` además del README.
+
+**Qué devolvió el agente.**
+
+- Rama `fix/standardize-listen-url-on-base-env-var` desde `develop`.
+- `Program.cs`: la variable se lee una sola vez y ese `urlBase` alimenta
+  `builder.WebHost.UseUrls(urlBase)` (escucha) y
+  `AddAccessControl(conexion, urlBase)` (enlaces). Una sola fuente.
+- `launchSettings.json`: `applicationUrl` fuera de los dos perfiles; solo quedan
+  `ASPNETCORE_ENVIRONMENT=Development`.
+- Corrección de comentarios que repetían el error del README: la recuperación no
+  usa la variable (`Program.cs`, `ConfiguracionEntorno.cs`).
+- `README.md`: tabla de variables (`PIRRY_LEDGER_PUBLIC_BASE_URL` fija host y
+  puerto y ya no menciona enlaces de recuperación), paso 7 (de dónde sale el
+  puerto, que el perfil solo fija el entorno, y cómo usarlo desde otra tablet),
+  descripción del Host y el índice de `docs/`.
+- `docs/adr/005-listen-address-from-public-base-url.md`, con la tabla de
+  alternativas descartadas (las opciones A, B y C que se plantearon y la de
+  escuchar en todos los interfaces).
+- El registro del bug pasó a **Resuelto** con sus cuatro criterios de
+  aceptación cumplidos y su evidencia; la carpeta `docs/bugs/` se eliminó más
+  tarde por decisión de Franklin (ver la segunda pasada, abajo), y hoy lo que
+  queda de eso es esta entrada y el ADR 005.
+- Entrada de bitácora (esta) y línea en `docs/current-iteration.md`.
+
+**Qué verifiqué, y con qué comando.**
+
+- *Antes del cambio*, `PIRRY_LEDGER_PUBLIC_BASE_URL=http://localhost:5999` +
+  `dotnet run --launch-profile http` → `Now listening on: http://localhost:5243`:
+  la variable se ignoraba para el puerto. Ese es el bug.
+- *Después*, `dotnet run --project Src/Host/PirryLedger.Host --no-build
+  --launch-profile http` → `Now listening on: http://localhost:5243`,
+  `Hosting environment: Development` (el recorrido del README no cambia).
+- *Después*, `dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`
+  → `Now listening on: http://localhost:5243`; antes decía 5000.
+- *Después*, variable de proceso `http://localhost:5999` →
+  `Now listening on: http://localhost:5999`, `GET /yo` → `401` en ese puerto y
+  `GET http://localhost:5243/yo` → sin respuesta: la API sigue a la variable.
+- Sonda de precedencia: `ASPNETCORE_URLS=http://localhost:5888` junto con la
+  variable en 5243 → escucha 5243. `UseUrls` manda sobre `ASPNETCORE_URLS`.
+- `dotnet run ... -- --send-mail` → salida idéntica a la de antes
+  (`Correos tomados: 0`, `No habia correos pendientes de enviar.`).
+- Sin la variable → `Falta la variable de entorno
+  PIRRY_LEDGER_PUBLIC_BASE_URL. El README explica como definirla.` y código de
+  salida 1, sin traza.
+- `dotnet build pirry-ledger.slnx` → 0 errores, 0 advertencias.
+- `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+  AccessControl), las mismas que el baseline de antes de empezar.
+- `git diff --stat` → solo tres archivos de `Src/Host/PirryLedger.Host/`; nada
+  en `Src/Core`, `Src/Business` ni en `Tests/`.
+
+**Qué verificó Franklin, y con qué comando.** Pendiente: revisa este trabajo y
+los comandos anteriores antes de que se suba.
+
+**Qué no incluye.** Nada de lógica de negocio, autenticación, correo ni pruebas;
+no cambia textos de correos ni rutas; no añade validaciones ni avisos nuevos;
+no decide HTTPS (el perfil `https` dejó de escuchar en 7258, queda anotado en el
+ADR 005); no toca `docs/requirements/`, `.gitignore` ni bitácoras anteriores. El
+arreglo no se commitea ni se sube sin su aprobación.
+
+**Qué cambió de lo que pidió.** Nada esencial. Dos desviaciones menores que
+conviene saber: (1) para poder verificar, tuve que recompilar, porque el DLL en
+`bin/` estaba desactualizado respecto a la migración snake_case y la aplicación
+se caía al arrancar con `no existe la columna a.Rol` — era un artefacto local,
+`dotnet build` lo resolvió y no forma parte del arreglo; (2) la sonda de
+precedencia confirmó que `UseUrls` gana sobre `ASPNETCORE_URLS`, así que el
+README no necesita advertencia sobre esa variable.
+
+**Segunda pasada: las dos observaciones del análisis final (2026-10-04).** Al
+preguntar si completarlas rompía algún requisito, la respuesta fue que no:
+`grep` en `docs/requirements/` sobre `https|TLS|SSL|cifrad|redirec|transporte|puerto|certific`
+no devuelve ninguna coincidencia. Lo más parecido que existe es
+`PIRRY_LEDGER_SMTP_SECURITY`, que cifra el correo saliente por SMTP y no tiene
+relación con la entrada HTTP de la API.
+
+- **`app.UseHttpsRedirection()` retirado de `Program.cs`.** Con la variable en
+  `http` no hay ningún endpoint HTTPS al que redirigir, así que el middleware no
+  redirigía nada: solo imprimía
+  `warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3] Failed to
+  determine the https port for redirect.` en la primera petición. Se comprobó
+  con `git stash` (código anterior, perfil `http`) que ese aviso ya salía antes
+  de este trabajo, es decir, era preexistente y no una regresión. Queda como
+  decisión y alternativa descartada en el ADR 005, punto 5.
+- **`PirryLedger.Host.http`**: comentario sobre `@host` indicando que debe
+  coincidir con `PIRRY_LEDGER_PUBLIC_BASE_URL`, para que la guía de regresión no
+  se quede con un puerto que ya no decide launchSettings.
+- **Carpeta `docs/bugs/` eliminada** (2026-10-04, decisión de Franklin). El
+  registro del bug 001 ya no está en el repositorio; lo que sobrevive de él es
+  el ADR 005 (contexto y alternativas), esta entrada y las referencias de
+  `README.md` y `current-iteration.md`, todas ellas actualizadas para que no
+  queden rutas rotas.
+
+**Qué verifiqué en la segunda pasada, y con qué comando.**
+
+- `dotnet build pirry-ledger.slnx` → 0 errores, 0 advertencias.
+- `dotnet run --project Src/Host/PirryLedger.Host --no-build --launch-profile
+  http` → `Now listening on: http://localhost:5243`,
+  `Hosting environment: Development`; `GET /yo` → `401`; y
+  `POST /api/auth/login` con credenciales malas → sin ninguna línea `warn`,
+  `fail` o `https` en la salida (antes salía la del middleware).
+- `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+  AccessControl).
+
+## Variables de entorno desde un archivo `.env` — DotNetEnv (2026-10-04)
+
+**Qué se pidió.** Franklin planteó si no sería mejor tener un `.env` con todas
+las variables de entorno en lugar de los once comandos
+`SetEnvironmentVariable(..., 'User')` que el README pidió hasta ahora. Presenté
+tres caminos con sus contras (paquete `DotNetEnv`, loader propio o script de
+PowerShell) y él eligió el primero, autorizó **solo** ese paquete y pidió
+actualizar README, docs y bitácora.
+
+**Qué se decidió y por qué.**
+
+- El `.env` se carga **antes** de `WebApplication.CreateBuilder`, así que las
+  variables entran por el mismo camino de siempre: `IConfiguration` →
+  `ConfiguracionEntorno`. RD-10 sigue cumplido porque al final siguen siendo
+  variables de entorno, no un mecanismo de configuración distinto.
+- **El entorno real manda:** `Env.NoClobber()`, de modo que una variable ya
+  definida en la terminal o en el sistema no la pisa el archivo. Un despliegue
+  con variables de verdad sigue funcionando igual.
+- **Si no hay `.env` no es error.** El loader busca el archivo desde el
+  directorio de trabajo hacia arriba y, si no lo encuentra, sigue sin más: la
+  aplicación queda como estaba antes, con las variables del entorno.
+- El `.gitignore` ya lo tenía previsto (`.env`, `.env.*`, `!.env.example`), así
+  que `.env` nunca se sube y sí se sube `.env.example` con nombres y
+  descripciones, sin valores reales.
+
+**Qué hizo el agente.**
+
+- `dotnet add ... package DotNetEnv` (3.2.0, paquete único autorizado; arrastra
+  `Superpower` 3.0.0, que es dependencia suya).
+- `Program.cs`: `using DotNetEnv;`, la llamada `CargarArchivoEnv()` antes de
+  construir el `builder` y la función local que busca el `.env` hacia arriba y
+  lo carga con `Env.NoClobber().Load(archivo)`.
+- `.env.example` con las once variables agrupadas en obligatorias, primer
+  Administrador y SMTP, con su explicación.
+- `README.md`: el paso 4 se reescribe (Opción A `.env`, Opción B1 usuario de
+  Windows, Opción B2 `$env:` en la terminal), se actualizan las referencias a
+  esas opciones en migraciones, arranque, semilla, enviador y el paso SMTP, y el
+  árbol del repositorio pasa a mostrar `.env.example`.
+- La plantilla SMTP del README añade un bloque que escribe las seis variables en
+  el `.env` con `Add-Content`, con la contraseña entre comillas dobles.
+
+**Qué verifiqué, y con qué comando.**
+
+- `git check-ignore -v .env` → `.gitignore:153:.env`; `git status --short` →
+  `?? .env.example`, es decir, el ejemplo se puede versionar y el `.env` real no.
+- `dotnet build pirry-ledger.slnx` → 0 errores y 0 advertencias;
+  `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 + 84).
+- **Solo `.env`, sin ninguna variable de entorno en el proceso** (se borraron
+  las once con `Remove-Item Env:` antes de lanzar) →
+  `Now listening on: http://localhost:5243`, `GET /yo` → `401`, `stderr` vacío.
+- **Precedencia:** `$env:PIRRY_LEDGER_PUBLIC_BASE_URL = 'http://localhost:5999'`
+  con el `.env` en 5243 → `Now listening on: http://localhost:5999`,
+  `GET :5999/yo` → `401` y `GET :5243/yo` → sin respuesta.
+- **Sin `.env` y sin variables:** renombrado el archivo, `ExitCode: 1` y
+  `Falta la variable de entorno ConnectionStrings__PirryLedger. El README
+  explica como definirla.` sin traza (RD-08), igual que antes del cambio.
+- **Parseo del bloque SMTP del README**, con `dotnet fsi` y el paquete instalado,
+  sobre un archivo temporal con `PIRRY_LEDGER_SMTP_PASSWORD="clave de prueba
+  12345"` → `SMTP_PASSWORD parseado = [clave de prueba 12345]`, es decir, el
+  valor con espacios llega completo y sin comillas.
+
+**Qué NO se hizo.** No cambió ninguna lógica de negocio, ninguna variable ni su
+nombre, ni las pruebas. No se tocaron `ConfiguracionEntorno` ni los mensajes de
+error. La decisión quedó documentada en `docs/adr/006-local-env-configuration.md`
+tras la autorización de Franklin (2026-10-04), con las alternativas descartadas:
+loader propio, script de PowerShell, mantener `SetEnvironmentVariable`,
+`appsettings.*.local.json` y `dotnet user-secrets`.

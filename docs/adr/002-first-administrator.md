@@ -1,4 +1,4 @@
-# ADR 002 - Primer Administrador: semilla desde variables de entorno
+# ADR 002 - First Administrator: seed from environment variables
 
 - **Estado:** aceptada
 - **Fecha:** 2026-10-01

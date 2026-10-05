@@ -4,7 +4,7 @@ using PirryLedger.Core.Contracts.Time;
 namespace PirryLedger.Core.AccessControl.Application;
 
 // Crea el primer Administrador de la base a partir de las variables de entorno
-// (docs/adr/002-primer-administrador.md).
+// (docs/adr/002-first-administrator.md).
 //
 // Por que hace falta: el registro publico siempre fija Rol.Estandar, porque
 // RF-CA-15 exige que nazca inactivo y un usuario recien registrado no puede

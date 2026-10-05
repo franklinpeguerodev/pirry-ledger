@@ -27,7 +27,7 @@ public sealed class CuentaNoActivadaException : Exception
     }
 }
 
-// RF-CA-03 y RF-CA-19. Decision de credencial en docs/adr/001-credencial-de-sesion.md.
+// RF-CA-03 y RF-CA-19. Decision de credencial en docs/adr/001-session-credential.md.
 //
 // El orden de las comprobaciones es la parte importante de este archivo, y no es
 // arbitrario:

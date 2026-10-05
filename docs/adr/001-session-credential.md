@@ -1,4 +1,4 @@
-﻿# ADR 001 - Credencial de sesion: token opaco con tabla `Sesion`
+﻿# ADR 001 - Session credential: opaque token with a `Sesion` table
 
 - **Estado:** aceptada
 - **Fecha:** 2026-09-30

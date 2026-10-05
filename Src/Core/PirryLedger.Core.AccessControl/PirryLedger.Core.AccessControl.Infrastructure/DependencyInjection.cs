@@ -45,7 +45,7 @@ public static class DependencyInjection
 
         services.AddScoped<ActivateAccount>();
 
-        // Decision de Franklin (docs/adr/001-credencial-de-sesion.md): caducidad
+        // Decision de Franklin (docs/adr/001-session-credential.md): caducidad
         // ABSOLUTA de 8 horas. La sesion no se renueva al usarla.
         services.AddScoped<Login>(proveedor => new Login(
             proveedor.GetRequiredService<IUserRepository>(),
@@ -73,7 +73,7 @@ public static class DependencyInjection
             proveedor.GetRequiredService<IClock>(),
             urlBase));
 
-        // Primer Administrador (docs/adr/002-primer-administrador.md). El Host lo
+        // Primer Administrador (docs/adr/002-first-administrator.md). El Host lo
         // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
         // dispararlo: no es una operacion de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();

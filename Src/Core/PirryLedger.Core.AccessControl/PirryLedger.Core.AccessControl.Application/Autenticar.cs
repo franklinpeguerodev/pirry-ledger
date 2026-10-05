@@ -27,7 +27,7 @@ public sealed class RolInsuficienteException : Exception
 
 // EL UNICO PUNTO DE VALIDACION.
 //
-// Las cinco condiciones de docs/adr/001-credencial-de-sesion.md se comprueban aqui
+// Las cinco condiciones de docs/adr/001-session-credential.md se comprueban aqui
 // y en ningun otro sitio: la sesion existe, no esta cerrada, no vencio, su
 // CredencialVersion coincide con la del usuario y el usuario sigue activo.
 //

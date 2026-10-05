@@ -1,5 +1,6 @@
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
 // cada pieza expone los suyos (RD-01).
+using DotNetEnv;
 using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
@@ -11,6 +12,14 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Host;
 
 const string ComandoEnviarCorreo = "--send-mail";
+
+// Archivo .env de desarrollo local: si existe, se cargan sus variables ANTES de
+// construir la configuracion, que las lee del entorno (RD-10: al final siguen
+// siendo variables de entorno, no un mecanismo distinto). NoClobber: una
+// variable ya definida en la terminal o en el sistema no la toca el archivo,
+// asi que un despliegue con variables reales sigue mandando. Si no hay archivo,
+// no pasa nada y siguen mandando las definidas de otra forma (README, paso 4).
+CargarArchivoEnv();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,14 +33,21 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 // tablas separadas por prefijo. Ninguna de las dos ve los contextos de la otra.
 var conexion = LeerConexionObligatoria(builder.Configuration);
 
-builder.Services.AddAccessControl(conexion, LeerUrlBaseObligatoria(builder.Configuration));
+// La misma variable fija el puerto donde escucha la API y la direccion de los
+// enlaces de activacion. Una sola fuente para las dos cosas: no hay forma de
+// que se desincronicen (docs/adr/005-listen-address-from-public-base-url.md).
+// Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
+var urlBase = LeerUrlBaseObligatoria(builder.Configuration);
+builder.WebHost.UseUrls(urlBase);
+
+builder.Services.AddAccessControl(conexion, urlBase);
 builder.Services.AddNotifications(
     conexion,
     ConfiguracionEntorno.LeerSmtp(builder.Configuration) ?? SmtpConfiguracion.Vacia);
 
 var app = builder.Build();
 
-// Primer Administrador (docs/adr/002-primer-administrador.md). Se ejecuta en el
+// Primer Administrador (docs/adr/002-first-administrator.md). Se ejecuta en el
 // arranque y es idempotente: si ya hay un Administrador, no hace nada y la
 // aplicacion sigue igual. Solo corre si estan las variables, para que una base
 // de desarrollo sin ellas no produzca ruido en cada arranque.
@@ -87,7 +103,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// No hay UseHttpsRedirection: la direccion de escucha sale de
+// PIRRY_LEDGER_PUBLIC_BASE_URL (hoy http) y no existe ningun endpoint https al
+// que redirigir, asi que el middleware no redirige nada y solo imprime un aviso.
+// Si se decide HTTPS, va en un ADR (docs/adr/005-listen-address-from-public-base-url.md).
 
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
@@ -118,6 +137,27 @@ app.MapNotifications();
 
 app.Run();
 
+// Busca un .env desde el directorio de trabajo hacia arriba y lo carga en el
+// proceso. No es un error que falte: no encontrarlo significa que las variables
+// vienen de otro sitio (entorno del usuario o de la terminal).
+static void CargarArchivoEnv()
+{
+    var directorio = Directory.GetCurrentDirectory();
+
+    while (!string.IsNullOrWhiteSpace(directorio))
+    {
+        var archivo = Path.Combine(directorio, ".env");
+
+        if (File.Exists(archivo))
+        {
+            Env.NoClobber().Load(archivo);
+            return;
+        }
+
+        directorio = Directory.GetParent(directorio)?.FullName;
+    }
+}
+
 // Lee la cadena de conexion de ConnectionStrings__PirryLedger. Si falta, avisa
 // por el nombre de la variable y para: un error de configuracion no puede ser
 // una excepcion con traza (RD-08).
@@ -136,8 +176,10 @@ static string LeerConexionObligatoria(IConfiguration configuracion)
     return valor;
 }
 
-// Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de activacion
-// y de recuperacion. Sin ella los enlaces saldrian con una direccion que no
+// Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de
+// activacion y con la que se fija el puerto de escucha de la API. La
+// recuperacion no lleva enlace: lleva un codigo suelto, y por eso esta variable
+// no entra en ese correo. Sin ella los enlaces saldrian con una direccion que no
 // existe, asi que es obligatoria igual que la cadena de conexion.
 static string LeerUrlBaseObligatoria(IConfiguration configuracion)
 {
