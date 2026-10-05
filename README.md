@@ -33,12 +33,26 @@ en orden solo la primera vez; después, los pasos 5 a 8 son los que se repiten.
 - La herramienta global `dotnet-ef` `10.0.12`, solo para aplicar las
   migraciones.
 
-Los proyectos de infraestructura ya incluyen el paquete
-`Microsoft.EntityFrameworkCore.Design`, que permite que `dotnet ef` cree y
-ejecute el contexto de diseño de cada módulo. No tienes que instalarlo a mano:
-`dotnet restore` lo descarga desde los `.csproj`. La herramienta global
-`dotnet-ef` y el paquete `Design` son cosas distintas y se necesitan ambas para
-trabajar con las migraciones.
+Entity Framework Core en este proyecto necesita **dos piezas distintas**, que
+no se reemplazan entre sí:
+
+- **La herramienta global `dotnet-ef`** es el ejecutable `dotnet ef` que
+  invoca el paso 5. Vive en tu perfil de usuario (`%USERPROFILE%\.dotnet\tools`)
+  y se instala una sola vez por máquina. El repositorio fija su versión en
+  `10.0.12` para que todas las copias del proyecto se comporten igual.
+- **El paquete `Microsoft.EntityFrameworkCore.Design`** (`10.0.4` en este
+  repositorio) lo referencian los proyectos de infraestructura para que
+  `dotnet ef` pueda crear y ejecutar el `DbContext` de cada módulo. Lo baja
+  `dotnet restore` desde los `.csproj`; **no se instala a mano** y la versión
+  la controla el repositorio, no la herramienta global.
+
+Las versiones no coinciden a propósito: la herramienta global corre como
+proceso aparte y el paquete se compila dentro de la aplicación. Mientras
+`dotnet ef --version` responda `10.0.12`, el binario y el paquete son
+compatibles aunque los números no sean iguales. Si quieres ver qué versión
+del paquete está usando el proyecto, abre cualquiera de los dos
+`.csproj` de infraestructura: `PirryLedger.Core.AccessControl.Infrastructure`
+y `PirryLedger.Core.Notifications.Infrastructure`.
 
 El Host además usa el paquete `DotNetEnv` para leer el archivo `.env` del paso
 4. Tampoco hay que instalarlo a mano: `dotnet restore` (y el propio
@@ -57,10 +71,9 @@ dotnet ef --version
 
 Debes obtener .NET `10.0.302` y Entity Framework `10.0.12`. Si `dotnet ef` ya
 responde `10.0.12`, no vuelvas a ejecutar `dotnet tool install`; ejecuta solo
-las comprobaciones de versión. El paquete `Design` ya está declarado en
-`PirryLedger.Core.AccessControl.Infrastructure` y
-`PirryLedger.Core.Notifications.Infrastructure`; no ejecutes ningún otro
-comando de instalación para él.
+las comprobaciones de versión. Los paquetes `Design` y `DotNetEnv` ya están
+declarados en los `.csproj` correspondientes; no ejecutes ningún otro
+comando de instalación para ellos.
 
 ### Paso 2: clonar el repositorio
 
