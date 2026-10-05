@@ -73,8 +73,7 @@ From Practice 2 on, two of the eight points in each practice re-verify this work
   same environment variable that builds the activation links: one source for
   both, so they cannot drift apart. The `launchSettings.json` profiles no longer
   define a port (they only set the environment). Documented in
-  `docs/adr/005-direccion-de-escucha-desde-variable.md`; closes
-  `docs/bugs/001-puerto-escucha-vs-public-base-url.md`.
+  `docs/adr/005-direccion-de-escucha-desde-variable.md`.
 
 Resolved and therefore no longer listed: the session credential mechanism (`docs/adr/001-credencial-de-sesion.md`, accepted 2026-09-30), the data stack (PostgreSQL with EF Core migrations, applied in the README), and how the first Administrator is created (`docs/adr/002-primer-administrador.md`, accepted 2026-10-01: a seed from environment variables that runs on startup).
 

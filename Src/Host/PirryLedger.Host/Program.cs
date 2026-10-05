@@ -26,7 +26,7 @@ var conexion = LeerConexionObligatoria(builder.Configuration);
 
 // La misma variable fija el puerto donde escucha la API y la direccion de los
 // enlaces de activacion. Una sola fuente para las dos cosas: no hay forma de
-// que se desincronicen (docs/bugs/001-puerto-escucha-vs-public-base-url.md).
+// que se desincronicen (docs/adr/005-direccion-de-escucha-desde-variable.md).
 // Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
 var urlBase = LeerUrlBaseObligatoria(builder.Configuration);
 builder.WebHost.UseUrls(urlBase);

@@ -786,7 +786,7 @@ entorno; el valor no aparece ni en este documento ni en el repositorio.
 ## Puerto de escucha desde la variable de entorno — bug 001 y ADR 005 (2026-10-04)
 
 **Qué se pidió.** Franklin me pidió analizar el proyecto y confirmar si el bug
-documentado en `docs/bugs/001-puerto-escucha-vs-public-base-url.md` era real tal
+del puerto de escucha, registrado el 2026-10-03, era real tal
 como estaba planteado. Lo es: lo verifiqué leyendo el código y corriendo la
 aplicación. Después pidió arreglarlo con una indicación concreta:
 `PIRRY_LEDGER_PUBLIC_BASE_URL` pasa a ser la única fuente de verdad — define el
@@ -795,8 +795,8 @@ sin dañar, romper ni cambiar lógica, y creando la rama pertinente.
 
 Antes de tocar código presenté el plan y cuatro decisiones; las resolvió así:
 ADR para la decisión, quitar `applicationUrl` de `launchSettings.json`, escuchar
-exactamente lo que diga la variable (no todos los interfaces) y actualizar bug +
-bitácora + `current-iteration.md` además del README.
+exactamente lo que diga la variable (no todos los interfaces) y actualizar el
+registro de bug, la bitácora y `current-iteration.md` además del README.
 
 **Qué devolvió el agente.**
 
@@ -813,10 +813,12 @@ bitácora + `current-iteration.md` además del README.
   puerto, que el perfil solo fija el entorno, y cómo usarlo desde otra tablet),
   descripción del Host y el índice de `docs/`.
 - `docs/adr/005-direccion-de-escucha-desde-variable.md`, con la tabla de
-  alternativas descartadas (las opciones A, B y C del bug y la de escuchar en
-  todos los interfaces).
-- `docs/bugs/001` pasa a **Resuelto**, conserva lo observado como histórico y
-  marca los cuatro criterios de aceptación como cumplidos con su evidencia.
+  alternativas descartadas (las opciones A, B y C que se plantearon y la de
+  escuchar en todos los interfaces).
+- El registro del bug pasó a **Resuelto** con sus cuatro criterios de
+  aceptación cumplidos y su evidencia; la carpeta `docs/bugs/` se eliminó más
+  tarde por decisión de Franklin (ver la segunda pasada, abajo), y hoy lo que
+  queda de eso es esta entrada y el ADR 005.
 - Entrada de bitácora (esta) y línea en `docs/current-iteration.md`.
 
 **Qué verifiqué, y con qué comando.**
@@ -880,6 +882,11 @@ relación con la entrada HTTP de la API.
 - **`PirryLedger.Host.http`**: comentario sobre `@host` indicando que debe
   coincidir con `PIRRY_LEDGER_PUBLIC_BASE_URL`, para que la guía de regresión no
   se quede con un puerto que ya no decide launchSettings.
+- **Carpeta `docs/bugs/` eliminada** (2026-10-04, decisión de Franklin). El
+  registro del bug 001 ya no está en el repositorio; lo que sobrevive de él es
+  el ADR 005 (contexto y alternativas), esta entrada y las referencias de
+  `README.md` y `current-iteration.md`, todas ellas actualizadas para que no
+  queden rutas rotas.
 
 **Qué verifiqué en la segunda pasada, y con qué comando.**
 

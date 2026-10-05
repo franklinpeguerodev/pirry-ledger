@@ -7,12 +7,12 @@
 
 ## Contexto
 
-`docs/bugs/001-puerto-escucha-vs-public-base-url.md` registró que el puerto de
+El 2026-10-03 se observó que el puerto de
 escucha de la API y `PIRRY_LEDGER_PUBLIC_BASE_URL` eran **dos configuraciones
 independientes** que coincidían por casualidad, sin ninguna validación entre
 ellas:
 
-| | De qué dependía | Valor a fecha del bug |
+| | De qué dependía | Valor a fecha de la observación |
 |---|---|---|
 | Puerto donde escucha la API | `applicationUrl` del perfil de `launchSettings.json` | `http://localhost:5243` |
 | `PIRRY_LEDGER_PUBLIC_BASE_URL` | Variable de entorno leída al arrancar | `http://localhost:5243` |
@@ -45,7 +45,7 @@ construyen los enlaces de activación.
    avisa por el nombre de la variable, sin traza (RD-08). No cambia el texto ni
    el código de salida.
 4. `--send-mail` no cambia: la validación corre antes de la rama del comando,
-   decisión que ya estaba documentada como intencional en el bug (punto 4).
+   decisión que ya estaba documentada como intencional el 2026-10-03.
 5. `app.UseHttpsRedirection()` se **retira** de `Program.cs`. La dirección de
    escucha sale de la variable y en esta iteración es `http`: no existe ningún
    endpoint HTTPS al que redirigir, así que el middleware no redirige nada y
@@ -64,9 +64,9 @@ ambas cosas, que es exactamente lo que hace falta para abrirlo desde la tablet.
 
 | Alternativa | Motivo para descartarla |
 |---|---|
-| Mantener `launchSettings` como fuente del puerto y solo documentar la diferencia (opción A del bug) | Cero riesgo técnico, pero deja la desincronización silenciosa: el DLL seguiría escuchando en 5000 con los enlaces en 5243 y nadie lo vería. |
-| Avisar por consola si el puerto escuchado no coincide con la variable (opción B del bug) | Coge la deriva en lugar de eliminarla, y puede dar falsos positivos legítimos detrás de un proxy. Además ya no haría falta: con una sola fuente no hay nada que comparar. |
-| Derivar la URL de la petición entrante y prescindir de la variable (opción C del bug) | El enlace se construye al encolar el correo, en una operación que no siempre tiene una petición delante (reenvío de activación, por ejemplo) y el correo se envía mucho después, por otro proceso. Además eliminaría una variable obligatoria documentada: es cambio de diseño. |
+| Mantener `launchSettings` como fuente del puerto y solo documentar la diferencia (opción A) | Cero riesgo técnico, pero deja la desincronización silenciosa: el DLL seguiría escuchando en 5000 con los enlaces en 5243 y nadie lo vería. |
+| Avisar por consola si el puerto escuchado no coincide con la variable (opción B) | Coge la deriva en lugar de eliminarla, y puede dar falsos positivos legítimos detrás de un proxy. Además ya no haría falta: con una sola fuente no hay nada que comparar. |
+| Derivar la URL de la petición entrante y prescindir de la variable (opción C) | El enlace se construye al encolar el correo, en una operación que no siempre tiene una petición delante (reenvío de activación, por ejemplo) y el correo se envía mucho después, por otro proceso. Además eliminaría una variable obligatoria documentada: es cambio de diseño. |
 | Escuchar en todos los interfaces (`+:{puerto}`) | Abriría el puerto en todas las interfaces aunque la variable diga `localhost`, y los enlaces seguirían diciendo `localhost`, que no sirve desde la tablet. Contradice la idea de una sola fuente. |
 | Mantener `applicationUrl` y confiar en que `UseUrls` gana | Verificado: `UseUrls` gana hoy sobre `ASPNETCORE_URLS`. Pero dejaría una segunda fuente que podría volver a mandar en una versión futura del framework. Quitarla elimina la pregunta. |
 | Mantener `app.UseHttpsRedirection()` | Con la variable en `http` no hay endpoint HTTPS, así que no redirige nada: solo emite un aviso que invita a leerlo como un error. Se comprobó con `git stash` que el aviso ya salía antes del cambio con el perfil `http`, es decir, existía desde antes. Se retira en lugar de documentar un aviso inútil. |

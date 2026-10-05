@@ -524,7 +524,6 @@ pirry-ledger/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
 │   ├── adr/                        Decisiones tecnicas 001 a 005
-│   ├── bugs/                       Bugs registrados: abiertos, congelados y resueltos
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
