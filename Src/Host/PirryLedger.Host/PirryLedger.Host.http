@@ -43,6 +43,10 @@
 # referencias a respuestas {{name.response.body.$.field}} (REST Client de VS Code
 # y cliente HTTP de JetBrains).
 
+# Host de la API. Coincide con el valor por defecto de
+# PIRRY_LEDGER_PUBLIC_BASE_URL (README, paso 4): esa variable fija a la vez el
+# host:puerto donde escucha la API y la dirección de los enlaces de activación,
+# así que si la cambias, cambia también esta línea.
 @host = http://localhost:5243
 
 # --- Entradas (completar una sola vez) ----------------------------------------
