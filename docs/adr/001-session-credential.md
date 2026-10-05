@@ -1,4 +1,4 @@
-﻿# ADR 001 - Session credential: opaque token with a `Sesion` table
+﻿# ADR 001 - Session credential: opaque token with a session table
 
 - **Estado:** aceptada
 - **Fecha:** 2026-09-30
@@ -13,7 +13,7 @@ invalidarse **en el servidor**. Cerrar sesion (RF-CA-18), cambiar la contrasena
 anular las credenciales ya emitidas. Una credencial autocontenida que se valida
 solo, sin consultar nada en el servidor, no cumple.
 
-Piramid ERP v3, un solo despliegue, sin microservicios. La pregunta es como se
+El sistema es un monolito modular con un solo despliegue. La pregunta es como se
 valida cada peticion sin repetir logica por todos lados.
 
 ## Decision
