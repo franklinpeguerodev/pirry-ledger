@@ -1,4 +1,4 @@
-# ADR 005 - La dirección de escucha sale de `PIRRY_LEDGER_PUBLIC_BASE_URL`
+# ADR 005 - Listen address comes from `PIRRY_LEDGER_PUBLIC_BASE_URL`
 
 - **Estado:** aceptada
 - **Fecha:** 2026-10-04
