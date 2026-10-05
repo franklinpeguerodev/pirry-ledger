@@ -154,7 +154,8 @@ Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
   residuo de una versión anterior de este README), manda la del entorno y el
   `.env` no la pisa: bórrala de Windows para que mande el archivo. En un equipo
   limpio no hay ninguna definida.
-- Las seis SMTP se agregan en el paso [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail).
+- Las seis SMTP también viven en el `.env`: se completan en el paso
+  [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail).
 
 ### Paso 5: compilar y ejecutar las pruebas
 
@@ -401,39 +402,66 @@ recibir la contraseña normal de tu cuenta: necesitas una **contraseña de
 aplicación** creada en la configuración de seguridad de Google. Usa una cuenta
 de prueba, si es posible. [Documentación de Google](https://support.google.com/mail/answer/185833?hl=es-419).
 
-Añade las seis líneas al final de tu `.env`. `Read-Host` lee la contraseña de
-aplicación de forma segura, el `-replace '\s', ''` elimina los espacios que
-Google puede mostrar entre grupos de caracteres y `Add-Content` las añade al
-archivo sin que la contraseña aparezca en el historial de la terminal:
+Las seis variables SMTP se definen, como todas las demás, **en el `.env`** y en
+ningún otro sitio: no tocas Windows ni la terminal. La plantilla del paso 4 ya
+las trae con valores de ejemplo, así que solo te queda lo tuyo:
+
+| Variable | Qué poner |
+|---|---|
+| `PIRRY_LEDGER_SMTP_HOST` | Déjalo en `smtp.gmail.com`. |
+| `PIRRY_LEDGER_SMTP_PORT` | Déjalo en `587`. |
+| `PIRRY_LEDGER_SMTP_SECURITY` | Déjalo en `StartTls`. |
+| `PIRRY_LEDGER_SMTP_USER` | Tu cuenta de prueba, dos veces (aquí y en `FROM`). |
+| `PIRRY_LEDGER_SMTP_PASSWORD` | La contraseña de aplicación, **entre comillas dobles**, porque puede contener espacios. |
+| `PIRRY_LEDGER_SMTP_FROM` | La misma cuenta de prueba: es la dirección que aparece como remitente. |
+
+En el `.env` teórico, esas seis líneas se ven así:
+
+```env
+PIRRY_LEDGER_SMTP_HOST=smtp.gmail.com
+PIRRY_LEDGER_SMTP_PORT=587
+PIRRY_LEDGER_SMTP_SECURITY=StartTls
+PIRRY_LEDGER_SMTP_USER=<tu-cuenta-de-prueba@gmail.com>
+PIRRY_LEDGER_SMTP_PASSWORD="<contrasena-de-aplicacion>"
+PIRRY_LEDGER_SMTP_FROM=<tu-cuenta-de-prueba@gmail.com>
+```
+
+Si prefieres no escribir la contraseña a mano, este bloque la lee sin mostrarla
+ni dejarla en el historial de la terminal y la escribe en `.env`, reemplazando
+la línea si ya existe (no la duplica) o añadiéndola al final si falta:
 
 ```powershell
 $segura = Read-Host -Prompt 'Contrasena de aplicacion SMTP' -AsSecureString
 $credencial = New-Object System.Net.NetworkCredential('', $segura)
 $plana = $credencial.Password -replace '\s', ''
 
-$lineas = @"
-PIRRY_LEDGER_SMTP_PASSWORD="$plana"
-PIRRY_LEDGER_SMTP_HOST=smtp.gmail.com
-PIRRY_LEDGER_SMTP_PORT=587
-PIRRY_LEDGER_SMTP_SECURITY=StartTls
-PIRRY_LEDGER_SMTP_USER=<tu-cuenta-de-prueba@gmail.com>
-PIRRY_LEDGER_SMTP_FROM=<tu-cuenta-de-prueba@gmail.com>
-"@
-
-Add-Content -LiteralPath .env -Value $lineas
+$clave = 'PIRRY_LEDGER_SMTP_PASSWORD'
+$linea = '{0}="{1}"' -f $clave, $plana
+$ruta = Join-Path (Get-Location) '.env'
+$lineas = [System.Collections.Generic.List[string]]::new()
+[System.IO.File]::ReadAllLines($ruta) | ForEach-Object {
+    if ($_ -match "^$clave=") { $lineas.Add($linea) } else { $lineas.Add($_) }
+}
+if ($lineas -notcontains $linea) { $lineas.Add($linea) }
+[System.IO.File]::WriteAllLines($ruta, $lineas, (New-Object System.Text.UTF8Encoding($false)))
 
 $segura = $null
 $credencial = $null
 $plana = $null
 $lineas = $null
+$linea = $null
 ```
 
-La contraseña va entre comillas dobles dentro del `.env` porque puede contener
-espacios. Vuelve a arrancar la API después de editar el archivo.
+Vuelve a arrancar la API después de editar el archivo: las variables se leen al
+arrancar, no en cada petición.
 
-Reemplaza los dos valores `<tu-cuenta-de-prueba@gmail.com>` por la dirección de
-la cuenta que creó la contraseña de aplicación. No escribas la contraseña de
-aplicación en el README, en el código, en comandos guardados ni en commits.
+Dos avisos:
+
+- Si alguna de esas seis variables quedara definida como variable de entorno de
+  Windows (versión antigua de este README), bórrala: el entorno manda sobre el
+  `.env` y esa variable ignoraría el archivo.
+- No escribas la contraseña de aplicación en el README, en el código, en
+  comandos guardados ni en commits.
 
 ---
 
@@ -627,15 +655,6 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Bod
 # Solo letras -> 400
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; correo='b@ejemplo.com'; contrasena='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
-
-
-
-
-
-
-
-
-
 
 
 
