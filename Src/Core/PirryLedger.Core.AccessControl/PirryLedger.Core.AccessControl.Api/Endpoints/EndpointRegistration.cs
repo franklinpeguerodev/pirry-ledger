@@ -16,34 +16,34 @@ public static class EndpointRegistration
 {
     // Decision propia: el enlace de activacion caduca en 24 horas. entities.md no
     // lo fija. Es tiempo de sobra para que el destinatario lo abra y corto para
-    // que un enlace olvidado en un correo no sirva dentro de un mes.
-    private static readonly TimeSpan ValidezDelToken = TimeSpan.FromHours(24);
+    // que un enlace olvidado en un Email no sirva dentro de un mes.
+    private static readonly TimeSpan TokenValidity = TimeSpan.FromHours(24);
 
     public static IEndpointRouteBuilder MapAccessControl(this IEndpointRouteBuilder endpoints)
     {
         // RF-CA-01, RF-CA-15 y RF-NOT-08.
         endpoints.MapPost("/api/auth/register", async (
-            RegisterRequest peticion,
-            RegisterUser registrar,
-            IClock reloj,
+            RegisterRequest request,
+            RegisterUser register,
+            IClock clock,
             CancellationToken cancellationToken) =>
         {
-            // RD-07 y RD-08: todo rechazo sale como un mensaje controlado. Ni una
-            // traza, ni una consulta SQL, ni el correo o la contrasena del
-            // usuario en la respuesta.
+            // RD-07 y RD-08: todo rechazo sale como un message controlado. Ni una
+            // traza, ni una consulta SQL, ni el Email o la contrasena del
+            // User en la respuesta.
             try
             {
-                await registrar.EjecutarAsync(
-                    peticion.Nombre,
-                    peticion.Correo,
-                    peticion.Contrasena,
-                    ValidezDelToken,
+                await register.ExecuteAsync(
+                    request.Name,
+                    request.Email,
+                    request.Password,
+                    TokenValidity,
                     cancellationToken);
             }
             catch (DuplicateEmailException)
             {
-                // 409 con el mismo cuerpo que un correo nuevo. El flujo no dice si
-                // ese correo ya estaba registrado.
+                // 409 con el mismo cuerpo que un Email nuevo. El flujo no dice si
+                // ese Email ya estaba registrado.
                 return Results.Json(
                     new ErrorResponse("No pudimos completar el registro con esos datos."),
                     statusCode: StatusCodes.Status409Conflict);
@@ -55,24 +55,24 @@ public static class EndpointRegistration
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            // 202: el correo sale por la cola, no ahora. La cuenta existe pero esta
+            // 202: el Email sale por la cola, no ahora. La cuenta existe pero esta
             // inactiva hasta que se abra el enlace.
             return Results.Json(
-                new ActivadoResponse(Activado: false),
+                new ActivatedResponse(Activated: false),
                 statusCode: StatusCodes.Status202Accepted);
         })
-        .ConAcceso(Operacion.RegistrarUsuario);
+        .WithAccess(Operation.RegisterUser);
 
         // RF-CA-16: abrir el enlace activa la cuenta.
-        endpoints.MapGet("/activar", async (
+        endpoints.MapGet("/activate", async (
             string? token,
-            ActivateAccount activar,
-            IClock reloj,
+            ActivateAccount activate,
+            IClock clock,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                await activar.EjecutarAsync(token ?? string.Empty, cancellationToken);
+                await activate.ExecuteAsync(token ?? string.Empty, cancellationToken);
             }
             catch (ActivationRejectedException error)
             {
@@ -83,49 +83,49 @@ public static class EndpointRegistration
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            return Results.Json(new ActivadoResponse(Activado: true));
+            return Results.Json(new ActivatedResponse(Activated: true));
         })
-        .ConAcceso(Operacion.ActivarCuenta);
+        .WithAccess(Operation.ActivateAccount);
 
         // RF-CA-17: reenviar el enlace de activacion.
         //
         // El cuerpo de la respuesta es el mismo que en el registro y el codigo es
-        // 202 tambien. Si el correo no existe, la cuenta ya esta activa o el
-        // correo esta mal escrito, la respuesta no cambia ni un byte: no se puede
+        // 202 tambien. Si el Email no existe, la cuenta ya esta activa o el
+        // Email esta mal escrito, la respuesta no cambia ni un byte: no se puede
         // usar este endpoint para averiguar quien tiene cuenta.
-        endpoints.MapPost("/api/auth/reenviar-activacion", async (
-            ResendActivationRequest peticion,
-            ResendActivationLink reenviar,
+        endpoints.MapPost("/api/auth/resend-activation", async (
+            ResendActivationRequest request,
+            ResendActivationLink resend,
             CancellationToken cancellationToken) =>
         {
-            await reenviar.EjecutarAsync(
-                peticion.Correo,
-                ValidezDelToken,
+            await resend.ExecuteAsync(
+                request.Email,
+                TokenValidity,
                 cancellationToken);
 
             return Results.Json(
-                new EnviadoResponse(Enviado: true),
+                new SentResponse(Sent: true),
                 statusCode: StatusCodes.Status202Accepted);
         })
-        .ConAcceso(Operacion.ReenviarActivacion);
+        .WithAccess(Operation.ResendActivation);
 
-        endpoints.MapPost("/api/auth/recuperacion", async (
+        endpoints.MapPost("/api/auth/recovery", async (
             PasswordRecoveryRequest request,
             [FromServices] PasswordRecovery recovery,
             CancellationToken cancellationToken) =>
         {
-            await recovery.RequestAsync(request.Correo, cancellationToken);
-            return Results.Json(new EnviadoResponse(true), statusCode: StatusCodes.Status202Accepted);
-        }).ConAcceso(Operacion.SolicitarRecuperacion);
+            await recovery.RequestAsync(request.Email, cancellationToken);
+            return Results.Json(new SentResponse(true), statusCode: StatusCodes.Status202Accepted);
+        }).WithAccess(Operation.RequestRecovery);
 
-        endpoints.MapPost("/api/auth/restablecer-contrasena", async (
+        endpoints.MapPost("/api/auth/reset-password", async (
             ResetPasswordRequest request,
             [FromServices] PasswordRecovery recovery,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                await recovery.CompleteAsync(request.Codigo, request.Contrasena, cancellationToken);
+                await recovery.CompleteAsync(request.Code, request.Password, cancellationToken);
                 return Results.NoContent();
             }
             catch (RecoveryRejectedException error)
@@ -136,92 +136,92 @@ public static class EndpointRegistration
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
             }
-        }).ConAcceso(Operacion.RestablecerContrasena);
+        }).WithAccess(Operation.ResetPassword);
 
-        // RF-CA-03: iniciar sesion. Devuelve el token en claro UNA vez; el cliente
+        // RF-CA-03: iniciar Session. Devuelve el token en claro UNA vez; el cliente
         // lo envia en Authorization: Bearer y ya nunca se vuelve a pedir.
         endpoints.MapPost("/api/auth/login", async (
-            LoginRequest peticion,
-            Login iniciarSesion,
+            LoginRequest request,
+            Login login,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                var token = await iniciarSesion.EjecutarAsync(
-                    peticion.Correo,
-                    peticion.Contrasena,
+                var token = await login.ExecuteAsync(
+                    request.Email,
+                    request.Password,
                     cancellationToken);
 
                 return Results.Json(
                     new TokenResponse(token),
                     statusCode: StatusCodes.Status200OK);
             }
-            catch (CredencialesRechazadasException error)
+            catch (CredentialsRejectedException error)
             {
-                // Correo inexistente y contrasena erronea: mismo 401, mismo cuerpo.
+                // Email inexistente y contrasena erronea: mismo 401, mismo cuerpo.
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
-            catch (CuentaBloqueadaException error)
+            catch (AccountBlockedException error)
             {
-                // Decision de Franklin: el mensaje de bloqueo es el MISMO que el de
-                // credenciales, porque un mensaje propio confirmaria que ese correo
+                // Decision de Franklin: el message de bloqueo es el MISMO que el de
+                // credenciales, porque un message propio confirmaria que ese Email
                 // existe. El cliente ve un 401 igual que en los demas fallos.
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
-            catch (CuentaNoActivadaException error)
+            catch (AccountNotActivatedException error)
             {
-                // Unico mensaje distinto, y solo se alcanza con la contrasena
+                // Unico message distinto, y solo se alcanza con la contrasena
                 // correcta (RF-CA-15).
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
         })
-        .ConAcceso(Operacion.IniciarSesion);
+        .WithAccess(Operation.Login);
 
-        // RF-CA-18: cerrar sesion. 204 siempre, exista o no el token, para que no
+        // RF-CA-18: Close Session. 204 siempre, exista o no el token, para que no
         // se pueda comprobar si una credencial fue valida alguna vez.
         endpoints.MapPost("/api/auth/logout", async (
-            HttpRequest peticionHttp,
-            Logout cerrarSesion,
+            HttpRequest httpRequest,
+            Logout logout,
             CancellationToken cancellationToken) =>
         {
-            await cerrarSesion.EjecutarAsync(
-                PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+            await logout.ExecuteAsync(
+                TokenBearer.Read(httpRequest) ?? string.Empty,
                 cancellationToken);
 
             return Results.NoContent();
         })
-        .ConAcceso(Operacion.CerrarSesion);
+        .WithAccess(Operation.Logout);
 
-        // RF-CA-07: el usuario autenticado y su rol.
+        // RF-CA-07: el User autenticado y su role.
         //
-        // Devuelve SOLO nombre, correo y rol. Nunca el hash, nunca el token y
-        // nunca CredencialVersion: por mucho que se sabe de la sesion, eso no le
+        // Devuelve SOLO Name, Email y Role. Nunca el hash, nunca el token y
+        // nunca CredentialVersion: por mucho que se sabe de la Session, eso no le
         // sirve a nadie y no debe viajar.
-        endpoints.MapGet("/yo", async (
-            HttpRequest peticionHttp,
-            Autenticar autenticar,
+        endpoints.MapGet("/me", async (
+            HttpRequest httpRequest,
+            Authenticate authenticate,
             CancellationToken cancellationToken) =>
         {
-            UsuarioAutenticado usuario;
+            AuthenticatedUser user;
 
             try
             {
-                usuario = await autenticar.EjecutarAsync(
-                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                user = await authenticate.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
                     cancellationToken);
             }
-            catch (SesionInvalidaException error)
+            catch (InvalidSessionException error)
             {
-                // 401: no hay sesion valida.
+                // 401: no hay Session valida.
                 //
-                // Aqui no se captura RolInsuficienteException porque /yo no exige
-                // ningun rol: solo pregunta quien es. Un 403 en este endpoint
+                // Aqui no se captura InsufficientRoleException porque /me no exige
+                // ningun role: solo pregunta quien es. Un 403 en este endpoint
                 // seria imposible, y un catch para una excepcion que no puede
                 // ocurrir solo confunde a quien lo lea.
                 return Results.Json(
@@ -229,13 +229,13 @@ public static class EndpointRegistration
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            return Results.Json(new YoResponse(usuario.Nombre, usuario.Correo, usuario.Rol.ToString()));
+            return Results.Json(new MeResponse(user.Name, user.Email, user.Role.ToString()));
         })
-        .ConAcceso(Operacion.ConsultarSesionPropia);
+        .WithAccess(Operation.QueryOwnSession);
 
-        MapearAdministracionDeUsuarios(endpoints);
+        MapUserAdministration(endpoints);
 
-        endpoints.MapPost("/api/auth/cambiar-contrasena", async (
+        endpoints.MapPost("/api/auth/change-password", async (
             ChangePasswordRequest request,
             HttpRequest httpRequest,
             [FromServices] ChangeOwnPassword changePassword,
@@ -244,13 +244,13 @@ public static class EndpointRegistration
             try
             {
                 await changePassword.ExecuteAsync(
-                    PortadorDelToken.Leer(httpRequest) ?? string.Empty,
-                    request.ContrasenaActual,
-                    request.NuevaContrasena,
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    request.CurrentPassword,
+                    request.NewPassword,
                     cancellationToken);
                 return Results.NoContent();
             }
-            catch (SesionInvalidaException error)
+            catch (InvalidSessionException error)
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
             }
@@ -258,119 +258,119 @@ public static class EndpointRegistration
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
             }
-        }).ConAcceso(Operacion.CambiarContrasenaPropia);
+        }).WithAccess(Operation.ChangeOwnPassword);
 
         return endpoints;
     }
 
-    // RF-CA-21, RF-CA-08 y RF-CA-20: las cuatro rutas de Administrador.
+    // RF-CA-21, RF-CA-08 y RF-CA-20: las cuatro rutas de Administrator.
     //
-    // RF-CA-05: aqui no se compara ningun rol. Cada ruta se declara con
-    // ConAcceso(Operacion.X) y el filtro de acceso consulta ExigenciasDeRol, el
+    // RF-CA-05: aqui no se compara ningun role. Cada route se declara con
+    // WithAccess(Operation.X) y el filtro de acceso consulta RoleRequirements, el
     // punto unico. Este bloque solo traduce excepciones a codigos de estado.
     //
-    // Los catch de SesionInvalida y RolInsuficiente se repiten en cada ruta, y no
+    // Los catch de InvalidSession y InsufficientRole se repiten en cada route, y no
     // hay un helper: un unico helper seria una funcion con cuatro ramas y un tipo
     // de retorno, mas dificil de leer que el try catch que se ve. Ademas el 401
     // tiene que salir antes que el 403 en todas, que es justo el orden que la
     // rubrica revisa.
-    private static void MapearAdministracionDeUsuarios(IEndpointRouteBuilder endpoints)
+    private static void MapUserAdministration(IEndpointRouteBuilder endpoints)
     {
-        // RF-CA-21: listar usuarios con su rol y su estado.
-        endpoints.MapGet("/api/admin/usuarios", async (
-            HttpRequest peticionHttp,
-            ListUsers listar,
+        // RF-CA-21: listar usuarios con su role y su estado.
+        endpoints.MapGet("/api/admin/users", async (
+            HttpRequest httpRequest,
+            ListUsers list,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                var usuarios = await listar.EjecutarAsync(
-                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                var users = await list.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
                     cancellationToken);
 
-                return Results.Ok(usuarios);
+                return Results.Ok(users);
             }
-            catch (SesionInvalidaException error)
+            catch (InvalidSessionException error)
             {
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
-            catch (RolInsuficienteException error)
+            catch (InsufficientRoleException error)
             {
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status403Forbidden);
             }
         })
-        .ConAcceso(Operacion.ListarUsuarios);
+        .WithAccess(Operation.ListUsers);
 
-        // RF-CA-08: cambiar el rol de un usuario.
-        endpoints.MapPost("/api/admin/usuarios/{id:guid}/rol", async (
+        // RF-CA-08: cambiar el role de un User.
+        endpoints.MapPost("/api/admin/users/{id:guid}/role", async (
             Guid id,
-            ChangeRoleRequest peticion,
-            HttpRequest peticionHttp,
-            ChangeUserRole cambiarRol,
+            ChangeRoleRequest request,
+            HttpRequest httpRequest,
+            ChangeUserRole changeRole,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                await cambiarRol.EjecutarAsync(
-                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
+                await changeRole.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
                     id,
-                    peticion.Rol,
+                    request.Role,
                     cancellationToken);
 
                 return Results.NoContent();
             }
-            catch (SesionInvalidaException error)
+            catch (InvalidSessionException error)
             {
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status401Unauthorized);
             }
-            catch (RolInsuficienteException error)
+            catch (InsufficientRoleException error)
             {
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status403Forbidden);
             }
-            catch (OperacionDeAdministracionRechazadaException error)
+            catch (AdministrationOperationRejectedException error)
             {
-                // 400: el rol es valido pero la operacion no se puede hacer
-                // (cambiarse el rol a si mismo, usuario inexistente, rol que no
-                // existe). No es 403: el rol de quien llama SI alcanzaba.
+                // 400: el role es valido pero la operation no se puede hacer
+                // (cambiarse el role a si mismo, User inexistente, Role que no
+                // existe). No es 403: el role de quien llama SI alcanzaba.
                 return Results.Json(
                     new ErrorResponse(error.Message),
                     statusCode: StatusCodes.Status400BadRequest);
             }
         })
-        .ConAcceso(Operacion.CambiarRolDeUsuario);
+        .WithAccess(Operation.ChangeUserRole);
 
-        // RF-CA-20: desactivar y reactivar. La misma ruta y el mismo caso de uso
-        // con un parametro distinto, porque desactivar y reactivar son la misma
-        // operacion con dos finales.
-        endpoints.MapPost("/api/admin/usuarios/{id:guid}/desactivar", async (
+        // RF-CA-20: Deactivate y Reactivate. La misma route y el mismo caso de uso
+        // con un parametro distinto, porque Deactivate y Reactivate son la misma
+        // Operation con dos finales.
+        endpoints.MapPost("/api/admin/users/{id:guid}/deactivate", async (
             Guid id,
-            HttpRequest peticionHttp,
-            DeactivateUser desactivar,
+            HttpRequest httpRequest,
+            DeactivateUser deactivate,
             CancellationToken cancellationToken) =>
         {
-            return await CambiarEstadoAsync(peticionHttp, desactivar, id, Operacion.DesactivarUsuario, cancellationToken);
+            return await ChangeStateAsync(httpRequest, deactivate, id, Operation.DeactivateUser, cancellationToken);
         })
-        .ConAcceso(Operacion.DesactivarUsuario);
+        .WithAccess(Operation.DeactivateUser);
 
-        endpoints.MapPost("/api/admin/usuarios/{id:guid}/reactivar", async (
+        endpoints.MapPost("/api/admin/users/{id:guid}/reactivate", async (
             Guid id,
-            HttpRequest peticionHttp,
-            DeactivateUser desactivar,
+            HttpRequest httpRequest,
+            DeactivateUser deactivate,
             CancellationToken cancellationToken) =>
         {
-            return await CambiarEstadoAsync(peticionHttp, desactivar, id, Operacion.ReactivarUsuario, cancellationToken);
+            return await ChangeStateAsync(httpRequest, deactivate, id, Operation.ReactivateUser, cancellationToken);
         })
-        .ConAcceso(Operacion.ReactivarUsuario);
+        .WithAccess(Operation.ReactivateUser);
 
-        endpoints.MapPost("/api/admin/usuarios/{id:guid}/forzar-restablecimiento", async (
+        endpoints.MapPost("/api/admin/users/{id:guid}/force-reset", async (
             Guid id,
             HttpRequest httpRequest,
             [FromServices] ForcePasswordReset reset,
@@ -379,72 +379,72 @@ public static class EndpointRegistration
             try
             {
                 await reset.ExecuteAsync(
-                    PortadorDelToken.Leer(httpRequest) ?? string.Empty,
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
                     id,
                     cancellationToken);
                 return Results.NoContent();
             }
-            catch (SesionInvalidaException error)
+            catch (InvalidSessionException error)
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
             }
-            catch (RolInsuficienteException error)
+            catch (InsufficientRoleException error)
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
             }
-            catch (OperacionDeAdministracionRechazadaException error)
+            catch (AdministrationOperationRejectedException error)
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
             }
-        }).ConAcceso(Operacion.ForzarRestablecimiento);
+        }).WithAccess(Operation.ForceReset);
     }
 
     // El cuerpo de los dos endpoints de estado. Es el unico caso donde un helper
     // si paga: los dos tendrian exactamente el mismo try catch, cuatro ramas
     // cada uno, y la unica diferencia seria una palabra. Duplicar eso invites a
     // que uno se actualice y el otro no.
-    private static async Task<IResult> CambiarEstadoAsync(
-        HttpRequest peticionHttp,
-        DeactivateUser casoDeUso,
-        Guid usuarioId,
-        Operacion operacion,
+    private static async Task<IResult> ChangeStateAsync(
+        HttpRequest httpRequest,
+        DeactivateUser useCase,
+        Guid userId,
+        Operation operation,
         CancellationToken cancellationToken)
     {
         try
         {
             // El mismo caso de uso para los dos finales. El metodo decide por que
-            // operacion se entra: desactivar o reactivar. Asi el punto unico de
-            // RF-CA-05 decide el rol de cada uno y no el endpoint.
-            if (operacion == Operacion.ReactivarUsuario)
+            // Operation se entra: Deactivate o Reactivate. Asi el punto unico de
+            // RF-CA-05 decide el role de cada uno y no el endpoint.
+            if (operation == Operation.ReactivateUser)
             {
-                await casoDeUso.ReactivarAsync(
-                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
-                    usuarioId,
+                await useCase.ReactivateAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    userId,
                     cancellationToken);
             }
             else
             {
-                await casoDeUso.EjecutarAsync(
-                    PortadorDelToken.Leer(peticionHttp) ?? string.Empty,
-                    usuarioId,
+                await useCase.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    userId,
                     cancellationToken);
             }
 
             return Results.NoContent();
         }
-        catch (SesionInvalidaException error)
+        catch (InvalidSessionException error)
         {
             return Results.Json(
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status401Unauthorized);
         }
-        catch (RolInsuficienteException error)
+        catch (InsufficientRoleException error)
         {
             return Results.Json(
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status403Forbidden);
         }
-        catch (OperacionDeAdministracionRechazadaException error)
+        catch (AdministrationOperationRejectedException error)
         {
             return Results.Json(
                 new ErrorResponse(error.Message),
