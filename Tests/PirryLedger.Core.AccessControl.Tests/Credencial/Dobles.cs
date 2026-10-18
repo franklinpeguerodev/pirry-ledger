@@ -10,124 +10,124 @@ namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 // RD-12: las piezas se prueban sin levantar la aplicacion ni tocar PostgreSQL.
 // Los dobles de los repositorios viven aqui, en el proyecto de pruebas.
 //
-// El reloj falso es lo que hace que RF-CA-19 sea comprobable: los quince minutos
-// de bloqueo se recorren instanciando otro reloj quince minutos adelante, sin
-// esperar. Con el reloj real, esta prueba tardaria un cuarto de hora.
+// El Clock falso es lo que hace que RF-CA-19 sea comprobable: los quince minutos
+// de bloqueo se recorren instanciando otro Clock quince minutos adelante, sin
+// esperar. Con el Clock real, esta prueba tardaria un cuarto de hora.
 
-internal sealed class RelojFalso : IClock
+internal sealed class FakeClock : IClock
 {
-    public RelojFalso(DateTime ahora)
+    public FakeClock(DateTime now)
     {
-        UtcNow = ahora;
+        UtcNow = now;
     }
 
     public DateTime UtcNow { get; set; }
 
-    public void Avanzar(TimeSpan cantidad) => UtcNow = UtcNow.Add(cantidad);
+    public void Advance(TimeSpan amount) => UtcNow = UtcNow.Add(amount);
 }
 
-internal sealed class UsuarioEnMemoria : IUserRepository
+internal sealed class FakeUserRepository : IUserRepository
 {
-    private readonly List<Usuario> _usuarios = [];
+    private readonly List<User> _users = [];
 
-    public Usuario Crear(string nombre, string correo, string hash, DateTime ahoraUtc, bool activo, Domain.Rol rol = Domain.Rol.Estandar)
+    public User Create(string name, string email, string hash, DateTime utcNow, bool active, Role role = Role.Standard)
     {
         // Se crea y luego se activa o no desde fuera, porque el constructor de
-        // Usuario lo deja siempre inactivo (RF-CA-15).
-        var usuario = Usuario.Crear(nombre, correo, hash, ahoraUtc);
+        // User lo deja siempre inactivo (RF-CA-15).
+        var user = User.Create(name, email, hash, utcNow);
 
-        if (activo)
+        if (active)
         {
-            usuario.Activar();
+            user.Activate();
         }
 
-        // Crear no recibe rol: el usuario nace con el rol por defecto y se cambia
-        // despues con CambiarRol, que es el camino real.
-        if (rol != usuario.Rol)
+        // Create no recibe role: el user nace con el Role por defecto y se cambia
+        // despues con ChangeRole, que es el camino real.
+        if (role != user.Role)
         {
-            usuario.CambiarRol(rol);
+            user.ChangeRole(role);
         }
 
-        _usuarios.Add(usuario);
+        _users.Add(user);
 
-        return usuario;
+        return user;
     }
 
-    public Task<Usuario?> BuscarPorCorreoAsync(string correo, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_usuarios
-            .FirstOrDefault(usuario => usuario.Correo == correo.Trim().ToLowerInvariant()));
+    public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users
+            .FirstOrDefault(user => user.Email == email.Trim().ToLowerInvariant()));
 
-    public Task<Usuario?> BuscarPorIdAsync(Guid usuarioId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_usuarios.FirstOrDefault(usuario => usuario.Id == usuarioId));
+    public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.FirstOrDefault(user => user.Id == userId));
 
-    public Task GuardarAsync(Usuario usuario, CancellationToken cancellationToken = default)
+    public Task SaveAsync(User user, CancellationToken cancellationToken = default)
     {
         // El doble guarda la misma instancia, asi que las mutaciones de la entidad
         // ya estan visibles. No hace falta persistir nada.
         //
         // Aun asi hay que registrar la fila si no estaba: hay casos de uso (como
-        // el seed del primer Administrador) que crean la entidad y la guardan
-        // sin pasar antes por Crear, y sin esto no se podrian volver a buscar.
-        if (!_usuarios.Any(registrado => registrado.Id == usuario.Id))
+        // el seed del primer Administrator) que crean la entidad y la guardan
+        // sin pasar antes por Create, y sin esto no se podrian volver a buscar.
+        if (!_users.Any(registered => registered.Id == user.Id))
         {
-            _usuarios.Add(usuario);
+            _users.Add(user);
         }
 
         return Task.CompletedTask;
     }
 
-    // RF-CA-21. Ordena por correo como el repositorio real, para que las pruebas
-    // no dependan del orden en que se crean los usuarios.
-    public Task<IReadOnlyList<Usuario>> ListarAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<Usuario>>(_usuarios
-            .OrderBy(usuario => usuario.Correo)
+    // RF-CA-21. Ordena por Email como el repositorio real, para que las pruebas
+    // no dependan del orden en que se crean los Users.
+    public Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<User>>(_users
+            .OrderBy(user => user.Email)
             .ToList());
 
     // RF-CA-20: solo los activos, como el repositorio real.
-    public Task<int> ContarAdministradoresActivosAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(_usuarios
-            .Count(usuario => usuario.Rol == Domain.Rol.Administrador && usuario.Activo));
+    public Task<int> CountActiveAdministratorsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users
+            .Count(user => user.Role == Role.Administrator && user.Active));
 
-    public Task<bool> ExisteAlgunAdministradorAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(_usuarios.Any(usuario => usuario.Rol == Domain.Rol.Administrador));
+    public Task<bool> AnyAdministratorExistsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Any(user => user.Role == Role.Administrator));
 
     // Solo para pruebas: el repositorio real no necesita listar Administradores.
     // Sirve para comprobar que el seed no creo dos.
-    public Task<List<Usuario>> BuscarTodosLosAdministradoresAsync() =>
-        Task.FromResult(_usuarios.Where(usuario => usuario.Rol == Domain.Rol.Administrador).ToList());
+    public Task<List<User>> FindAllAdministratorsAsync() =>
+        Task.FromResult(_users.Where(user => user.Role == Role.Administrator).ToList());
 }
 
-internal sealed class SesionEnMemoria : ISessionRepository
+internal sealed class FakeSessionRepository : ISessionRepository
 {
-    private readonly List<Sesion> _sesiones = [];
+    private readonly List<Session> _sessions = [];
 
-    public int Guardadas => _sesiones.Count;
+    public int SavedCount => _sessions.Count;
 
-    public Sesion? Buscar(string hashDelToken) =>
-        _sesiones.FirstOrDefault(sesion => sesion.HashDelToken == hashDelToken);
+    public Session? Find(string tokenHash) =>
+        _sessions.FirstOrDefault(session => session.TokenHash == tokenHash);
 
-    public Task GuardarAsync(Sesion sesion, CancellationToken cancellationToken = default)
+    public Task SaveAsync(Session session, CancellationToken cancellationToken = default)
     {
-        _sesiones.Add(sesion);
+        _sessions.Add(session);
         return Task.CompletedTask;
     }
 
-    public Task<Sesion?> BuscarPorHashAsync(string hashDelToken, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Buscar(hashDelToken));
+    public Task<Session?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Find(tokenHash));
 
-    public Task<bool> CerrarPorHashAsync(
-        string hashDelToken,
-        DateTime ahoraUtc,
+    public Task<bool> CloseByHashAsync(
+        string tokenHash,
+        DateTime utcNow,
         CancellationToken cancellationToken = default)
     {
-        var sesion = Buscar(hashDelToken);
+        var session = Find(tokenHash);
 
-        if (sesion is null || sesion.EstaCerrada)
+        if (session is null || session.IsClosed)
         {
             return Task.FromResult(false);
         }
 
-        sesion.Cerrar(ahoraUtc);
+        session.Close(utcNow);
 
         return Task.FromResult(true);
     }

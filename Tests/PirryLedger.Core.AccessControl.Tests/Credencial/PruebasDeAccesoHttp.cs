@@ -13,89 +13,89 @@ namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 // recibe una petición construida manualmente (RD-06, RD-07 y RD-08).
 public sealed class PruebasDeAccesoHttp
 {
-    private static readonly DateTime Ahora = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime utcNow = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
     public async Task UsuarioEstandarRecibe403EnUnaOperacionAdministrativa()
     {
-        var escenario = new EscenarioDeSesion(Ahora);
-        var token = await escenario.AbrirSesionAsync();
-        var resultado = await EjecutarFiltroAsync(
-            escenario.Autenticar,
+        var scenario = new SessionScenario(utcNow);
+        var token = await scenario.OpenSessionAsync();
+        var result = await EjecutarFiltroAsync(
+            scenario.Authenticate,
             token,
-            Operacion.ListarUsuarios);
+            Operation.ListUsers);
 
-        Assert.Equal(StatusCodes.Status403Forbidden, resultado.StatusCode);
+        Assert.Equal(StatusCodes.Status403Forbidden, result.StatusCode);
     }
 
     [Fact]
     public async Task PeticionSinCredencialRecibe401AntesDeComprobarElRol()
     {
-        var escenario = new EscenarioDeSesion(Ahora);
-        var resultado = await EjecutarFiltroAsync(
-            escenario.Autenticar,
+        var scenario = new SessionScenario(utcNow);
+        var result = await EjecutarFiltroAsync(
+            scenario.Authenticate,
             string.Empty,
-            Operacion.ListarUsuarios);
+            Operation.ListUsers);
 
-        Assert.Equal(StatusCodes.Status401Unauthorized, resultado.StatusCode);
+        Assert.Equal(StatusCodes.Status401Unauthorized, result.StatusCode);
     }
 
     [Fact]
     public async Task OperacionPublicaLlegaAlHandler()
     {
-        var escenario = new EscenarioDeSesion(Ahora);
-        var contexto = CrearContexto(
-            escenario.Autenticar,
+        var scenario = new SessionScenario(utcNow);
+        var context = CrearContexto(
+            scenario.Authenticate,
             string.Empty,
-            Operacion.IniciarSesion);
-        var llamada = EndpointFilterInvocationContext.Create(contexto);
+            Operation.Login);
+        var llamada = EndpointFilterInvocationContext.Create(context);
 
-        var resultado = await FiltroDeAcceso.AplicarAsync(
+        var result = await AccessFilter.ApplyAsync(
             llamada,
             _ => ValueTask.FromResult<object?>("ejecutado"));
 
-        Assert.Equal("ejecutado", resultado);
+        Assert.Equal("ejecutado", result);
     }
 
     private static async Task<HttpResponse> EjecutarFiltroAsync(
-        Autenticar autenticar,
+        Authenticate authenticate,
         string token,
-        Operacion operacion)
+        Operation operation)
     {
-        var contexto = CrearContexto(autenticar, token, operacion);
-        var llamada = EndpointFilterInvocationContext.Create(contexto);
+        var context = CrearContexto(authenticate, token, operation);
+        var llamada = EndpointFilterInvocationContext.Create(context);
 
-        var resultado = await FiltroDeAcceso.AplicarAsync(
+        var result = await AccessFilter.ApplyAsync(
             llamada,
             _ => ValueTask.FromResult<object?>("no deberia ejecutarse"));
 
-        var respuesta = Assert.IsAssignableFrom<IResult>(resultado);
-        await respuesta.ExecuteAsync(contexto);
+        var response = Assert.IsAssignableFrom<IResult>(result);
+        await response.ExecuteAsync(context);
 
-        return contexto.Response;
+        return context.Response;
     }
 
     private static DefaultHttpContext CrearContexto(
-        Autenticar autenticar,
+        Authenticate authenticate,
         string token,
-        Operacion operacion)
+        Operation operation)
     {
         var servicios = new ServiceCollection()
-            .AddSingleton(autenticar)
+            .AddSingleton(authenticate)
             .AddLogging()
             .BuildServiceProvider();
-        var contexto = new DefaultHttpContext
+        var context = new DefaultHttpContext
         {
             RequestServices = servicios,
         };
-        contexto.Request.Headers.Authorization = string.IsNullOrEmpty(token)
+        context.Request.Headers.Authorization = string.IsNullOrEmpty(token)
             ? string.Empty
             : $"Bearer {token}";
-        contexto.SetEndpoint(new Endpoint(
+        context.SetEndpoint(new Endpoint(
             _ => Task.CompletedTask,
-            new EndpointMetadataCollection(new FiltroDeAcceso.MetadatoDeOperacion(operacion)),
+            new EndpointMetadataCollection(new AccessFilter.OperationMetadata(operation)),
             "prueba"));
 
-        return contexto;
+        return context;
     }
 }

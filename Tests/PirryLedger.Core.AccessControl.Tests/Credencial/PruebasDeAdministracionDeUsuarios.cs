@@ -9,29 +9,29 @@ namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 // RF-CA-05, RF-CA-06, RF-CA-08, RF-CA-20 y RF-CA-21.
 //
 // Estas pruebas cubren lo que la rubrica revisa a mano: una peticion ARMADA A
-// MANO de un Estandar contra una operacion de Administrador tiene que ser
+// MANO de un Standard contra una Operation de Administrator tiene que ser
 // rechazada. No basta con que la interfaz no muestre el boton; el rechazo
 // ocurre en el servidor (RD-06).
 public sealed class PruebasDeAdministracionDeUsuarios
 {
-    private static readonly DateTime Ahora = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime utcNow = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
     private static readonly TimeSpan VentanaDeSesion = TimeSpan.FromHours(8);
 
-    // Escenario con un Administrador y un Estandar, los dos activos y con
-    // sesion abierta. Devuelve tambien los tokens para no tener que entrar dos
+    // scenario con un Administrator y un Standard, los dos activos y con
+    // Session abierta. Devuelve tambien los tokens para no tener que Login dos
     // veces en cada prueba.
-    private static async Task<(EscenarioDeSesion Escenario, string TokenAdmin, string TokenEstandar)> EscenarioConAmbosAsync()
+    private static async Task<(SessionScenario scenario, string TokenAdmin, string TokenEstandar)> EscenarioConAmbosAsync()
     {
-        var escenario = new EscenarioDeSesion(Ahora);
+        var scenario = new SessionScenario(utcNow);
 
-        // El escenario trae un Estandar. Se anade el Administrador.
-        escenario.Usuarios.Crear(
-            "Admin", "admin@ejemplo.com", escenario.Hasher.Hash("admin12345"), Ahora, activo: true, rol: Rol.Administrador);
+        // El scenario trae un Standard. Se anade el Administrator.
+        scenario.Users.Create(
+            "Admin", "admin@ejemplo.com", scenario.Hasher.Hash("admin12345"), utcNow, active: true, role: Role.Administrator);
 
-        var tokenAdmin = await escenario.Entrar.EjecutarAsync("admin@ejemplo.com", "admin12345");
-        var tokenEstandar = await escenario.AbrirSesionAsync();
+        var tokenAdmin = await scenario.Login.ExecuteAsync("admin@ejemplo.com", "admin12345");
+        var tokenEstandar = await scenario.OpenSessionAsync();
 
-        return (escenario, tokenAdmin, tokenEstandar);
+        return (scenario, tokenAdmin, tokenEstandar);
     }
 
     // --- RF-CA-05: el punto unico ---
@@ -39,41 +39,41 @@ public sealed class PruebasDeAdministracionDeUsuarios
     [Fact]
     public void TodaOperacionDelEnumDeclaraSuRol()
     {
-        // El hueco que RF-CA-05 prohibe: una operacion en el enum que nadie
+        // El hueco que RF-CA-05 prohibe: una Operation en el enum que nadie
         // declaro en el punto unico. Si alguien anade una al enum y olvida
-        // ExigenciasDeRol, esta prueba falla y dice cual falta.
-        foreach (var operacion in Enum.GetValues<Operacion>())
+        // RoleRequirements, esta prueba falla y dice cual falta.
+        foreach (var Operation in Enum.GetValues<Operation>())
         {
-            var declarada = ExigenciasDeRol.OperacionesDeclaradas().Contains(operacion);
+            var declarada = RoleRequirements.DeclaredOperations().Contains(Operation);
 
-            // Si NO esta declarada, RolRequerido tiene que lanzar en vez de
-            // devolver un rol cualquiera: una operacion sin proteccion no puede
-            // devolver "nadie" como si fuera una respuesta valida.
+            // Si NO esta declarada, RequiredRole tiene que lanzar en vez de
+            // devolver un Role cualquiera: una Operation sin proteccion no puede
+            // devolver "nadie" como si fuera una response valida.
             if (!declarada)
             {
-                var error = Assert.Throws<OperacionSinExigenciaDeRolException>(
-                    () => ExigenciasDeRol.RolRequerido(operacion));
+                var error = Assert.Throws<OperationWithoutRoleRequirementException>(
+                    () => RoleRequirements.RequiredRole(Operation));
 
-                Assert.Contains(operacion.ToString(), error.Message);
+                Assert.Contains(Operation.ToString(), error.Message);
             }
         }
 
-        // Y la cuenta sale: cada operacion del enum esta en la tabla.
-        Assert.Equal(Enum.GetValues<Operacion>().Length, ExigenciasDeRol.OperacionesDeclaradas().Count);
+        // Y la cuenta sale: cada Operation del enum esta en la tabla.
+        Assert.Equal(Enum.GetValues<Operation>().Length, RoleRequirements.DeclaredOperations().Count);
     }
 
     [Fact]
     public void LasCuatroOperacionesDeAdministracionExigenAdministrador()
     {
-        Assert.Equal(Rol.Administrador, ExigenciasDeRol.RolRequerido(Operacion.ListarUsuarios));
-        Assert.Equal(Rol.Administrador, ExigenciasDeRol.RolRequerido(Operacion.CambiarRolDeUsuario));
-        Assert.Equal(Rol.Administrador, ExigenciasDeRol.RolRequerido(Operacion.DesactivarUsuario));
-        Assert.Equal(Rol.Administrador, ExigenciasDeRol.RolRequerido(Operacion.ReactivarUsuario));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ListUsers));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ChangeUserRole));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.DeactivateUser));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ReactivateUser));
 
         // Y la tabla no tiene operaciones de mas: si alguien anade una al enum y
         // la declara, esta prueba falla y obliga a decidir si es de
-        // Administrador o no.
-        Assert.Equal(Enum.GetValues<Operacion>().Length, ExigenciasDeRol.OperacionesDeclaradas().Count);
+        // Administrator o no.
+        Assert.Equal(Enum.GetValues<Operation>().Length, RoleRequirements.DeclaredOperations().Count);
     }
 
     // --- RF-CA-06: el rechazo tiene que ocurrir con peticion a mano ---
@@ -81,56 +81,56 @@ public sealed class PruebasDeAdministracionDeUsuarios
     [Fact]
     public async Task EstandarRecibe403EnLasTresOperaciones()
     {
-        var (escenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
+        var (scenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
 
-        var listar = new ListUsers(escenario.Usuarios, escenario.Autenticar);
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
+        var listar = new ListUsers(scenario.Users, scenario.Authenticate);
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
 
-        var objetivo = escenario.Usuarios.Crear(
-            "Objetivo", "objetivo@ejemplo.com", escenario.Hasher.Hash("abc12345"), Ahora, activo: true);
+        var objetivo = scenario.Users.Create(
+            "Objetivo", "objetivo@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true);
 
-        // Los tres rechazos, del mismo tipo y por la misma razon. Si uno de
-        // ellos pasara, el Estandar tendria una operacion abierta.
-        await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => listar.EjecutarAsync(tokenEstandar));
+        // Los tres rechazos, del mismo Type y por la misma reason. Si uno de
+        // ellos pasara, el Standard tendria una Operation abierta.
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => listar.ExecuteAsync(tokenEstandar));
 
-        await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => cambiarRol.EjecutarAsync(tokenEstandar, objetivo.Id, "Estandar"));
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => ChangeRole.ExecuteAsync(tokenEstandar, objetivo.Id, "Standard"));
 
-        await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => desactivar.EjecutarAsync(tokenEstandar, objetivo.Id));
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => Deactivate.ExecuteAsync(tokenEstandar, objetivo.Id));
     }
 
     [Fact]
     public async Task EstandarNoPuedeCambiarSuPropioRol()
     {
-        var (escenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
+        var (scenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
 
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
 
-        // Su propio rol. El rechazo es 403 por falta de permisos, no 400 por
-        // operacion invalida: lo primero dice "tu rol no alcanza", que es lo que
+        // Su propio Role. El rechazo es 403 por falta de permisos, no 400 por
+        // Operation invalida: lo primero dice "tu Role no alcanza", que es lo que
         // RF-CA-08 pide.
-        await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => cambiarRol.EjecutarAsync(tokenEstandar, escenario.Usuario.Id, "Administrador"));
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => ChangeRole.ExecuteAsync(tokenEstandar, scenario.User.Id, "Administrator"));
     }
 
     [Fact]
     public async Task SinSesionEs401YNo403()
     {
-        var (escenario, _, _) = await EscenarioConAmbosAsync();
+        var (scenario, _, _) = await EscenarioConAmbosAsync();
 
-        var listar = new ListUsers(escenario.Usuarios, escenario.Autenticar);
+        var listar = new ListUsers(scenario.Users, scenario.Authenticate);
 
-        // El orden importa: sin sesion no se sabe el rol, asi que no se puede
+        // El orden importa: sin Session no se sabe el Role, asi que no se puede
         // decir "no tienes permisos" porque eso confirmaria que el token fue real
         // alguna vez. Gana el 401.
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => listar.EjecutarAsync(string.Empty));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => listar.ExecuteAsync(string.Empty));
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => listar.EjecutarAsync("token-inventado"));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => listar.ExecuteAsync("token-inventado"));
     }
 
     // --- RF-CA-21: listar ---
@@ -138,21 +138,21 @@ public sealed class PruebasDeAdministracionDeUsuarios
     [Fact]
     public async Task ElListadoTraeCorreoRolYEstadoYNingunHash()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var listar = new ListUsers(escenario.Usuarios, escenario.Autenticar);
+        var listar = new ListUsers(scenario.Users, scenario.Authenticate);
 
-        var usuarios = await listar.EjecutarAsync(tokenAdmin);
+        var Users = await listar.ExecuteAsync(tokenAdmin);
 
-        // El escenario trae un Estandar y esta prueba anade un Administrador.
-        Assert.Equal(2, usuarios.Count);
+        // El scenario trae un Standard y esta prueba anade un Administrator.
+        Assert.Equal(2, Users.Count);
 
-        var objetivo = usuarios.First(usuario => usuario.Correo == "admin@ejemplo.com");
-        Assert.Equal(Rol.Administrador, objetivo.Rol);
-        Assert.True(objetivo.Activo);
+        var objetivo = Users.First(User => User.Email == "admin@ejemplo.com");
+        Assert.Equal(Role.Administrator, objetivo.Role);
+        Assert.True(objetivo.Active);
 
         // RF-CA-21: el listado NUNCA incluye hashes ni tokens. Se comprueba por
-        // nombre del tipo, no por el contenido: UsuarioListado no tiene campo de
+        // Name del Type, no por el contenido: ListedUser no tiene campo de
         // hash, asi que no hay por donde filtrarse aunque alguien lo intente.
         Assert.DoesNotContain(objetivo.GetType().GetProperties(), propiedad =>
             propiedad.Name.Contains("Hash", StringComparison.OrdinalIgnoreCase));
@@ -161,284 +161,284 @@ public sealed class PruebasDeAdministracionDeUsuarios
             propiedad.Name.Contains("Token", StringComparison.OrdinalIgnoreCase));
 
         Assert.DoesNotContain(objetivo.GetType().GetProperties(), propiedad =>
-            propiedad.Name.Contains("Contrasena", StringComparison.OrdinalIgnoreCase));
+            propiedad.Name.Contains("Password", StringComparison.OrdinalIgnoreCase));
     }
 
-    // --- RF-CA-08: cambiar rol ---
+    // --- RF-CA-08: cambiar Role ---
 
     [Fact]
     public async Task AdministradorCambiaElRolDeOtro()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
-        var objetivo = escenario.Usuario;
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
+        var objetivo = scenario.User;
 
-        Assert.Equal(Rol.Estandar, objetivo.Rol);
+        Assert.Equal(Role.Standard, objetivo.Role);
 
-        await cambiarRol.EjecutarAsync(tokenAdmin, objetivo.Id, "Administrador");
+        await ChangeRole.ExecuteAsync(tokenAdmin, objetivo.Id, "Administrator");
 
-        Assert.Equal(Rol.Administrador, objetivo.Rol);
+        Assert.Equal(Role.Administrator, objetivo.Role);
     }
 
     [Fact]
     public async Task ElRolSeAceptaSinDistinguirMayusculas()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
-        var objetivo = escenario.Usuario;
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
+        var objetivo = scenario.User;
 
-        await cambiarRol.EjecutarAsync(tokenAdmin, objetivo.Id, "administrador");
+        await ChangeRole.ExecuteAsync(tokenAdmin, objetivo.Id, "Administrator");
 
-        Assert.Equal(Rol.Administrador, objetivo.Rol);
+        Assert.Equal(Role.Administrator, objetivo.Role);
     }
 
     [Fact]
     public async Task UnRolQueNoExisteEs400YNoUnErrorInterno()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
 
-        // RD-07: un JSON con un rol inventado es un dato malo del cliente, no un
-        // fallo del servidor. TryParse evita que Enum.Parse lance dentro de la
+        // RD-07: un JSON con un Role inventado es un dato malo del cliente, no un
+        // failure del servidor. TryParse evita que Enum.Parse lance dentro de la
         // capa HTTP.
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => cambiarRol.EjecutarAsync(tokenAdmin, escenario.Usuario.Id, "SuperAdministrador"));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => ChangeRole.ExecuteAsync(tokenAdmin, scenario.User.Id, "SuperAdministrador"));
 
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => cambiarRol.EjecutarAsync(tokenAdmin, escenario.Usuario.Id, "99"));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => ChangeRole.ExecuteAsync(tokenAdmin, scenario.User.Id, "99"));
 
-        // Y el rol no cambio.
-        Assert.Equal(Rol.Estandar, escenario.Usuario.Rol);
+        // Y el Role no cambio.
+        Assert.Equal(Role.Standard, scenario.User.Role);
     }
 
     [Fact]
     public async Task UnAdministradorNoPuedeCambiarSuPropioRol()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
-        var admin = await escenario.Usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
+        var admin = await scenario.Users.FindByEmailAsync("admin@ejemplo.com");
 
-        // Es operacion invalida, no falta de permisos: por eso es
-        // OperacionDeAdministracionRechazadaException y no RolInsuficiente. El
+        // Es Operation invalida, no falta de permisos: por eso es
+        // AdministrationOperationRejectedException y no RolInsuficiente. El
         // endpoint lo traduce a 400 en vez de 403.
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => cambiarRol.EjecutarAsync(tokenAdmin, admin!.Id, "Estandar"));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => ChangeRole.ExecuteAsync(tokenAdmin, admin!.Id, "Standard"));
 
-        Assert.Equal(Rol.Administrador, admin!.Rol);
+        Assert.Equal(Role.Administrator, admin!.Role);
     }
 
-    // --- RF-CA-20: desactivar ---
+    // --- RF-CA-20: Deactivate ---
 
     [Fact]
     public async Task DesactivarInvalidaLaSesionAbiertaDelOtro()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var objetivo = escenario.Usuario;
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var objetivo = scenario.User;
 
-        // El Estandar abre sesion ANTES de que se le desactive. El token se guarda, para
+        // El Standard abre Session ANTES de que se le desactive. El token se guarda, para
         // poder comprobar despues que ESA credencial concreta deja de servir.
-        var tokenObjetivo = await escenario.AbrirSesionYGuardarTokenAsync();
+        var tokenObjetivo = await scenario.OpenSessionAndStoreTokenAsync();
 
-        await escenario.Autenticar.EjecutarAsync(tokenObjetivo);
+        await scenario.Authenticate.ExecuteAsync(tokenObjetivo);
 
-        await desactivar.EjecutarAsync(tokenAdmin, objetivo.Id);
+        await Deactivate.ExecuteAsync(tokenAdmin, objetivo.Id);
 
-        Assert.False(objetivo.Activo);
+        Assert.False(objetivo.Active);
 
-        // Y esa sesion deja de servir. No se borro ninguna fila de Sesion: lo
-        // que cambio fue CredencialVersion, y el punto de validacion la compara.
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(tokenObjetivo));
+        // Y esa Session deja de servir. No se borro ninguna fila de Session: lo
+        // que cambio fue CredentialVersion, y el punto de validacion la compara.
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(tokenObjetivo));
     }
 
     [Fact]
     public async Task UnDesactivadoNoPuedeIniciarSesion()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var objetivo = escenario.Usuario;
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var objetivo = scenario.User;
 
-        await desactivar.EjecutarAsync(tokenAdmin, objetivo.Id);
+        await Deactivate.ExecuteAsync(tokenAdmin, objetivo.Id);
 
-        // RF-CA-20: "un usuario desactivado no inicia sesion".
-        await Assert.ThrowsAsync<CuentaNoActivadaException>(
-            () => escenario.Entrar.EjecutarAsync("empleado@ejemplo.com", "abc12345"));
+        // RF-CA-20: "un User desactivado no inicia Session".
+        await Assert.ThrowsAsync<AccountNotActivatedException>(
+            () => scenario.Login.ExecuteAsync("empleado@ejemplo.com", "abc12345"));
     }
 
     [Fact]
     public async Task AdministradorNoPuedeDesactivarseASiMismo()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var admin = await escenario.Usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var admin = await scenario.Users.FindByEmailAsync("admin@ejemplo.com");
 
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.EjecutarAsync(tokenAdmin, admin!.Id));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ExecuteAsync(tokenAdmin, admin!.Id));
 
-        Assert.True(admin!.Activo);
+        Assert.True(admin!.Active);
     }
 
     [Fact]
     public async Task NoSePuedeDesactivarAlUltimoAdministradorActivo()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var admin = await escenario.Usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var admin = await scenario.Users.FindByEmailAsync("admin@ejemplo.com");
 
-        // Este es el UNICO Administrador activo de la base. Desactivarlo dejaria
+        // Este es el UNICO Administrator Active de la base. Desactivarlo dejaria
         // el sistema sin administracion sin forma de arreglarlo por la API.
-        Assert.Equal(1, await escenario.Usuarios.ContarAdministradoresActivosAsync());
+        Assert.Equal(1, await scenario.Users.CountActiveAdministratorsAsync());
 
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.EjecutarAsync(tokenAdmin, admin!.Id));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ExecuteAsync(tokenAdmin, admin!.Id));
 
-        Assert.True(admin!.Activo);
+        Assert.True(admin!.Active);
     }
 
     [Fact]
     public async Task SePuedeDesactivarUnAdministradorCuandoHayOtroActivo()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        // Un segundo Administrador activo: ahora si hay respaldo.
-        var segundo = escenario.Usuarios.Crear(
-            "Admin Dos", "admin2@ejemplo.com", escenario.Hasher.Hash("admin12345"), Ahora, activo: true, rol: Rol.Administrador);
+        // Un segundo Administrator active: utcNow si hay respaldo.
+        var segundo = scenario.Users.Create(
+            "Admin Dos", "admin2@ejemplo.com", scenario.Hasher.Hash("admin12345"), utcNow, active: true, role: Role.Administrator);
 
-        Assert.Equal(2, await escenario.Usuarios.ContarAdministradoresActivosAsync());
+        Assert.Equal(2, await scenario.Users.CountActiveAdministratorsAsync());
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var primero = await escenario.Usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var primero = await scenario.Users.FindByEmailAsync("admin@ejemplo.com");
 
         // Quien llama (tokenAdmin) es "primero", asi que no puede desactivarse a si
-        // mismo. El que se desactiva es el SEGUNDO Administrador, y para eso hace
-        // falta su propia sesion: el caso de uso exige Administrador y el token
+        // mismo. El que se desactiva es el SEGUNDO Administrator, y para eso hace
+        // falta su propia Session: el caso de uso exige Administrator y el token
         // del primero tambien lo es, pero el rechazo de auto-desactivacion
         // comprueba el Id del que llama.
-        var tokenSegundo = await escenario.Entrar.EjecutarAsync("admin2@ejemplo.com", "admin12345");
+        var tokenSegundo = await scenario.Login.ExecuteAsync("admin2@ejemplo.com", "admin12345");
 
-        await desactivar.EjecutarAsync(tokenSegundo, primero!.Id);
+        await Deactivate.ExecuteAsync(tokenSegundo, primero!.Id);
 
-        Assert.False(primero!.Activo);
-        Assert.True(segundo.Activo);
+        Assert.False(primero!.Active);
+        Assert.True(segundo.Active);
     }
 
     [Fact]
     public async Task UnAdministradorDesactivadoNoCuentaComoRespaldo()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var admin = await escenario.Usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var admin = await scenario.Users.FindByEmailAsync("admin@ejemplo.com");
 
-        // Desactivar a un Estandar no toca el conteo.
-        await desactivar.EjecutarAsync(tokenAdmin, escenario.Usuario.Id);
-        Assert.Equal(1, await escenario.Usuarios.ContarAdministradoresActivosAsync());
+        // Deactivate a un Standard no toca el conteo.
+        await Deactivate.ExecuteAsync(tokenAdmin, scenario.User.Id);
+        Assert.Equal(1, await scenario.Users.CountActiveAdministratorsAsync());
 
-        // Si el unico Administrador ya estuviera inactivo, seguiria sin poder
+        // Si el unico Administrator ya estuviera inactivo, seguiria sin poder
         // desactivarse: no habria a quien volver. El conteo mira solo los activos.
-        Assert.False(escenario.Usuario.Activo);
-        Assert.True(admin!.Activo);
+        Assert.False(scenario.User.Active);
+        Assert.True(admin!.Active);
     }
 
-    // Desactivar una cuenta que ya esta inactiva tiene que responder 400 diciendo
-    // eso, no un 500. Y el mensaje tiene que hablar de la cuenta inactiva: antes
-    // de arreglarlo, este caso devolvia "no se puede desactivar al ultimo
-    // Administrador activo", que no era lo que habia pasado.
+    // Deactivate una cuenta que ya esta inactiva tiene que responder 400 diciendo
+    // eso, no un 500. Y el Message tiene que hablar de la cuenta inactiva: antes
+    // de arreglarlo, este caso devolvia "no se puede Deactivate al ultimo
+    // Administrator Active", que no era lo que habia pasado.
     [Fact]
     public async Task DesactivarDosVecesLaMismaCuentaEsRechazoControlado()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
 
-        await desactivar.EjecutarAsync(tokenAdmin, escenario.Usuario.Id);
+        await Deactivate.ExecuteAsync(tokenAdmin, scenario.User.Id);
 
-        var error = await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.EjecutarAsync(tokenAdmin, escenario.Usuario.Id));
+        var error = await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ExecuteAsync(tokenAdmin, scenario.User.Id));
 
         Assert.Equal("La cuenta ya esta inactiva.", error.Message);
     }
 
-    // La cuenta inactiva se avisa antes que la regla del ultimo Administrador.
-    // Este usuario es Estandar, asi que el guardia del ultimo Administrador ni
+    // La cuenta inactiva se avisa antes que la regla del ultimo Administrator.
+    // Este User es Standard, asi que el guardia del ultimo Administrator ni
     // siquiera le tocaba: lo que se comprueba aqui es el orden de las reglas.
     [Fact]
     public async Task DesactivarUnaCuentaInactivaNoDiceQueFaltaUnAdministrador()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var objetivo = await escenario.Usuarios.BuscarPorCorreoAsync("empleado@ejemplo.com");
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var objetivo = await scenario.Users.FindByEmailAsync("empleado@ejemplo.com");
 
-        await desactivar.EjecutarAsync(tokenAdmin, escenario.Usuario.Id);
+        await Deactivate.ExecuteAsync(tokenAdmin, scenario.User.Id);
 
-        var error = await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.EjecutarAsync(tokenAdmin, objetivo!.Id));
+        var error = await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ExecuteAsync(tokenAdmin, objetivo!.Id));
 
-        Assert.DoesNotContain("ultimo Administrador", error.Message);
+        Assert.DoesNotContain("ultimo Administrator", error.Message);
     }
 
-    // --- Reactivar ---
+    // --- Reactivate ---
 
     [Fact]
     public async Task ReactivarDevuelveLaCuentaYSuSesionVuelveAFuncionar()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var objetivo = escenario.Usuario;
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var objetivo = scenario.User;
 
-        await desactivar.EjecutarAsync(tokenAdmin, objetivo.Id);
-        Assert.False(objetivo.Activo);
+        await Deactivate.ExecuteAsync(tokenAdmin, objetivo.Id);
+        Assert.False(objetivo.Active);
 
-        await desactivar.ReactivarAsync(tokenAdmin, objetivo.Id);
-        Assert.True(objetivo.Activo);
+        await Deactivate.ReactivateAsync(tokenAdmin, objetivo.Id);
+        Assert.True(objetivo.Active);
 
-        // Y entra con la misma contrasena.
-        var token = await escenario.Entrar.EjecutarAsync("empleado@ejemplo.com", "abc12345");
+        // Y entra con la misma Password.
+        var token = await scenario.Login.ExecuteAsync("empleado@ejemplo.com", "abc12345");
         Assert.NotNull(token);
     }
 
-    // Reactivar una cuenta que ya esta activa es un 400 controlado. Sin esto la
+    // Reactivate una cuenta que ya esta activa es un 400 controlado. Sin esto la
     // excepcion de la entidad salia como 500 con traza (RD-07, RD-08).
     [Fact]
     public async Task ReactivarDosVecesLaMismaCuentaEsRechazoControlado()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
 
-        // Sin esto la primera llamada ya fallaria, porque en el escenario el
-        // usuario esta activo: reactivar tiene que ir precedido de desactivar.
-        await desactivar.EjecutarAsync(tokenAdmin, escenario.Usuario.Id);
-        await desactivar.ReactivarAsync(tokenAdmin, escenario.Usuario.Id);
+        // Sin esto la primera llamada ya fallaria, porque en el scenario el
+        // User esta active: Reactivate tiene que ir precedido de Deactivate.
+        await Deactivate.ExecuteAsync(tokenAdmin, scenario.User.Id);
+        await Deactivate.ReactivateAsync(tokenAdmin, scenario.User.Id);
 
-        var error = await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.ReactivarAsync(tokenAdmin, escenario.Usuario.Id));
+        var error = await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ReactivateAsync(tokenAdmin, scenario.User.Id));
 
         Assert.Equal("La cuenta ya esta activa.", error.Message);
     }
 
-    // Y el caso mas directo de todos: reactivar a alguien que esta activo desde
-    // el principio, sin pasar por desactivar.
+    // Y el caso mas directo de todos: Reactivate a alguien que esta Active desde
+    // el principio, sin pasar por Deactivate.
     [Fact]
     public async Task ReactivarUnaCuentaQueNuncaSeDesactivoEsRechazoControlado()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
 
-        var error = await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.ReactivarAsync(tokenAdmin, escenario.Usuario.Id));
+        var error = await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ReactivateAsync(tokenAdmin, scenario.User.Id));
 
         Assert.Equal("La cuenta ya esta activa.", error.Message);
     }
@@ -446,43 +446,43 @@ public sealed class PruebasDeAdministracionDeUsuarios
     [Fact]
     public async Task ReactivarTambienExigeAdministrador()
     {
-        var (escenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
+        var (scenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
 
-        await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => desactivar.ReactivarAsync(tokenEstandar, escenario.Usuario.Id));
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => Deactivate.ReactivateAsync(tokenEstandar, scenario.User.Id));
     }
 
     [Fact]
     public async Task UnUsuarioQueNoExisteEsRechazoControlado()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var cambiarRol = new ChangeUserRole(escenario.Usuarios, escenario.Autenticar);
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
         var inexistente = Guid.NewGuid();
 
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.EjecutarAsync(tokenAdmin, inexistente));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ExecuteAsync(tokenAdmin, inexistente));
 
-        await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => cambiarRol.EjecutarAsync(tokenAdmin, inexistente, "Administrador"));
+        await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => ChangeRole.ExecuteAsync(tokenAdmin, inexistente, "Administrator"));
     }
 
     [Fact]
     public async Task LosMensajesDeRechazoNoLlevanCorreosNiHashes()
     {
-        var (escenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
+        var (scenario, tokenAdmin, _) = await EscenarioConAmbosAsync();
 
-        var desactivar = new DeactivateUser(escenario.Usuarios, escenario.Autenticar);
-        var admin = await escenario.Usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var admin = await scenario.Users.FindByEmailAsync("admin@ejemplo.com");
 
-        var error = await Assert.ThrowsAsync<OperacionDeAdministracionRechazadaException>(
-            () => desactivar.EjecutarAsync(tokenAdmin, admin!.Id));
+        var error = await Assert.ThrowsAsync<AdministrationOperationRejectedException>(
+            () => Deactivate.ExecuteAsync(tokenAdmin, admin!.Id));
 
-        // RD-08: el mensaje dice que paso, no con que datos.
+        // RD-08: el Message dice que paso, no con que datos.
         Assert.DoesNotContain("admin@ejemplo.com", error.Message);
-        Assert.DoesNotContain(admin!.HashDeContrasena, error.Message);
+        Assert.DoesNotContain(admin!.PasswordHash, error.Message);
     }
 }

@@ -8,10 +8,10 @@ namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 
 // RF-CA-03 y RF-CA-19.
 //
-// Lo que se comprueba aqui es que NO se filtra informacion. Que un correo
-// inexistente y una contrasena erronea den el mismo error es la mitad del
+// Lo que se comprueba aqui es que NO se filtra informacion. Que un Email
+// inexistente y una Password erronea den el mismo error es la mitad del
 // requisito; la otra mitad, y la que se olvida, es que no se distingan ni por el
-// mensaje ni por el tiempo que tardan.
+// Message ni por el tiempo que tardan.
 public sealed class PruebasDeInicioDeSesion
 {
     private static readonly TimeSpan VentanaDeSesion = TimeSpan.FromHours(8);
@@ -19,53 +19,53 @@ public sealed class PruebasDeInicioDeSesion
     [Fact]
     public async Task CredencialesCorrectasAbrenSesion()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        var token = await escenario.AbrirSesionAsync();
+        var token = await scenario.OpenSessionAsync();
 
         Assert.False(string.IsNullOrWhiteSpace(token));
-        Assert.Equal(1, escenario.Sesiones.Guardadas);
+        Assert.Equal(1, scenario.Sessions.SavedCount);
     }
 
     [Fact]
     public async Task CorreoInexistenteYContrasenaErroneaDanElMismoError()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        var correoQueNoExiste = await CapturarAsync(
-            () => escenario.Entrar.EjecutarAsync("nadie@ejemplo.com", "abc12345"));
-        var contrasenaErronea = await CapturarAsync(
-            () => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+        var nonExistentEmail = await CapturarAsync(
+            () => scenario.Login.ExecuteAsync("nadie@ejemplo.com", "abc12345"));
+        var wrongPassword = await CapturarAsync(
+            () => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
 
-        // Mismo tipo: el endpoint los traduce a 401 igual.
-        Assert.Equal(correoQueNoExiste.Tipo, contrasenaErronea.Tipo);
+        // Mismo Type: el endpoint los traduce a 401 igual.
+        Assert.Equal(nonExistentEmail.Type, wrongPassword.Type);
 
-        // Y mismo mensaje, sin espacios ni diferencias sutiles.
-        Assert.Equal(correoQueNoExiste.Mensaje, contrasenaErronea.Mensaje);
+        // Y mismo Message, sin espacios ni diferencias sutiles.
+        Assert.Equal(nonExistentEmail.Message, wrongPassword.Message);
     }
 
-    // Con el hash senuelo cacheado, verificar contra un usuario inexistente cuesta
-    // la MISMA operacion del hasher que contra uno real: una sola verificacion.
+    // Con el hash senuelo cacheado, Verify contra un user inexistente cuesta
+    // la MISMA Operation del hasher que contra uno real: una sola verificacion.
     // Se comprueba la propiedad directamente en vez de comparar milisegundos,
     // porque la carga del equipo hace que una medicion temporal sea inestable.
     [Fact]
     public async Task ElCorreoNoExistenteEjecutaElMismoTrabajoDeHash()
     {
-        var escenario = new EscenarioDeSesion();
-        var hasher = new HasherContador(escenario.Hasher);
+        var scenario = new SessionScenario();
+        var hasher = new HasherContador(scenario.Hasher);
         var login = new Login(
-            escenario.Usuarios,
-            escenario.Sesiones,
+            scenario.Users,
+            scenario.Sessions,
             hasher,
-            escenario.Reloj,
+            scenario.Clock,
             VentanaDeSesion);
 
-        await CapturarAsync(() => login.EjecutarAsync("nadie@ejemplo.com", "abc12345"));
+        await CapturarAsync(() => login.ExecuteAsync("nadie@ejemplo.com", "abc12345"));
         Assert.Equal(1, hasher.Verificaciones);
         Assert.Equal(1, hasher.CreacionesDeSenaluelo);
 
         hasher.ReiniciarContadores();
-        await CapturarAsync(() => login.EjecutarAsync(escenario.Correo, "malaclave1"));
+        await CapturarAsync(() => login.ExecuteAsync(scenario.Email, "malaclave1"));
         Assert.Equal(1, hasher.Verificaciones);
         Assert.Equal(0, hasher.CreacionesDeSenaluelo);
     }
@@ -73,152 +73,152 @@ public sealed class PruebasDeInicioDeSesion
     [Fact]
     public async Task CuentaNoActivadaSeInformaSoloTrasVerificarLaContrasena()
     {
-        var ahora = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-        var escenario = new EscenarioDeSesion(ahora);
+        var utcNow = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        var scenario = new SessionScenario(utcNow);
 
-        // Un segundo usuario, registrado pero sin activar (RF-CA-15).
-        var inactivo = escenario.Usuarios.Crear(
-            "Pendiente", "pendiente@ejemplo.com", escenario.Hasher.Hash("abc12345"), ahora, activo: false);
+        // Un segundo user, registrado pero sin Activate (RF-CA-15).
+        var inactivo = scenario.Users.Create(
+            "Pending", "Pending@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: false);
 
-        var usuario = await escenario.Usuarios.BuscarPorIdAsync(inactivo.Id);
+        var user = await scenario.Users.FindByIdAsync(inactivo.Id);
 
-        Assert.False(usuario!.Activo);
+        Assert.False(user!.Active);
 
-        // Con la contrasena CORRECTA se dice que la cuenta no esta activada.
+        // Con la Password CORRECTA se dice que la cuenta no esta activada.
         var correcto = await CapturarAsync(
-            () => escenario.Entrar.EjecutarAsync("pendiente@ejemplo.com", "abc12345"));
-        Assert.Equal(typeof(CuentaNoActivadaException), correcto.Tipo);
+            () => scenario.Login.ExecuteAsync("Pending@ejemplo.com", "abc12345"));
+        Assert.Equal(typeof(AccountNotActivatedException), correcto.Type);
 
-        // Con la contrasena ERRONEA se dice lo de siempre, sin mencionar la
+        // Con la Password ERRONEA se dice lo de siempre, sin mencionar la
         // activacion. Si dijera "esa cuenta existe pero esta inactiva" sin
-        // contrasena, bastaria con probar correos para saber quien tiene cuenta.
+        // Password, bastaria con probar correos para saber quien tiene cuenta.
         var erroneo = await CapturarAsync(
-            () => escenario.Entrar.EjecutarAsync("pendiente@ejemplo.com", "malaclave1"));
-        Assert.Equal(typeof(CredencialesRechazadasException), erroneo.Tipo);
-        Assert.DoesNotContain("activa", erroneo.Mensaje, StringComparison.OrdinalIgnoreCase);
+            () => scenario.Login.ExecuteAsync("Pending@ejemplo.com", "malaclave1"));
+        Assert.Equal(typeof(CredentialsRejectedException), erroneo.Type);
+        Assert.DoesNotContain("activa", erroneo.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task CincoIntentosFallidosBloqueanLaCuenta()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
         for (var intento = 1; intento <= 5; intento++)
         {
-            await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+            await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
         }
 
-        Assert.True(escenario.Usuario.EstaBloqueado(escenario.Reloj.UtcNow));
+        Assert.True(scenario.User.IsBlocked(scenario.Clock.UtcNow));
     }
 
     [Fact]
     public async Task ElSextoIntentoSeRechazaAunConLaContrasenaCorrecta()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
         for (var intento = 1; intento <= 5; intento++)
         {
-            await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+            await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
         }
 
         // RF-CA-19: aqui esta el criterio de aceptacion literal.
-        var sexto = await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, escenario.Contrasena));
+        var sexto = await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, scenario.Password));
 
-        Assert.Equal(typeof(CuentaBloqueadaException), sexto.Tipo);
-        Assert.Equal(0, escenario.Sesiones.Guardadas);
+        Assert.Equal(typeof(AccountBlockedException), sexto.Type);
+        Assert.Equal(0, scenario.Sessions.SavedCount);
     }
 
     [Fact]
     public async Task ElMensajeDeBloqueoNoDistingueDeCredencialesIncorrectas()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
         for (var intento = 1; intento <= 5; intento++)
         {
-            await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+            await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
         }
 
         var duranteBloqueo = await CapturarAsync(
-            () => escenario.Entrar.EjecutarAsync(escenario.Correo, escenario.Contrasena));
+            () => scenario.Login.ExecuteAsync(scenario.Email, scenario.Password));
 
-        // Si el bloqueo tuviera su propio mensaje, confirmaria que ese correo
+        // Si el bloqueo tuviera su propio Message, confirmaria que ese Email
         // existe. Con el mismo texto, no se puede saber.
-        var contrasenaErronea = await CapturarAsync(
-            () => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+        var wrongPassword = await CapturarAsync(
+            () => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
 
-        Assert.Equal(contrasenaErronea.Mensaje, duranteBloqueo.Mensaje);
+        Assert.Equal(wrongPassword.Message, duranteBloqueo.Message);
     }
 
     [Fact]
     public async Task ElBloqueoTerminaAlPasarQuinceMinutos()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
         for (var intento = 1; intento <= 5; intento++)
         {
-            await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+            await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
         }
 
-        Assert.True(escenario.Usuario.EstaBloqueado(escenario.Reloj.UtcNow));
+        Assert.True(scenario.User.IsBlocked(scenario.Clock.UtcNow));
 
-        // Sin esperar: el reloj es inyectable (RD-11).
-        escenario.Reloj.Avanzar(TimeSpan.FromMinutes(15));
+        // Sin esperar: el Clock es inyectable (RD-11).
+        scenario.Clock.Advance(TimeSpan.FromMinutes(15));
 
-        Assert.False(escenario.Usuario.EstaBloqueado(escenario.Reloj.UtcNow));
+        Assert.False(scenario.User.IsBlocked(scenario.Clock.UtcNow));
 
-        // Y ya se puede entrar con la contrasena correcta.
-        var token = await escenario.Entrar.EjecutarAsync(escenario.Correo, escenario.Contrasena);
+        // Y ya se puede Login con la Password correcta.
+        var token = await scenario.Login.ExecuteAsync(scenario.Email, scenario.Password);
         Assert.False(string.IsNullOrWhiteSpace(token));
     }
 
     [Fact]
     public async Task UnInicioDeSesionCorrectoPoneElContadorEnCero()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
         for (var intento = 1; intento <= 4; intento++)
         {
-            await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
+            await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
         }
 
-        Assert.Equal(4, escenario.Usuario.IntentosFallidos);
+        Assert.Equal(4, scenario.User.FailedAttempts);
 
-        await escenario.AbrirSesionAsync();
+        await scenario.OpenSessionAsync();
 
-        Assert.Equal(0, escenario.Usuario.IntentosFallidos);
-        Assert.Null(escenario.Usuario.BloqueoHastaUtc);
+        Assert.Equal(0, scenario.User.FailedAttempts);
+        Assert.Null(scenario.User.LockedUntilUtc);
     }
 
     [Fact]
     public async Task LosIntentosFallidosSeAcumulanSoloMientrasNoHayaAcierto()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        // Dos fallos, un acierto (contador a cero), y dos fallos mas: no se llega
+        // Dos failures, un acierto (contador a cero), y dos failures mas: no se llega
         // al bloqueo.
-        await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave1"));
-        await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave2"));
-        await escenario.AbrirSesionAsync();
-        await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave3"));
-        await CapturarAsync(() => escenario.Entrar.EjecutarAsync(escenario.Correo, "malaclave4"));
+        await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave1"));
+        await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave2"));
+        await scenario.OpenSessionAsync();
+        await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave3"));
+        await CapturarAsync(() => scenario.Login.ExecuteAsync(scenario.Email, "malaclave4"));
 
-        Assert.Equal(2, escenario.Usuario.IntentosFallidos);
-        Assert.False(escenario.Usuario.EstaBloqueado(escenario.Reloj.UtcNow));
+        Assert.Equal(2, scenario.User.FailedAttempts);
+        Assert.False(scenario.User.IsBlocked(scenario.Clock.UtcNow));
     }
 
     [Fact]
     public async Task ElCorreoEsSensibleAMayusculasYMinusculas()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        var token = await escenario.Entrar.EjecutarAsync("EMPLEADO@EJEMPLO.COM", escenario.Contrasena);
+        var token = await scenario.Login.ExecuteAsync("EMPLEADO@EJEMPLO.COM", scenario.Password);
 
         Assert.False(string.IsNullOrWhiteSpace(token));
     }
 
-    // Captura la excepcion sin que el test falle, para poder comparar el mensaje
+    // Captura la excepcion sin que el test falle, para poder comparar el Message
     // entre los dos casos.
-    private static async Task<(Type Tipo, string Mensaje)> CapturarAsync(Func<Task> accion)
+    private static async Task<(Type Type, string Message)> CapturarAsync(Func<Task> accion)
     {
         try
         {
@@ -237,18 +237,18 @@ public sealed class PruebasDeInicioDeSesion
 
         public int CreacionesDeSenaluelo { get; private set; }
 
-        public string Hash(string contrasena) => interno.Hash(contrasena);
+        public string Hash(string Password) => interno.Hash(Password);
 
-        public bool Verificar(string contrasena, string hashGuardado)
+        public bool Verify(string Password, string hashGuardado)
         {
             Verificaciones++;
-            return interno.Verificar(contrasena, hashGuardado);
+            return interno.Verify(Password, hashGuardado);
         }
 
-        public string CrearHashSenaluelo()
+        public string CreateDummyHash()
         {
             CreacionesDeSenaluelo++;
-            return interno.CrearHashSenaluelo();
+            return interno.CreateDummyHash();
         }
 
         public void ReiniciarContadores()
