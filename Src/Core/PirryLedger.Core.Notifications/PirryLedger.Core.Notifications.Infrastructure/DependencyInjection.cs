@@ -14,18 +14,18 @@ public static class DependencyInjection
     public static IServiceCollection AddNotifications(
         this IServiceCollection services,
         string connectionString,
-        SmtpConfiguracion smtp)
+        SmtpConfiguration smtp)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-        services.AddDbContext<NotificationsDbContext>(opciones =>
-            opciones.UseNpgsql(connectionString));
+        services.AddDbContext<NotificationsDbContext>(options =>
+            options.UseNpgsql(connectionString));
 
         services.AddSingleton(smtp);
         services.AddSingleton<IEmailTransporter, MailKitEmailTransporter>();
-        services.AddScoped<ICorreoEnColaRepository, CorreoEnColaRepository>();
+        services.AddScoped<IEmailQueueRepository, EmailQueueRepository>();
         services.AddScoped<IEmailQueue, EmailQueue>();
-        services.AddScoped<ProcesarColaDeCorreo>();
+        services.AddScoped<ProcessEmailQueue>();
 
         return services;
     }

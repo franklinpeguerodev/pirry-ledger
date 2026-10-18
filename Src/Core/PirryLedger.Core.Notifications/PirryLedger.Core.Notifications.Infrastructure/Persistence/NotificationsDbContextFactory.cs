@@ -13,26 +13,26 @@ namespace PirryLedger.Core.Notifications.Infrastructure;
 //
 // Las dos piezas comparten base de datos, asi que comparten la misma cadena de
 // conexion: ConnectionStrings__PirryLedger, en la variable de entorno que el
-// README documenta por nombre. Nunca hay una cadena de conexion en el
-// repositorio (RD-10).
+// README documenta por Name. Nunca hay una cadena de conexion en el
+// repository (RD-10).
 public sealed class NotificationsDbContextFactory : IDesignTimeDbContextFactory<NotificationsDbContext>
 {
-    private const string VariableDeConexion = ConfiguracionDeBaseDeDatos.VariableDeConexion;
+    private const string ConnectionVariable = DatabaseConfiguration.ConnectionVariable;
 
     public NotificationsDbContext CreateDbContext(string[] args)
     {
-        var connectionString = Environment.GetEnvironmentVariable(VariableDeConexion);
+        var connectionString = Environment.GetEnvironmentVariable(ConnectionVariable);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                $"Falta la variable de entorno {VariableDeConexion}. El README explica como definirla.");
+                $"Falta la variable de entorno {ConnectionVariable}. El README explica como definirla.");
         }
 
-        var opciones = new DbContextOptionsBuilder<NotificationsDbContext>()
+        var options = new DbContextOptionsBuilder<NotificationsDbContext>()
             .UseNpgsql(connectionString)
             .Options;
 
-        return new NotificationsDbContext(opciones);
+        return new NotificationsDbContext(options);
     }
 }

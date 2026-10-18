@@ -9,40 +9,40 @@ namespace PirryLedger.Core.Notifications.Infrastructure;
 
 internal sealed class MailKitEmailTransporter : IEmailTransporter
 {
-    private readonly SmtpConfiguracion _configuracion;
+    private readonly SmtpConfiguration _configuration;
 
-    public MailKitEmailTransporter(SmtpConfiguracion configuracion)
+    public MailKitEmailTransporter(SmtpConfiguration configuration)
     {
-        _configuracion = configuracion;
+        _configuration = configuration;
     }
 
-    public async Task EnviarAsync(string destinatario, string asunto, string cuerpo, CancellationToken cancellationToken = default)
+    public async Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken = default)
     {
-        if (!_configuracion.EstaConfigurada)
+        if (!_configuration.IsConfigured)
         {
             throw new EmailDeliveryException(
-                "Faltan las variables de entorno del servidor de correo (RF-NOT-13). Revisa el README.");
+                "Faltan las variables de entorno del servidor de Email (RF-NOT-13). Revisa el README.");
         }
 
-        using var cliente = new SmtpClient();
+        using var client = new SmtpClient();
 
         try
         {
-            await cliente.ConnectAsync(
-                _configuracion.Servidor,
-                _configuracion.Puerto,
-                TraducirModoSsl(_configuracion.ModoSeguridad),
+            await client.ConnectAsync(
+                _configuration.Server,
+                _configuration.Port,
+                TranslateSslMode(_configuration.SecurityMode),
                 cancellationToken);
 
-            await cliente.AuthenticateAsync(_configuracion.Usuario, _configuracion.Contrasena, cancellationToken);
+            await client.AuthenticateAsync(_configuration.User, _configuration.Password, cancellationToken);
 
-            var mensaje = new MimeMessage();
-            mensaje.From.Add(MailboxAddress.Parse(_configuracion.Remitente));
-            mensaje.To.Add(MailboxAddress.Parse(destinatario));
-            mensaje.Subject = asunto;
-            mensaje.Body = new TextPart("plain") { Text = cuerpo };
+            var message = new MimeMessage();
+            message.From.Add(MailboxAddress.Parse(_configuration.From));
+            message.To.Add(MailboxAddress.Parse(recipient));
+            message.Subject = subject;
+            message.Body = new TextPart("plain") { Text = body };
 
-            await cliente.SendAsync(mensaje, cancellationToken);
+            await client.SendAsync(message, cancellationToken);
         }
         catch (EmailDeliveryException)
         {
@@ -52,46 +52,46 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
         {
             throw;
         }
-        catch (Exception excepcion)
+        catch (Exception exception)
         {
             throw new EmailDeliveryException(
-                $"No se pudo entregar el correo a {destinatario} por {_configuracion.Servidor}:{_configuracion.Puerto}. {Enmascarar(excepcion.Message)}",
-                new Exception(Enmascarar(excepcion.ToString())));
+                $"No se pudo entregar el Email a {recipient} por {_configuration.Server}:{_configuration.Port}. {Mask(exception.Message)}",
+                new Exception(Mask(exception.ToString())));
         }
         finally
         {
-            if (cliente.IsConnected)
+            if (client.IsConnected)
             {
-                await cliente.DisconnectAsync(true, CancellationToken.None);
+                await client.DisconnectAsync(true, CancellationToken.None);
             }
         }
     }
 
-    private static SecureSocketOptions TraducirModoSsl(ModoSsl modo) => modo switch
+    private static SecureSocketOptions TranslateSslMode(SslMode mode) => mode switch
     {
-        ModoSsl.Ninguno => SecureSocketOptions.None,
-        ModoSsl.StartTls => SecureSocketOptions.StartTls,
-        ModoSsl.Ssl => SecureSocketOptions.SslOnConnect,
+        SslMode.None => SecureSocketOptions.None,
+        SslMode.StartTls => SecureSocketOptions.StartTls,
+        SslMode.Ssl => SecureSocketOptions.SslOnConnect,
         _ => SecureSocketOptions.StartTls,
     };
 
-    // RD-08: un error jamas debe filtrar credenciales. El usuario y la contrasena
+    // RD-08: un error jamas debe filtrar credenciales. El User y la contrasena
     // son valores de variables de entorno (RD-10), asi que si una libreria
-    // los repite en su mensaje, ese mensaje no puede guardarse ni mostrarse tal cual.
-    private string Enmascarar(string texto)
+    // los repite en su message, ese message no puede guardarse ni mostrarse tal cual.
+    private string Mask(string text)
     {
-        var resultado = texto;
+        var result = text;
 
-        if (!string.IsNullOrWhiteSpace(_configuracion.Usuario))
+        if (!string.IsNullOrWhiteSpace(_configuration.User))
         {
-            resultado = resultado.Replace(_configuracion.Usuario, "[usuario SMTP]", StringComparison.OrdinalIgnoreCase);
+            result = result.Replace(_configuration.User, "[User SMTP]", StringComparison.OrdinalIgnoreCase);
         }
 
-        if (!string.IsNullOrWhiteSpace(_configuracion.Contrasena))
+        if (!string.IsNullOrWhiteSpace(_configuration.Password))
         {
-            resultado = resultado.Replace(_configuracion.Contrasena, "[contrasena SMTP]", StringComparison.Ordinal);
+            result = result.Replace(_configuration.Password, "[contrasena SMTP]", StringComparison.Ordinal);
         }
 
-        return resultado;
+        return result;
     }
 }

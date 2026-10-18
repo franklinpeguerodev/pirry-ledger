@@ -8,31 +8,31 @@ using PirryLedger.Core.Notifications.Domain.Entities;
 namespace PirryLedger.Core.Notifications.Infrastructure;
 
 // Lo unico autorizado para escribir en la cola (RF-NOT-08). La operacion que
-// origina el correo llama a EnqueueAsync y termina: no abre conexion SMTP, no
-// espera al servidor de correo y no falla porque el servidor no responda.
+// origina el Email llama a EnqueueAsync y termina: no abre conexion SMTP, no
+// espera al servidor de Email y no falla porque el servidor no responda.
 //
 // Guarda de inmediato. El orden que sigue el modulo que la llama es escribir su
-// propio cambio primero y encolar despues, para no dejar un correo de activacion
-// de un usuario que al final no se guardo.
+// propio cambio primero y encolar despues, para no dejar un Email de activacion
+// de un User que al final no se guardo.
 internal sealed class EmailQueue : IEmailQueue
 {
-    private readonly NotificationsDbContext _contexto;
-    private readonly IClock _reloj;
+    private readonly NotificationsDbContext _context;
+    private readonly IClock _clock;
 
-    public EmailQueue(NotificationsDbContext contexto, IClock reloj)
+    public EmailQueue(NotificationsDbContext context, IClock clock)
     {
-        _contexto = contexto;
-        _reloj = reloj;
+        _context = context;
+        _clock = clock;
     }
 
     public async Task EnqueueAsync(QueuedEmail email, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(email);
 
-        var correo = CorreoEnCola.Crear(email.Destinatario, email.Asunto, email.Cuerpo, _reloj.UtcNow);
+        var item = EmailQueueItem.Create(email.Recipient, email.Subject, email.Body, _clock.UtcNow);
 
-        _contexto.CorreosEnCola.Add(correo);
+        _context.EmailQueueItems.Add(item);
 
-        await _contexto.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }
