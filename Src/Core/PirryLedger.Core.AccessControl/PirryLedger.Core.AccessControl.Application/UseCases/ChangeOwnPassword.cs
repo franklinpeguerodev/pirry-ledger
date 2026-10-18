@@ -8,10 +8,10 @@ public sealed class ChangeOwnPassword
 {
     private readonly IUserRepository _users;
     private readonly IPasswordHasher _hasher;
-    private readonly Autenticar _auth;
+    private readonly Authenticate _auth;
     private readonly IClock _clock;
 
-    public ChangeOwnPassword(IUserRepository users, IPasswordHasher hasher, Autenticar auth, IClock clock)
+    public ChangeOwnPassword(IUserRepository users, IPasswordHasher hasher, Authenticate auth, IClock clock)
     {
         _users = users;
         _hasher = hasher;
@@ -25,21 +25,21 @@ public sealed class ChangeOwnPassword
         string newPassword,
         CancellationToken cancellationToken = default)
     {
-        var authenticated = await _auth.EjecutarAsync(token, cancellationToken);
-        var policy = PasswordPolicy.Evaluar(newPassword);
-        if (!policy.EsValida)
+        var authenticated = await _auth.ExecuteAsync(token, cancellationToken);
+        var policy = PasswordPolicy.Evaluate(newPassword);
+        if (!policy.IsValid)
         {
-            throw new RegistrationRejectedException(policy.Motivo!);
+            throw new RegistrationRejectedException(policy.Reason!);
         }
 
-        var user = await _users.BuscarPorIdAsync(authenticated.Id, cancellationToken)
-            ?? throw new SesionInvalidaException();
-        if (!_hasher.Verificar(currentPassword, user.HashDeContrasena))
+        var user = await _users.FindByIdAsync(authenticated.Id, cancellationToken)
+            ?? throw new InvalidSessionException();
+        if (!_hasher.Verify(currentPassword, user.PasswordHash))
         {
             throw new RegistrationRejectedException("La contrasena actual no es correcta.");
         }
 
-        user.CambiarContrasena(_hasher.Hash(newPassword), _clock.UtcNow);
-        await _users.GuardarAsync(user, cancellationToken);
+        user.ChangePassword(_hasher.Hash(newPassword), _clock.UtcNow);
+        await _users.SaveAsync(user, cancellationToken);
     }
 }

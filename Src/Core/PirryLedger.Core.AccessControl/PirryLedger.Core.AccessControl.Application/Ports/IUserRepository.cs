@@ -10,32 +10,32 @@ namespace PirryLedger.Core.AccessControl.Application;
 // guardar sea una decision de Infrastructure y no se disperse por el codigo.
 public interface IUserRepository
 {
-    // Normaliza el correo antes de buscar, para que "Juan@Correo.com" y
-    // "juan@correo.com" sean la misma persona y no dos registros.
-    Task<Usuario?> BuscarPorCorreoAsync(string correo, CancellationToken cancellationToken = default);
+    // Normaliza el Email antes de buscar, para que "Juan@Email.com" y
+    // "juan@Email.com" sean la misma persona y no dos registros.
+    Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken = default);
 
-    Task<Usuario?> BuscarPorIdAsync(Guid usuarioId, CancellationToken cancellationToken = default);
+    Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
-    // RF-CA-21: listar usuarios con su rol y su estado.
+    // RF-CA-21: listar usuarios con su role y su estado.
     //
     // Trae TODOS, sin paginar. Con 2 o 3 empleados por sucursal una pagina de
     // diez seria mas complicacion que usuarios: el paginado se anade el dia que
     // haga falta, no antes.
     //
-    // Ordena por correo para que la lista sea estable entre llamadas. Sin esto,
+    // Ordena por Email para que la lista sea estable entre llamadas. Sin esto,
     // PostgreSQL no garantiza orden y el listado cambiaria entre peticiones sin
     // que nadie haya tocado nada.
-    Task<IReadOnlyList<Usuario>> ListarAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken = default);
 
-    Task GuardarAsync(Usuario usuario, CancellationToken cancellationToken = default);
+    Task SaveAsync(User user, CancellationToken cancellationToken = default);
 
     // Lo necesitan RF-CA-20 y el seed para contar Administrators activos.
     // Existe como metodo y no como filtro porque la pregunta es "cuantos hay",
-    // no "este usuario es uno de ellos".
-    Task<int> ContarAdministradoresActivosAsync(CancellationToken cancellationToken = default);
+    // no "este User es uno de ellos".
+    Task<int> CountActiveAdministratorsAsync(CancellationToken cancellationToken = default);
 
-    // Lo necesita el seed del primer Administrador para ser idempotente: si ya
+    // Lo necesita el seed del primer Administrator para ser idempotente: si ya
     // hay uno, no se crea otro. Es un metodo propio y no un filtro de
-    // BuscarPorCorreoAsync porque la pregunta es "existe alguno", no "este".
-    Task<bool> ExisteAlgunAdministradorAsync(CancellationToken cancellationToken = default);
+    // FindByEmailAsync porque la pregunta es "existe alguno", no "este".
+    Task<bool> AnyAdministratorExistsAsync(CancellationToken cancellationToken = default);
 }

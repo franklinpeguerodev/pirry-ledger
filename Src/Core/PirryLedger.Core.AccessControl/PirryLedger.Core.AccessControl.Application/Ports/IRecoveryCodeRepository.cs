@@ -5,9 +5,9 @@ namespace PirryLedger.Core.AccessControl.Application;
 
 public interface IRecoveryCodeRepository
 {
-    Task<CodigoRecuperacion?> BuscarPorHashAsync(string hashDelCodigo, CancellationToken cancellationToken = default);
+    Task<RecoveryCode?> FindByHashAsync(string codeHash, CancellationToken cancellationToken = default);
 
-    Task InvalidarPendientesAsync(Guid usuarioId, CancellationToken cancellationToken = default);
+    Task InvalidatePendingAsync(Guid userId, CancellationToken cancellationToken = default);
 
-    Task GuardarAsync(CodigoRecuperacion codigo, CancellationToken cancellationToken = default);
+    Task SaveAsync(RecoveryCode code, CancellationToken cancellationToken = default);
 }

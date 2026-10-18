@@ -15,93 +15,93 @@ namespace PirryLedger.Core.AccessControl.Application;
 // (RD-08): dice que paso, no con que datos.
 public sealed class RegisterUser
 {
-    private readonly IUserRepository _usuarios;
+    private readonly IUserRepository _users;
     private readonly IActivationTokenRepository _tokens;
     private readonly IPasswordHasher _hasher;
-    private readonly IEmailQueue _colaDeCorreo;
-    private readonly IClock _reloj;
-    private readonly string _urlBase;
+    private readonly IEmailQueue _emailQueue;
+    private readonly IClock _clock;
+    private readonly string _baseUrl;
 
     public RegisterUser(
-        IUserRepository usuarios,
+        IUserRepository users,
         IActivationTokenRepository tokens,
         IPasswordHasher hasher,
-        IEmailQueue colaDeCorreo,
-        IClock reloj,
-        string urlBase)
+        IEmailQueue emailQueue,
+        IClock clock,
+        string baseUrl)
     {
-        _usuarios = usuarios;
+        _users = users;
         _tokens = tokens;
         _hasher = hasher;
-        _colaDeCorreo = colaDeCorreo;
-        _reloj = reloj;
-        _urlBase = urlBase;
+        _emailQueue = emailQueue;
+        _clock = clock;
+        _baseUrl = baseUrl;
     }
 
-    public async Task EjecutarAsync(
-        string nombre,
-        string correo,
-        string contrasena,
-        TimeSpan duracionDeValidez,
+    public async Task ExecuteAsync(
+        string name,
+        string email,
+        string password,
+        TimeSpan validityDuration,
         CancellationToken cancellationToken = default)
     {
-        var correoValido = EmailValidator.Evaluar(correo);
+        var emailResult = EmailValidator.Evaluate(email);
 
-        if (!correoValido.EsValido)
+        if (!emailResult.IsValid)
         {
-            throw new RegistrationRejectedException(correoValido.Motivo!);
+            throw new RegistrationRejectedException(emailResult.Reason!);
         }
 
-        var politica = PasswordPolicy.Evaluar(contrasena);
+        var policy = PasswordPolicy.Evaluate(password);
 
-        if (!politica.EsValida)
+        if (!policy.IsValid)
         {
-            throw new RegistrationRejectedException(politica.Motivo!);
+            throw new RegistrationRejectedException(policy.Reason!);
         }
 
-        if (string.IsNullOrWhiteSpace(nombre))
+        if (string.IsNullOrWhiteSpace(name))
         {
             throw new RegistrationRejectedException("El nombre es obligatorio.");
         }
 
-        var correoNormalizado = correo.Trim();
+        var normalizedEmail = email.Trim();
 
         // RF-CA-01: el indice unico de la base es la garantia real. Esta
         // comprobacion da un mensaje controlado antes de llegar alla, y el
         // indice cubre el caso de dos registros concurrentes.
-        var existente = await _usuarios.BuscarPorCorreoAsync(correoNormalizado, cancellationToken);
+        var existing = await _users.FindByEmailAsync(normalizedEmail, cancellationToken);
 
-        if (existente is not null)
+        if (existing is not null)
         {
             throw new DuplicateEmailException();
         }
 
         // RF-CA-02: se hashea aqui y el resto del sistema solo ve el hash.
-        var hash = _hasher.Hash(contrasena);
+        var hash = _hasher.Hash(password);
 
-        // RF-CA-15: nace inactivo y con rol Estandar, ambos fijados por la
+        // RF-CA-15: nace inactivo y con role Estandar, ambos fijados por la
         // entidad, no por parametros de este metodo.
-        var usuario = Usuario.Crear(nombre, correoNormalizado, hash, _reloj.UtcNow);
+        var user = User.Create(name, normalizedEmail, hash, _clock.UtcNow);
 
-        await _usuarios.GuardarAsync(usuario, cancellationToken);
+        await _users.SaveAsync(user, cancellationToken);
 
-        var tokenEnClaro = OneTimeCodeGenerator.Generar();
+        var plainToken = OneTimeCodeGenerator.Generate();
 
-        var token = TokenActivacion.Crear(
-            usuario.Id,
-            OneTimeCodeGenerator.CalcularHash(tokenEnClaro),
-            _reloj.UtcNow,
-            duracionDeValidez);
+        var token = ActivationToken.Create(
+            user.Id,
+            OneTimeCodeGenerator.CalculateHash(plainToken),
+            _clock.UtcNow,
+            validityDuration);
 
-        await _tokens.GuardarAsync(token, cancellationToken);
+        await _tokens.SaveAsync(token, cancellationToken);
 
         // RF-NOT-08: se encola y la operacion termina. El token en claro sale
         // ahora, dentro del correo, y no se guarda en ningun sitio mas.
-        await _colaDeCorreo.EnqueueAsync(
+        await _emailQueue.EnqueueAsync(
             new QueuedEmail(
-                correoNormalizado,
-                CorreoDeActivacion.Asunto,
-                CorreoDeActivacion.ArmarCuerpo(_urlBase, tokenEnClaro)),
+                normalizedEmail,
+                ActivationEmail.Subject,
+                ActivationEmail.BuildBody(_baseUrl, plainToken)),
             cancellationToken);
     }
 }

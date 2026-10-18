@@ -15,25 +15,25 @@ namespace PirryLedger.Core.AccessControl.Application;
 // permitiria comprobar si un token fue valido alguna vez.
 public sealed class Logout
 {
-    private readonly ISessionRepository _sesiones;
-    private readonly IClock _reloj;
+    private readonly ISessionRepository _sessions;
+    private readonly IClock _clock;
 
-    public Logout(ISessionRepository sesiones, IClock reloj)
+    public Logout(ISessionRepository sessions, IClock clock)
     {
-        _sesiones = sesiones;
-        _reloj = reloj;
+        _sessions = sessions;
+        _clock = clock;
     }
 
-    public async Task EjecutarAsync(string tokenEnClaro, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(string plainToken, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(tokenEnClaro))
+        if (string.IsNullOrWhiteSpace(plainToken))
         {
             return;
         }
 
-        await _sesiones.CerrarPorHashAsync(
-            SessionTokenGenerator.CalcularHash(tokenEnClaro.Trim()),
-            _reloj.UtcNow,
+        await _sessions.CloseByHashAsync(
+            SessionTokenGenerator.CalculateHash(plainToken.Trim()),
+            _clock.UtcNow,
             cancellationToken);
     }
 }

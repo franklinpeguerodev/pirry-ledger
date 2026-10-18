@@ -39,28 +39,28 @@ public sealed class PasswordRecovery
 
     public async Task RequestAsync(string? email, CancellationToken cancellationToken = default)
     {
-        if (!EmailValidator.Evaluar(email ?? string.Empty).EsValido)
+        if (!EmailValidator.Evaluate(email).IsValid)
         {
             return;
         }
 
-        var user = await _users.BuscarPorCorreoAsync(email!.Trim(), cancellationToken);
+        var user = await _users.FindByEmailAsync(email!.Trim(), cancellationToken);
         if (user is null)
         {
             return;
         }
 
-        await _codes.InvalidarPendientesAsync(user.Id, cancellationToken);
-        var plainCode = OneTimeCodeGenerator.Generar();
-        var code = CodigoRecuperacion.Crear(
+        await _codes.InvalidatePendingAsync(user.Id, cancellationToken);
+        var plainCode = OneTimeCodeGenerator.Generate();
+        var code = RecoveryCode.Create(
             user.Id,
-            OneTimeCodeGenerator.CalcularHash(plainCode),
+            OneTimeCodeGenerator.CalculateHash(plainCode),
             _clock.UtcNow,
             _validity);
 
-        await _codes.GuardarAsync(code, cancellationToken);
+        await _codes.SaveAsync(code, cancellationToken);
         await _emailQueue.EnqueueAsync(
-            new QueuedEmail(user.Correo, CorreoDeRecuperacion.Asunto, CorreoDeRecuperacion.ArmarCuerpo(plainCode)),
+            new QueuedEmail(user.Email, RecoveryEmail.Subject, RecoveryEmail.BuildBody(plainCode)),
             cancellationToken);
     }
 
@@ -69,28 +69,28 @@ public sealed class PasswordRecovery
         string? newPassword,
         CancellationToken cancellationToken = default)
     {
-        var policy = PasswordPolicy.Evaluar(newPassword);
-        if (!policy.EsValida)
+        var policy = PasswordPolicy.Evaluate(newPassword);
+        if (!policy.IsValid)
         {
-            throw new RegistrationRejectedException(policy.Motivo!);
+            throw new RegistrationRejectedException(policy.Reason!);
         }
 
         var code = await FindValidCodeAsync(plainCode, cancellationToken);
         var user = code is null
             ? null
-            : await _users.BuscarPorIdAsync(code.UsuarioId, cancellationToken);
+            : await _users.FindByIdAsync(code.UserId, cancellationToken);
         if (code is null || user is null)
         {
             throw new RecoveryRejectedException();
         }
 
-        user.CambiarContrasena(_hasher.Hash(newPassword!), _clock.UtcNow);
-        code.MarcarUsado(_clock.UtcNow);
-        await _users.GuardarAsync(user, cancellationToken);
-        await _codes.GuardarAsync(code, cancellationToken);
+        user.ChangePassword(_hasher.Hash(newPassword!), _clock.UtcNow);
+        code.MarkUsed(_clock.UtcNow);
+        await _users.SaveAsync(user, cancellationToken);
+        await _codes.SaveAsync(code, cancellationToken);
     }
 
-    private async Task<CodigoRecuperacion?> FindValidCodeAsync(
+    private async Task<RecoveryCode?> FindValidCodeAsync(
         string? plainCode,
         CancellationToken cancellationToken)
     {
@@ -99,9 +99,9 @@ public sealed class PasswordRecovery
             return null;
         }
 
-        var code = await _codes.BuscarPorHashAsync(
-            OneTimeCodeGenerator.CalcularHash(plainCode.Trim()),
+        var code = await _codes.FindByHashAsync(
+            OneTimeCodeGenerator.CalculateHash(plainCode.Trim()),
             cancellationToken);
-        return code is null || code.EstaUsado || code.HaVencido(_clock.UtcNow) ? null : code;
+        return code is null || code.IsUsed || code.HasExpired(_clock.UtcNow) ? null : code;
     }
 }

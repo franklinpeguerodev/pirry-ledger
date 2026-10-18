@@ -5,25 +5,25 @@ using PirryLedger.Core.Contracts.Time;
 namespace PirryLedger.Core.AccessControl.Application;
 
 // Los tres rechazos de este caso de uso. Son tipos distintos y no excepciones
-// genericas porque cada uno lleva un mensaje distinto al cliente, y aun asi
-// ninguno revela si el correo existe.
-public sealed class CredencialesRechazadasException : Exception
+// genericas porque cada uno lleva un message distinto al cliente, y aun asi
+// ninguno revela si el Email existe.
+public sealed class CredentialsRejectedException : Exception
 {
-    public CredencialesRechazadasException(string mensaje) : base(mensaje)
+    public CredentialsRejectedException(string message) : base(message)
     {
     }
 }
 
-public sealed class CuentaBloqueadaException : Exception
+public sealed class AccountBlockedException : Exception
 {
-    public CuentaBloqueadaException(string mensaje) : base(mensaje)
+    public AccountBlockedException(string message) : base(message)
     {
     }
 }
 
-public sealed class CuentaNoActivadaException : Exception
+public sealed class AccountNotActivatedException : Exception
 {
-    public CuentaNoActivadaException(string mensaje) : base(mensaje)
+    public AccountNotActivatedException(string message) : base(message)
     {
     }
 }
@@ -33,111 +33,111 @@ public sealed class CuentaNoActivadaException : Exception
 // El orden de las comprobaciones es la parte importante de este archivo, y no es
 // arbitrario:
 //
-// 1. Bloqueo. Se mira antes de verificar la contrasena porque RF-CA-19 exige que
-//    el sexto intento se rechace AUN CON la contrasena correcta. Verificar el hash
+// 1. Bloqueo. Se mira antes de Verify la contrasena porque RF-CA-19 exige que
+//    el sexto intento se rechace AUN CON la contrasena correcta. Verify el hash
 //    primero daria un `401` de credenciales y no de bloqueo, que es otra respuesta.
-// 2. Hash senuelo. Si el correo no existe se verifica igualmente contra un hash
-//    falso, para que el tiempo de respuesta no diga si el correo esta dado de
-//    alta. Sin esto, un `401` en 5 ms delata que el correo no existe.
+// 2. Hash senuelo. Si el Email no existe se verifica igualmente contra un hash
+//    falso, para que el tiempo de respuesta no diga si el Email esta dado de
+//    alta. Sin esto, un `401` en 5 ms delata que el Email no existe.
 // 3. Verificacion real de la contrasena.
 // 4. Cuenta inactiva. Solo se informa DESPUES de que la contrasena sea correcta,
-//    porque si se dijera antes, bastaria con conocer un correo registrado para
+//    porque si se dijera antes, bastaria con conocer un Email registrado para
 //    enterarse de que existe, sin saber la contrasena.
 public sealed class Login
 {
-    // Decision de Franklin. El mensaje durante el bloqueo NO dice que la cuenta
-    // esta bloqueada: confirmarlo seria decir que el correo existe, y con esto el
+    // Decision de Franklin. El message durante el bloqueo NO dice que la cuenta
+    // esta bloqueada: confirmarlo seria decir que el Email existe, y con esto el
     // endpoint no podria distinguir "bloqueado" de "mal contrasena" ni de "no
-    // existe". Se responde con el mismo mensaje de credenciales incorrectas.
-    private const string MensajeDeCredenciales = "Correo o contrasena incorrectos.";
-    private const string MensajeDeBloqueo = "Correo o contrasena incorrectos.";
-    private const string MensajeDeCuentaInactiva = "La cuenta no esta activada.";
+    // existe". Se responde con el mismo message de credenciales incorrectas.
+    private const string CredentialsMessage = "Email o contrasena incorrectos.";
+    private const string LockoutMessage = "Email o contrasena incorrectos.";
+    private const string AccountInactiveMessage = "La cuenta no esta activada.";
 
-    private const int MaximoIntentos = 5;
-    private static readonly TimeSpan DuracionDelBloqueo = TimeSpan.FromMinutes(15);
+    private const int MaximumAttempts = 5;
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
-    private readonly IUserRepository _usuarios;
-    private readonly ISessionRepository _sesiones;
+    private readonly IUserRepository _users;
+    private readonly ISessionRepository _sessions;
     private readonly IPasswordHasher _hasher;
-    private readonly IClock _reloj;
-    private readonly TimeSpan _duracionDeLaSesion;
+    private readonly IClock _clock;
+    private readonly TimeSpan _sessionDuration;
 
     public Login(
-        IUserRepository usuarios,
-        ISessionRepository sesiones,
+        IUserRepository users,
+        ISessionRepository sessions,
         IPasswordHasher hasher,
-        IClock reloj,
-        TimeSpan duracionDeLaSesion)
+        IClock clock,
+        TimeSpan sessionDuration)
     {
-        _usuarios = usuarios;
-        _sesiones = sesiones;
+        _users = users;
+        _sessions = sessions;
         _hasher = hasher;
-        _reloj = reloj;
-        _duracionDeLaSesion = duracionDeLaSesion;
+        _clock = clock;
+        _sessionDuration = sessionDuration;
     }
 
     // Devuelve el token EN CLARO, que es lo unico que sale hacia el cliente y lo
     // unico que no se vuelve a guardar en ningun sitio.
-    public async Task<string> EjecutarAsync(string correo, string contrasena, CancellationToken cancellationToken = default)
+    public async Task<string> ExecuteAsync(string email, string password, CancellationToken cancellationToken = default)
     {
-        var ahora = _reloj.UtcNow;
+        var utcNow = _clock.UtcNow;
 
-        var correoNormalizado = (correo ?? string.Empty).Trim().ToLowerInvariant();
-        var usuario = await _usuarios.BuscarPorCorreoAsync(correoNormalizado, cancellationToken);
+        var normalizedEmail = (email ?? string.Empty).Trim().ToLowerInvariant();
+        var user = await _users.FindByEmailAsync(normalizedEmail, cancellationToken);
 
-        // 1. Bloqueo (RF-CA-19). Se comprueba sobre el usuario real. Un correo que
+        // 1. Bloqueo (RF-CA-19). Se comprueba sobre el user real. Un Email que
         // no existe no puede estar bloqueado, y por eso cae en el hash senuelo
-        // de abajo en lugar de recibir el mensaje de bloqueo: si lo recibiera,
-        // bastaria con five intentos fallidos para descubrir que el correo existe.
-        if (usuario is not null && usuario.EstaBloqueado(ahora))
+        // de abajo en lugar de recibir el message de bloqueo: si lo recibiera,
+        // bastaria con five intentos fallidos para descubrir que el Email existe.
+        if (user is not null && user.IsBlocked(utcNow))
         {
-            throw new CuentaBloqueadaException(MensajeDeBloqueo);
+            throw new AccountBlockedException(LockoutMessage);
         }
 
-        // 2. Hash senuelo. Se verifica SIEMPRE, exista o no el usuario, para que el
+        // 2. Hash senuelo. Se verifica SIEMPRE, exista o no el user, para que el
         // tiempo de respuesta sea el mismo en los dos casos.
-        var hashParaVerificar = usuario?.HashDeContrasena ?? _hasher.CrearHashSenaluelo();
-        var contrasenaCorrecta = _hasher.Verificar(contrasena ?? string.Empty, hashParaVerificar);
+        var hashToVerify = user?.PasswordHash ?? _hasher.CreateDummyHash();
+        var passwordCorrect = _hasher.Verify(password ?? string.Empty, hashToVerify);
 
-        // 3. Credenciales incorrectas. El mensaje es el mismo tanto si el correo no
+        // 3. Credenciales incorrectas. El message es el mismo tanto si el Email no
         // existia como si la contrasena estaba mal, para no revelar cual de las
         // dos cosas fallo (RF-CA-03).
-        if (usuario is null || !contrasenaCorrecta)
+        if (user is null || !passwordCorrect)
         {
-            // RF-CA-19: el contador vive en el usuario, no en memoria del proceso.
+            // RF-CA-19: el contador vive en el user, no en memoria del proceso.
             // Asi el bloqueo aguanta un reinicio de la aplicacion.
-            if (usuario is not null)
+            if (user is not null)
             {
-                usuario.RegistrarIntentoFallido(MaximoIntentos, ahora, DuracionDelBloqueo);
-                await _usuarios.GuardarAsync(usuario, cancellationToken);
+                user.RegisterFailedAttempt(MaximumAttempts, utcNow, LockoutDuration);
+                await _users.SaveAsync(user, cancellationToken);
             }
 
-            throw new CredencialesRechazadasException(MensajeDeCredenciales);
+            throw new CredentialsRejectedException(CredentialsMessage);
         }
 
-        // 4. RF-CA-15: la cuenta tiene que estar activada. Este mensaje SÍ es
+        // 4. RF-CA-15: la cuenta tiene que estar activada. Este message SÍ es
         // distinto del anterior, y solo se alcanza con la contrasena correcta.
-        if (!usuario.Activo)
+        if (!user.Active)
         {
-            throw new CuentaNoActivadaException(MensajeDeCuentaInactiva);
+            throw new AccountNotActivatedException(AccountInactiveMessage);
         }
 
         // RF-CA-19: un acierto pone el contador en cero.
-        usuario.RegistrarIntentoCorrecto();
+        user.RegisterSuccessfulAttempt();
 
         // Decision de Franklin: caducidad ABSOLUTA de 8 horas, no deslizante.
-        var tokenEnClaro = SessionTokenGenerator.Generar();
+        var plainToken = SessionTokenGenerator.Generate();
 
-        var sesion = Sesion.Crear(
-            usuario.Id,
-            SessionTokenGenerator.CalcularHash(tokenEnClaro),
-            ahora,
-            _duracionDeLaSesion,
-            usuario.CredencialVersion);
+        var session = Session.Create(
+            user.Id,
+            SessionTokenGenerator.CalculateHash(plainToken),
+            utcNow,
+            _sessionDuration,
+            user.CredentialVersion);
 
-        await _sesiones.GuardarAsync(sesion, cancellationToken);
-        await _usuarios.GuardarAsync(usuario, cancellationToken);
+        await _sessions.SaveAsync(session, cancellationToken);
+        await _users.SaveAsync(user, cancellationToken);
 
-        return tokenEnClaro;
+        return plainToken;
     }
 }

@@ -3,72 +3,72 @@ using PirryLedger.Core.AccessControl.Domain.Enums;
 
 namespace PirryLedger.Core.AccessControl.Application;
 
-// RF-CA-08: cambiar el rol de un usuario, reservado al Administrador.
+// RF-CA-08: cambiar el role de un user, reservado al Administrator.
 //
 // Dos rechazos distintos, y la diferencia importa:
 //
-// - Si quien llama es un Estandar, el rechazo es el 403 de RF-CA-06, y sale de
-//   Autenticar.EjecutarConRolAsync. Un Estandar no puede cambiar NINGUN rol,
+// - Si quien llama es un Standard, el rechazo es el 403 de RF-CA-06, y sale de
+//   Authenticate.ExecuteWithRoleAsync. Un Standard no puede cambiar NINGUN role,
 //   ni el suyo propio.
-// - Si quien llama es Administrador pero se cambia el rol a si mismo, el
-//   rechazo es otro: es una operacion invalida, no falta de permisos. Cambiarte
-//   el rol a ti mismo te deja encerrado fuera de la administracion en un solo
+// - Si quien llama es Administrator pero se cambia el role a si mismo, el
+//   rechazo es otro: es una operation invalida, no falta de permisos. Cambiarte
+//   el role a ti mismo te deja encerrado fuera de la administracion en un solo
 //   paso, sin que nadie mas lo decida.
 //
-// Que se pueda cambiar el propio rol no es un caso forgotten por la prisa: es la
-// unica forma de que un Administrador se quede sin su propio rol, y a partir de
+// Que se pueda cambiar el propio role no es un caso forgotten por la prisa: es la
+// unica forma de que un Administrator se quede sin su propio role, y a partir de
 // ahi ya no puede deshacerlo.
 public sealed class ChangeUserRole
 {
-    private readonly IUserRepository _usuarios;
-    private readonly Autenticar _autenticar;
+    private readonly IUserRepository _users;
+    private readonly Authenticate _authenticate;
 
-    public ChangeUserRole(IUserRepository usuarios, Autenticar autenticar)
+    public ChangeUserRole(IUserRepository users, Authenticate authenticate)
     {
-        _usuarios = usuarios;
-        _autenticar = autenticar;
+        _users = users;
+        _authenticate = authenticate;
     }
 
-    public async Task EjecutarAsync(
-        string tokenEnClaro,
-        Guid usuarioId,
-        string nuevoRol,
+    public async Task ExecuteAsync(
+        string plainToken,
+        Guid userId,
+        string newRole,
         CancellationToken cancellationToken = default)
     {
-        var quienLlama = await _autenticar.EjecutarConRolAsync(
-            tokenEnClaro,
-            ExigenciasDeRol.RolRequerido(Operacion.CambiarRolDeUsuario),
+        var caller = await _authenticate.ExecuteWithRoleAsync(
+            plainToken,
+            RoleRequirements.RequiredRole(Operation.ChangeUserRole),
             cancellationToken);
 
-        // RD-07: el rol llega como texto y se convierte aqui. El endpoint no
-        // hace Enum.Parse a proposito: si lo hiciera, un JSON con "rol": "inventado"
+        // RD-07: el role llega como texto y se convierte aqui. El endpoint no
+        // hace Enum.Parse a proposito: si lo hiciera, un JSON con "Role": "inventado"
         // lanzaria una excepcion sin manejar dentro de la capa HTTP, que es donde
         // RD-07 dice que no puede pasar.
         //
         // TryParse devuelve false en vez de lanzar, y por eso el rechazo sale
-        // como un 400 controlado con este mensaje.
-        if (!Enum.TryParse(nuevoRol, ignoreCase: true, out Rol rol) || !Enum.IsDefined(rol))
+        // como un 400 controlado con este message.
+        if (!Enum.TryParse(newRole, ignoreCase: true, out Role role) || !Enum.IsDefined(typeof(Role), role))
         {
-            throw new OperacionDeAdministracionRechazadaException("El rol indicado no existe.");
+            throw new AdministrationOperationRejectedException("El role indicado no existe.");
         }
 
-        // El que cambia su propio rol queda sin poder deshacerlo. Se rechaza
-        // aunque sea el unico caso en que el rol permite hacerlo.
-        if (quienLlama.Id == usuarioId)
+        // El que cambia su propio role queda sin poder deshacerlo. Se rechaza
+        // aunque sea el unico caso en que el role permite hacerlo.
+        if (caller.Id == userId)
         {
-            throw new OperacionDeAdministracionRechazadaException(
-                "Un Administrador no puede cambiar su propio rol.");
+            throw new AdministrationOperationRejectedException(
+                "Un Administrator no puede cambiar su propio role.");
         }
 
-        var usuario = await _usuarios.BuscarPorIdAsync(usuarioId, cancellationToken);
+        var user = await _users.FindByIdAsync(userId, cancellationToken);
 
-        if (usuario is null)
+        if (user is null)
         {
-            throw new OperacionDeAdministracionRechazadaException("No existe ese usuario.");
+            throw new AdministrationOperationRejectedException("No existe ese user.");
         }
 
-        usuario.CambiarRol(rol);
+        user.ChangeRole(role);
 
-        await _usuarios.GuardarAsync(usuario, cancellationToken);
+        await _users.SaveAsync(user, cancellationToken);
     }
 }

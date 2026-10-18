@@ -14,55 +14,55 @@ namespace PirryLedger.Core.AccessControl.Application;
 // se rechaza en la entidad, no aqui (RD-04).
 public sealed class ActivateAccount
 {
-    private readonly IUserRepository _usuarios;
+    private readonly IUserRepository _users;
     private readonly IActivationTokenRepository _tokens;
-    private readonly IClock _reloj;
+    private readonly IClock _clock;
 
     // Sin IPasswordHasher: activar no toca la contrasena. Se recibia antes y no se
     // usaba, y una dependencia que no se usa hace creer que el caso hace algo con
     // el hash cuando no es asi.
     public ActivateAccount(
-        IUserRepository usuarios,
+        IUserRepository users,
         IActivationTokenRepository tokens,
-        IClock reloj)
+        IClock clock)
     {
-        _usuarios = usuarios;
+        _users = users;
         _tokens = tokens;
-        _reloj = reloj;
+        _clock = clock;
     }
 
-    public async Task EjecutarAsync(string tokenEnClaro, CancellationToken cancellationToken = default)
+    public async Task ExecuteAsync(string plainToken, CancellationToken cancellationToken = default)
     {
         // RD-07: un enlace vacio o mal formado es un rechazo controlado, no una
         // excepcion sin manejar.
-        if (string.IsNullOrWhiteSpace(tokenEnClaro))
+        if (string.IsNullOrWhiteSpace(plainToken))
         {
             throw new ActivationRejectedException();
         }
 
-        var hash = OneTimeCodeGenerator.CalcularHash(tokenEnClaro.Trim());
+        var hash = OneTimeCodeGenerator.CalculateHash(plainToken.Trim());
 
-        var token = await _tokens.BuscarPorHashAsync(hash, cancellationToken);
+        var token = await _tokens.FindByHashAsync(hash, cancellationToken);
 
         // Las tres salidas de aqui son la misma para quien llama.
-        if (token is null || token.EstaUsado || token.HaVencido(_reloj.UtcNow))
+        if (token is null || token.IsUsed || token.HasExpired(_clock.UtcNow))
         {
             throw new ActivationRejectedException();
         }
 
-        var usuario = await _usuarios.BuscarPorIdAsync(token.UsuarioId, cancellationToken);
+        var user = await _users.FindByIdAsync(token.UserId, cancellationToken);
 
-        if (usuario is null)
+        if (user is null)
         {
             throw new ActivationRejectedException();
         }
 
-        // Un solo uso. MarcarUsado falla si ya se uso, y aqui solo se llega si no
+        // Un solo uso. MarkUsed falla si ya se uso, y aqui solo se llega si no
         // lo estaba, asi que el enlace no se puede reutilizar.
-        token.MarcarUsado(_reloj.UtcNow);
-        await _tokens.GuardarAsync(token, cancellationToken);
+        token.MarkUsed(_clock.UtcNow);
+        await _tokens.SaveAsync(token, cancellationToken);
 
-        usuario.Activar();
-        await _usuarios.GuardarAsync(usuario, cancellationToken);
+        user.Activate();
+        await _users.SaveAsync(user, cancellationToken);
     }
 }

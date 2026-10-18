@@ -1,61 +1,62 @@
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+
 namespace PirryLedger.Core.AccessControl.Application;
 
 // RF-CA-14: politica minima de contrasena, al menos 8 caracteres, con letras y
 // numeros. El criterio dice "en el registro y en todo cambio de contrasena", asi
 // que el unico sitio que decide es este y lo llaman todos los casos de uso.
 //
-// RD-07: un dato que no cumple produce un rechazo controlado con un mensaje que
+// RD-07: un dato que no cumple produce un rechazo controlado con un message que
 // dice que falta, nunca una excepcion sin manejar ni un error de infraestructura.
 public static class PasswordPolicy
 {
-    public const int LongitudMinima = 8;
+    public const int MinimumLength = 8;
 
-    // Un solo resultado con todos los motivos, para que el mensaje sea el mismo
+    // Un solo resultado con todos los motivos, para que el message sea el mismo
     // siempre y no dependa del orden en que se comprueben las reglas.
-    public sealed record Resultado(bool EsValida, string? Motivo)
+    public sealed record Result(bool IsValid, string? Reason)
     {
-        public static Resultado Valida { get; } = new(true, null);
+        public static Result Valid { get; } = new(true, null);
     }
 
-    public static Resultado Evaluar(string? contrasena)
+    public static Result Evaluate(string? password)
     {
-        if (string.IsNullOrEmpty(contrasena))
+        if (string.IsNullOrEmpty(password))
         {
-            return new Resultado(false, "La contrasena es obligatoria.");
+            return new Result(false, "La contrasena es obligatoria.");
         }
 
-        if (contrasena.Length < LongitudMinima)
+        if (password.Length < MinimumLength)
         {
-            return new Resultado(false, $"La contrasena debe tener al menos {LongitudMinima} caracteres.");
+            return new Result(false, $"La contrasena debe tener al menos {MinimumLength} caracteres.");
         }
 
-        var tieneLetra = false;
-        var tieneNumero = false;
+        var hasLetter = false;
+        var hasDigit = false;
 
-        foreach (var caracter in contrasena)
+        foreach (var character in password)
         {
-            if (char.IsLetter(caracter))
+            if (char.IsLetter(character))
             {
-                tieneLetra = true;
+                hasLetter = true;
             }
-            else if (char.IsDigit(caracter))
+            else if (char.IsDigit(character))
             {
-                tieneNumero = true;
+                hasDigit = true;
             }
 
-            if (tieneLetra && tieneNumero)
+            if (hasLetter && hasDigit)
             {
-                return Resultado.Valida;
+                return Result.Valid;
             }
         }
 
-        if (!tieneLetra && !tieneNumero)
+        if (!hasLetter && !hasDigit)
         {
-            return new Resultado(false, "La contrasena debe tener letras y numeros.");
+            return new Result(false, "La contrasena debe tener letras y numeros.");
         }
 
-        return new Resultado(false, "La contrasena debe tener letras y numeros.");
+        return new Result(false, "La contrasena debe tener letras y numeros.");
     }
 }

@@ -16,15 +16,15 @@ namespace PirryLedger.Core.AccessControl.Application;
 // estandar usa '+' y '/' que no son válidos ahí sin escapar.
 public static class SessionTokenGenerator
 {
-    public const int LongitudEnBytes = 32;
+    public const int LengthInBytes = 32;
 
-    public static string Generar() =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(LongitudEnBytes))
+    public static string Generate() =>
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(LengthInBytes))
             .Replace('+', '-')
             .Replace('/', '_')
             .TrimEnd('=');
 
     // Lo que se guarda en la base: el SHA-256, igual que los tokens de un solo uso.
-    public static string CalcularHash(string tokenEnClaro) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tokenEnClaro))).ToLowerInvariant();
+    public static string CalculateHash(string plainToken) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainToken))).ToLowerInvariant();
 }

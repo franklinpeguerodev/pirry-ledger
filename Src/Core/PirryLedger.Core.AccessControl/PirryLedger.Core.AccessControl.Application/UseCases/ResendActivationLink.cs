@@ -18,47 +18,47 @@ namespace PirryLedger.Core.AccessControl.Application;
 // se puede usar para listar a quien tiene cuenta.
 public sealed class ResendActivationLink
 {
-    private readonly IUserRepository _usuarios;
+    private readonly IUserRepository _users;
     private readonly IActivationTokenRepository _tokens;
-    private readonly IEmailQueue _colaDeCorreo;
-    private readonly IClock _reloj;
-    private readonly string _urlBase;
+    private readonly IEmailQueue _emailQueue;
+    private readonly IClock _clock;
+    private readonly string _baseUrl;
 
     public ResendActivationLink(
-        IUserRepository usuarios,
+        IUserRepository users,
         IActivationTokenRepository tokens,
-        IEmailQueue colaDeCorreo,
-        IClock reloj,
-        string urlBase)
+        IEmailQueue emailQueue,
+        IClock clock,
+        string baseUrl)
     {
-        _usuarios = usuarios;
+        _users = users;
         _tokens = tokens;
-        _colaDeCorreo = colaDeCorreo;
-        _reloj = reloj;
-        _urlBase = urlBase;
+        _emailQueue = emailQueue;
+        _clock = clock;
+        _baseUrl = baseUrl;
     }
 
-    public async Task EjecutarAsync(
-        string correo,
-        TimeSpan duracionDeValidez,
+    public async Task ExecuteAsync(
+        string email,
+        TimeSpan validityDuration,
         CancellationToken cancellationToken = default)
     {
         // El correo se valida igual que en el registro, pero un correo mal formado
         // no genera ninguna exception: seria otra forma de distinguir "esto no es
         // un correo" de "esto no existe en el sistema".
-        if (!EmailValidator.Evaluar(correo).EsValido)
+        if (!EmailValidator.Evaluate(email).IsValid)
         {
             return;
         }
 
-        var usuario = await _usuarios.BuscarPorCorreoAsync(correo.Trim(), cancellationToken);
+        var user = await _users.FindByEmailAsync(email.Trim(), cancellationToken);
 
         // Tres casos invisibles desde fuera: correo inexistente, cuenta ya activa y
         // cuenta pendiente. Los tres devuelven sin hacer nada ni decir nada.
         //
         // Si la cuenta ya esta activa, no se manda nada: el enlace viejo ya no
         // funciona y no tiene sentido reenviar uno que tampoco.
-        if (usuario is null || usuario.Activo)
+        if (user is null || user.Active)
         {
             return;
         }
@@ -66,24 +66,24 @@ public sealed class ResendActivationLink
         // Decision de Franklin (RF-CA-17): el enlace anterior deja de valer. Se
         // borran los tokens sin usar y se emite uno nuevo, de modo que el correo
         // viejo y el nuevo nunca pueden ser validos a la vez.
-        await _tokens.InvalidarPendientesAsync(usuario.Id, cancellationToken);
+        await _tokens.InvalidatePendingAsync(user.Id, cancellationToken);
 
-        var tokenEnClaro = OneTimeCodeGenerator.Generar();
+        var plainToken = OneTimeCodeGenerator.Generate();
 
-        var token = TokenActivacion.Crear(
-            usuario.Id,
-            OneTimeCodeGenerator.CalcularHash(tokenEnClaro),
-            _reloj.UtcNow,
-            duracionDeValidez);
+        var token = ActivationToken.Create(
+            user.Id,
+            OneTimeCodeGenerator.CalculateHash(plainToken),
+            _clock.UtcNow,
+            validityDuration);
 
-        await _tokens.GuardarAsync(token, cancellationToken);
+        await _tokens.SaveAsync(token, cancellationToken);
 
         // RF-NOT-08: se encola, no se envia. La operacion no espera al servidor SMTP.
-        await _colaDeCorreo.EnqueueAsync(
+        await _emailQueue.EnqueueAsync(
             new QueuedEmail(
-                usuario.Correo,
-                CorreoDeActivacion.Asunto,
-                CorreoDeActivacion.ArmarCuerpo(_urlBase, tokenEnClaro)),
+                user.Email,
+                ActivationEmail.Subject,
+                ActivationEmail.BuildBody(_baseUrl, plainToken)),
             cancellationToken);
     }
 }

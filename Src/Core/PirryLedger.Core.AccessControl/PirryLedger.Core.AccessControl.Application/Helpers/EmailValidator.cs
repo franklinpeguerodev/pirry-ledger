@@ -1,68 +1,69 @@
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+
 namespace PirryLedger.Core.AccessControl.Application;
 
 // RD-07: toda entrada externa se valida antes de usarse, y un dato invalido
-// produce un rechazo controlado con un mensaje, nunca una excepcion sin manejar
+// produce un rechazo controlado con un message, nunca una excepcion sin manejar
 // ni un error de infraestructura.
 //
-// El registro de usuario es la primera puerta de entrada de la aplicacion, asi
+// El registro de User es la primera puerta de entrada de la aplicacion, asi
 // que es donde mas importa. El corrector de "@gmail.com,otro" es a proposito: sin
-// Address.TryParse, un correo con dos arrobas pasaria el filtro de sintaxis de
+// Address.TryParse, un Email con dos arrobas pasaria el filtro de sintaxis de
 // .NET y llegaria al indice unico como un registro mas.
 public static class EmailValidator
 {
-    public const int LongitudMaxima = 320;
+    public const int MaximumLength = 320;
 
-    public sealed record Resultado(bool EsValido, string? Motivo)
+    public sealed record Result(bool IsValid, string? Reason)
     {
-        public static Resultado Valido { get; } = new(true, null);
+        public static Result Valid { get; } = new(true, null);
     }
 
-    public static Resultado Evaluar(string? correo)
+    public static Result Evaluate(string? email)
     {
-        if (string.IsNullOrWhiteSpace(correo))
+        if (string.IsNullOrWhiteSpace(email))
         {
-            return new Resultado(false, "El correo es obligatorio.");
+            return new Result(false, "El Email es obligatorio.");
         }
 
-        var recortado = correo.Trim();
+        var trimmed = email.Trim();
 
-        if (recortado.Length > LongitudMaxima)
+        if (trimmed.Length > MaximumLength)
         {
-            return new Resultado(false, $"El correo no puede pasar de {LongitudMaxima} caracteres.");
+            return new Result(false, $"El Email no puede pasar de {MaximumLength} caracteres.");
         }
 
-        if (recortado.Any(char.IsWhiteSpace))
+        if (trimmed.Any(char.IsWhiteSpace))
         {
-            return new Resultado(false, "El correo no puede contener espacios.");
+            return new Result(false, "El Email no puede contener espacios.");
         }
 
-        if (!System.Net.Mail.MailAddress.TryCreate(recortado, out var direccion))
+        if (!System.Net.Mail.MailAddress.TryCreate(trimmed, out var address))
         {
-            return new Resultado(false, "El correo no tiene un formato valido.");
+            return new Result(false, "El Email no tiene un formato valido.");
         }
 
-        if (!string.Equals(direccion.Address, recortado, StringComparison.Ordinal))
+        if (!string.Equals(address.Address, trimmed, StringComparison.Ordinal))
         {
-            // MailAddress acepta "nombre@correo.com" y lo normaliza a otra cosa.
-            // Si no coincide con lo que el usuario escribio, no es la direccion
-            // que el usuario cree estarregistrando.
-            return new Resultado(false, "El correo no tiene un formato valido.");
+            // MailAddress acepta "Name@Email.com" y lo normaliza a otra cosa.
+            // Si no coincide con lo que el User escribio, no es la direccion
+            // que el User cree estarregistrando.
+            return new Result(false, "El Email no tiene un formato valido.");
         }
 
-        var arroba = recortado.LastIndexOf('@');
+        var atIndex = trimmed.LastIndexOf('@');
 
         // Con "User@dominio.com", el arroba va antes del ultimo punto del dominio
         // y el dominio tiene que tener al menos un punto.
-        if (arroba <= 0 ||
-            arroba == recortado.Length - 1 ||
-            recortado.IndexOf('@') != arroba ||
-            recortado.IndexOf('.', arroba) < arroba + 2)
+        if (atIndex <= 0 ||
+            atIndex == trimmed.Length - 1 ||
+            trimmed.IndexOf('@') != atIndex ||
+            trimmed.IndexOf('.', atIndex) < atIndex + 2)
         {
-            return new Resultado(false, "El correo no tiene un formato valido.");
+            return new Result(false, "El Email no tiene un formato valido.");
         }
 
-        return Resultado.Valido;
+        return Result.Valid;
     }
 }

@@ -3,65 +3,65 @@ using PirryLedger.Core.AccessControl.Domain.Enums;
 
 namespace PirryLedger.Core.AccessControl.Application;
 
-// Lo que el endpoint devuelve de cada usuario. RF-CA-21: "el listado nunca
+// Lo que el endpoint devuelve de cada User. RF-CA-21: "el listado nunca
 // incluye hashes ni tokens".
 //
-// Es un record aparte de Usuario a proposito. Si el endpoint devolviera la
-// entidad, cualquier campo nuevo que se le anada a Usuario se filtraria solo, sin
+// Es un record aparte de User a proposito. Si el endpoint devolviera la
+// entidad, cualquier campo nuevo que se le anada a User se filtraria solo, sin
 // que nadie se acuerde de revisarlo. Con este record, el hash de la contrasena no
 // tiene por donde salir: no es que se esconda, es que no existe en el tipo.
-public sealed record UsuarioListado(
+public sealed record ListedUser(
     Guid Id,
-    string Nombre,
-    string Correo,
-    Rol Rol,
-    bool Activo,
-    DateTime FechaDeCreacionUtc);
+    string Name,
+    string Email,
+    Role Role,
+    bool Active,
+    DateTime CreatedAtUtc);
 
-// RF-CA-21: un Administrador lista los usuarios con su rol y su estado.
+// RF-CA-21: un Administrator lista los usuarios con su role y su estado.
 //
-// El rol lo resuelve el punto unico de RF-CA-05, no este caso de uso: la
-// exigencia esta declarada en ExigenciasDeRol y aqui solo se pide.
+// El role lo resuelve el punto unico de RF-CA-05, no este caso de uso: la
+// Requirement esta declarada en RoleRequirements y aqui solo se pide.
 public sealed class ListUsers
 {
-    private readonly IUserRepository _usuarios;
-    private readonly Autenticar _autenticar;
+    private readonly IUserRepository _users;
+    private readonly Authenticate _authenticate;
 
-    public ListUsers(IUserRepository usuarios, Autenticar autenticar)
+    public ListUsers(IUserRepository users, Authenticate authenticate)
     {
-        _usuarios = usuarios;
-        _autenticar = autenticar;
+        _users = users;
+        _authenticate = authenticate;
     }
 
-    // Acepta el token, no el usuario ya validado, porque el rechazo de rol tiene
+    // Acepta el token, no el User ya validado, porque el rechazo de role tiene
     // que ocurrir dentro del caso de uso: si el endpoint llamara a
-    // Autenticar por su cuenta y luego a este metodo, la exigencia de rol
+    // Authenticate por su cuenta y luego a este metodo, la Requirement de role
     // quedaria repartida entre los dos sitios (RF-CA-05).
-    public async Task<IReadOnlyList<UsuarioListado>> EjecutarAsync(
-        string tokenEnClaro,
+    public async Task<IReadOnlyList<ListedUser>> ExecuteAsync(
+        string plainToken,
         CancellationToken cancellationToken = default)
     {
-        // Lanza RolInsuficienteException (403) si el rol no alcanza, y
-        // SesionInvalidaException (401) si no hay sesion. El endpoint traduce
+        // Lanza InsufficientRoleException (403) si el role no alcanza, y
+        // InvalidSessionException (401) si no hay Session. El endpoint traduce
         // cada una, asi que no hace falta comprobar nada mas aqui.
-        await _autenticar.EjecutarConRolAsync(
-            tokenEnClaro,
-            ExigenciasDeRol.RolRequerido(Operacion.ListarUsuarios),
+        await _authenticate.ExecuteWithRoleAsync(
+            plainToken,
+            RoleRequirements.RequiredRole(Operation.ListUsers),
             cancellationToken);
 
-        var usuarios = await _usuarios.ListarAsync(cancellationToken);
+        var users = await _users.ListAsync(cancellationToken);
 
-        // La proyeccion a UsuarioListado es lo que quita el hash de la
+        // La proyeccion a ListedUser es lo que quita el hash de la
         // respuesta. Se hace aqui y no en el endpoint para que el endpoint no
         // pueda devolver la entidad por accidente.
-        return usuarios
-            .Select(usuario => new UsuarioListado(
-                usuario.Id,
-                usuario.Nombre,
-                usuario.Correo,
-                usuario.Rol,
-                usuario.Activo,
-                usuario.FechaDeCreacionUtc))
+        return users
+            .Select(user => new ListedUser(
+                user.Id,
+                user.Name,
+                user.Email,
+                user.Role,
+                user.Active,
+                user.CreatedAtUtc))
             .ToList();
     }
 }

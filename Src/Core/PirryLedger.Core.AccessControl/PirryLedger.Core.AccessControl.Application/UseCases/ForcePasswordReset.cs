@@ -10,7 +10,7 @@ public sealed class ForcePasswordReset
     private readonly IUserRepository _users;
     private readonly IRecoveryCodeRepository _codes;
     private readonly IEmailQueue _emailQueue;
-    private readonly Autenticar _auth;
+    private readonly Authenticate _auth;
     private readonly IClock _clock;
     private readonly IPasswordHasher _hasher;
     private readonly TimeSpan _validity;
@@ -19,7 +19,7 @@ public sealed class ForcePasswordReset
         IUserRepository users,
         IRecoveryCodeRepository codes,
         IEmailQueue emailQueue,
-        Autenticar auth,
+        Authenticate auth,
         IClock clock,
         IPasswordHasher hasher,
         TimeSpan validity)
@@ -35,21 +35,21 @@ public sealed class ForcePasswordReset
 
     public async Task ExecuteAsync(string token, Guid userId, CancellationToken cancellationToken = default)
     {
-        await _auth.EjecutarConRolAsync(token, ExigenciasDeRol.RolRequerido(Operacion.ForzarRestablecimiento), cancellationToken);
-        var user = await _users.BuscarPorIdAsync(userId, cancellationToken)
-            ?? throw new OperacionDeAdministracionRechazadaException("No existe ese usuario.");
+        await _auth.ExecuteWithRoleAsync(token, RoleRequirements.RequiredRole(Operation.ForceReset), cancellationToken);
+        var user = await _users.FindByIdAsync(userId, cancellationToken)
+            ?? throw new AdministrationOperationRejectedException("No existe ese user.");
 
         // Invalidate the old password immediately. The recovery code is the only
         // path that can establish the next usable password.
-        user.CambiarContrasena(_hasher.Hash(OneTimeCodeGenerator.Generar()), _clock.UtcNow);
-        await _users.GuardarAsync(user, cancellationToken);
-        await _codes.InvalidarPendientesAsync(user.Id, cancellationToken);
-        var plainCode = OneTimeCodeGenerator.Generar();
-        await _codes.GuardarAsync(
-            CodigoRecuperacion.Crear(user.Id, OneTimeCodeGenerator.CalcularHash(plainCode), _clock.UtcNow, _validity),
+        user.ChangePassword(_hasher.Hash(OneTimeCodeGenerator.Generate()), _clock.UtcNow);
+        await _users.SaveAsync(user, cancellationToken);
+        await _codes.InvalidatePendingAsync(user.Id, cancellationToken);
+        var plainCode = OneTimeCodeGenerator.Generate();
+        await _codes.SaveAsync(
+            RecoveryCode.Create(user.Id, OneTimeCodeGenerator.CalculateHash(plainCode), _clock.UtcNow, _validity),
             cancellationToken);
         await _emailQueue.EnqueueAsync(
-            new QueuedEmail(user.Correo, CorreoDeRecuperacion.Asunto, CorreoDeRecuperacion.ArmarCuerpo(plainCode)),
+            new QueuedEmail(user.Email, RecoveryEmail.Subject, RecoveryEmail.BuildBody(plainCode)),
             cancellationToken);
     }
 }
