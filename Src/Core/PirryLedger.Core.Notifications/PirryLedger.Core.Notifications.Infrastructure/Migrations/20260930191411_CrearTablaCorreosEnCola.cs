@@ -1,4 +1,7 @@
-﻿using System;
+using PirryLedger.Core.Notifications.Application;
+using PirryLedger.Core.Notifications.Domain.Entities;
+using PirryLedger.Core.Notifications.Domain.Enums;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable

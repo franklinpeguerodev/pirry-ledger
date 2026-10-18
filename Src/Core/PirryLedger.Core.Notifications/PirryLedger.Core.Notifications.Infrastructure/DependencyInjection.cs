@@ -1,7 +1,9 @@
+using PirryLedger.Core.Notifications.Application;
+using PirryLedger.Core.Notifications.Domain.Entities;
+using PirryLedger.Core.Notifications.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Core.Contracts.Notifications;
-using PirryLedger.Core.Notifications.Application;
 
 namespace PirryLedger.Core.Notifications.Infrastructure;
 

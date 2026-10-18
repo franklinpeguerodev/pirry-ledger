@@ -1,4 +1,5 @@
-﻿using System;
+using PirryLedger.Core.AccessControl.Infrastructure;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable

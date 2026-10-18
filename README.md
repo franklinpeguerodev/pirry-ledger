@@ -1148,7 +1148,7 @@ Verifica en ese orden:
    `AllowedTransitions`.
 
 ```powershell
-Get-Content Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/InvoiceStateMachine.cs
+Get-Content Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/StateMachines/InvoiceStateMachine.cs
 Get-Content docs/maquina-de-estados.md
 ```
 

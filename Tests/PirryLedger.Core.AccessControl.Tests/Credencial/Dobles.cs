@@ -1,5 +1,8 @@
+using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
-using PirryLedger.Core.AccessControl.Domain;
+using PirryLedger.Core.AccessControl.Domain.Entities;
+using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Contracts.Time;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;

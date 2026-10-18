@@ -1,4 +1,6 @@
-using PirryLedger.Core.Notifications.Domain;
+using PirryLedger.Core.Notifications.Application;
+using PirryLedger.Core.Notifications.Domain.Entities;
+using PirryLedger.Core.Notifications.Domain.Enums;
 
 namespace PirryLedger.Core.Notifications.Tests;
 
