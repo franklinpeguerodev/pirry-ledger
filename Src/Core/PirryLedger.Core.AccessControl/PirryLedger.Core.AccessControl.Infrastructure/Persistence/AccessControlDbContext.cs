@@ -5,26 +5,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace PirryLedger.Core.AccessControl.Infrastructure;
 
-// Contexto propio de la pieza de AccessControl, separado del de notificaciones:
+// context propio de la pieza de AccessControl, separado del de notificaciones:
 // cada pieza es duena de sus tablas y no ve las de la otra. Las dos comparten
 // servidor, no esquema (RD-01).
 //
-// Es publico porque el Host lo resuelve por inyeccion de dependencias. Lo que no
+// Es Public porque el Host lo resuelve por inyeccion de dependencias. Lo que no
 // hace el Host es tocarlo: solo lo registra.
 public sealed class AccessControlDbContext : DbContext
 {
-    public AccessControlDbContext(DbContextOptions<AccessControlDbContext> opciones)
-        : base(opciones)
+    public AccessControlDbContext(DbContextOptions<AccessControlDbContext> options)
+        : base(options)
     {
     }
 
-    public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<User> Users => Set<User>();
 
-    public DbSet<TokenActivacion> TokensDeActivacion => Set<TokenActivacion>();
+    public DbSet<ActivationToken> ActivationTokens => Set<ActivationToken>();
 
-    public DbSet<CodigoRecuperacion> CodigosDeRecuperacion => Set<CodigoRecuperacion>();
+    public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
 
-    public DbSet<Sesion> Sesiones => Set<Sesion>();
+    public DbSet<Session> Sessions => Set<Session>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

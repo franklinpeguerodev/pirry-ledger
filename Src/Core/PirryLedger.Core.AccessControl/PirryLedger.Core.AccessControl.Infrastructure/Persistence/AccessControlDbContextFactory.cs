@@ -16,22 +16,22 @@ namespace PirryLedger.Core.AccessControl.Infrastructure;
 // (RD-10).
 public sealed class AccessControlDbContextFactory : IDesignTimeDbContextFactory<AccessControlDbContext>
 {
-    private const string VariableDeConexion = ConfiguracionDeBaseDeDatos.VariableDeConexion;
+    private const string ConnectionVariable = DatabaseConfiguration.ConnectionVariable;
 
     public AccessControlDbContext CreateDbContext(string[] args)
     {
-        var connectionString = Environment.GetEnvironmentVariable(VariableDeConexion);
+        var connectionString = Environment.GetEnvironmentVariable(ConnectionVariable);
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                $"Falta la variable de entorno {VariableDeConexion}. El README explica como definirla.");
+                $"Falta la variable de entorno {ConnectionVariable}. El README explica como definirla.");
         }
 
-        var opciones = new DbContextOptionsBuilder<AccessControlDbContext>()
+        var options = new DbContextOptionsBuilder<AccessControlDbContext>()
             .UseNpgsql(connectionString)
             .Options;
 
-        return new AccessControlDbContext(opciones);
+        return new AccessControlDbContext(options);
     }
 }

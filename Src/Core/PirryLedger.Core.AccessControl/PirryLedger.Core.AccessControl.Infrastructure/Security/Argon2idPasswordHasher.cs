@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Org.BouncyCastle.Crypto.Generators;
-using Org.BouncyCastle.Crypto.Parameters;
 
 namespace PirryLedger.Core.AccessControl.Infrastructure;
 
@@ -20,148 +19,148 @@ namespace PirryLedger.Core.AccessControl.Infrastructure;
 // guardados: un hash viejo trae sus propios parametros y se verifica con ellos.
 public sealed class Argon2idPasswordHasher : IPasswordHasher
 {
-    private const string Prefijo = "$argon2id$";
+    private const string Prefix = "$argon2id$";
     private const string Version = "v=19";
 
-    private readonly ParametrosDeArgon2 _parametros;
+    private readonly Argon2Parameters _parameters;
 
     // El hash senuelo se calcula UNA vez por instancia y se reutiliza.
     //
-    // Calcularlo en cada intento cuesta un Argon2 extra: el correo inexistente
+    // Calcularlo en cada intento cuesta un Argon2 extra: el Email inexistente
     // tardaba el doble que una contrasena erronea (hash + verificacion contra uno,
     // solo verificacion contra el otro). Esa diferencia de tiempo se mide en
     // milisegundos desde fuera y enumera las cuentas igual de bien que un
-    // mensaje distinto. Calcularlo una vez deja ambos caminos en una sola
+    // message distinto. Calcularlo una vez deja ambos caminos en una sola
     // verificacion.
-    private readonly Lazy<string> _hashSenaluelo;
+    private readonly Lazy<string> _dummyHash;
 
-    public Argon2idPasswordHasher(ParametrosDeArgon2 parametros)
+    public Argon2idPasswordHasher(Argon2Parameters parameters)
     {
-        parametros.Validar();
-        _parametros = parametros;
+        parameters.Validate();
+        _parameters = parameters;
 
         // Random de 32 bytes: una contrasena que nadie conoce, asi que que el
         // mismo hash se reutilice no filtra nada y no se puede exploitear.
-        _hashSenaluelo = new Lazy<string>(
+        _dummyHash = new Lazy<string>(
             () => Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
             LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
-    public string Hash(string contrasena)
+    public string Hash(string password)
     {
-        ArgumentException.ThrowIfNullOrEmpty(contrasena);
+        ArgumentException.ThrowIfNullOrEmpty(password);
 
-        // Sal de 16 bytes del generador del sistema, distinta para cada usuario y
+        // Sal de 16 bytes del generador del sistema, distinta para cada User y
         // para cada cambio de contrasena (RF-CA-02).
-        var sal = RandomNumberGenerator.GetBytes(_parametros.LongitudDeLaSalEnBytes);
+        var salt = RandomNumberGenerator.GetBytes(_parameters.SaltLengthInBytes);
 
-        return ConstruirHash(contrasena, sal, _parametros);
+        return BuildHash(password, salt, _parameters);
     }
 
-    public bool Verificar(string contrasena, string hashGuardado)
+    public bool Verify(string password, string storedHash)
     {
-        if (string.IsNullOrEmpty(contrasena) || string.IsNullOrEmpty(hashGuardado))
+        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash))
         {
             return false;
         }
 
-        if (!IntentarLeer(hashGuardado, out var sal, out var hashEsperado, out var parametros))
+        if (!TryRead(storedHash, out var salt, out var expectedHash, out var parameters))
         {
             return false;
         }
 
-        var calculado = Derivar(contrasena, sal, parametros, hashEsperado.Length);
+        var calculated = Derive(password, salt, parameters, expectedHash.Length);
 
         // Tiempo constante: la comparacion no puede revelar cuantos bytes
         // acertaron antes de fallar. Nunca con ==.
-        return CryptographicOperations.FixedTimeEquals(calculado, hashEsperado);
+        return CryptographicOperations.FixedTimeEquals(calculated, expectedHash);
     }
 
-    public string CrearHashSenaluelo()
+    public string CreateDummyHash()
     {
-        return _hashSenaluelo.Value;
+        return _dummyHash.Value;
     }
 
-    private static string ConstruirHash(string contrasena, byte[] sal, ParametrosDeArgon2 parametros)
+    private static string BuildHash(string password, byte[] salt, Argon2Parameters parameters)
     {
-        var hash = Derivar(contrasena, sal, parametros, parametros.LongitudDelHashEnBytes);
+        var hash = Derive(password, salt, parameters, parameters.HashLengthInBytes);
 
-        var parametros_texto = string.Create(
+        var parametersText = string.Create(
             CultureInfo.InvariantCulture,
-            $"m={parametros.MemoriaKb},t={parametros.Iteraciones},p={parametros.Paralelismo}");
+            $"m={parameters.MemoryKb},t={parameters.Iterations},p={parameters.Parallelism}");
 
         return string.Concat(
-            Prefijo,
+            Prefix,
             Version,
             "$",
-            parametros_texto,
+            parametersText,
             "$",
-            Base64SinRelleno(sal),
+            Base64WithoutPadding(salt),
             "$",
-            Base64SinRelleno(hash));
+            Base64WithoutPadding(hash));
     }
 
-    private static byte[] Derivar(string contrasena, byte[] sal, ParametrosDeArgon2 parametros, int longitudDelHash)
+    private static byte[] Derive(string password, byte[] salt, Argon2Parameters parameters, int hashLength)
     {
-        var argumentos = new Argon2Parameters.Builder(Argon2Parameters.Argon2id)
-            .WithSalt(sal)
-            .WithMemoryAsKB(parametros.MemoriaKb)
-            .WithIterations(parametros.Iteraciones)
-            .WithParallelism(parametros.Paralelismo)
-            .WithVersion(Argon2Parameters.Version13)
+        var arguments = new Org.BouncyCastle.Crypto.Parameters.Argon2Parameters.Builder(Org.BouncyCastle.Crypto.Parameters.Argon2Parameters.Argon2id)
+            .WithSalt(salt)
+            .WithMemoryAsKB(parameters.MemoryKb)
+            .WithIterations(parameters.Iterations)
+            .WithParallelism(parameters.Parallelism)
+            .WithVersion(Org.BouncyCastle.Crypto.Parameters.Argon2Parameters.Version13)
             .Build();
 
-        var generador = new Argon2BytesGenerator();
-        generador.Init(argumentos);
+        var generator = new Argon2BytesGenerator();
+        generator.Init(arguments);
 
-        var hash = new byte[longitudDelHash];
-        generador.GenerateBytes(Encoding.UTF8.GetBytes(contrasena), hash);
+        var hash = new byte[hashLength];
+        generator.GenerateBytes(Encoding.UTF8.GetBytes(password), hash);
 
         return hash;
     }
 
-    // Un hash con prefijo, version o parametros que no conocemos se trata como
+    // Un hash con prefix, version o parametros que no conocemos se trata como
     // "no coincide". Nunca como excepcion: un dato corrupto en la base no puede
-    // convertirse en un error con traza hacia el usuario (RD-08).
-    private static bool IntentarLeer(
-        string hashGuardado,
-        out byte[] sal,
-        out byte[] hashEsperado,
-        out ParametrosDeArgon2 parametros)
+    // convertirse en un error con traza hacia el User (RD-08).
+    private static bool TryRead(
+        string storedHash,
+        out byte[] salt,
+        out byte[] expectedHash,
+        out Argon2Parameters parameters)
     {
-        sal = [];
-        hashEsperado = [];
-        parametros = new ParametrosDeArgon2();
+        salt = [];
+        expectedHash = [];
+        parameters = new Argon2Parameters();
 
-        if (!hashGuardado.StartsWith(Prefijo, StringComparison.Ordinal))
+        if (!storedHash.StartsWith(Prefix, StringComparison.Ordinal))
         {
             return false;
         }
 
-        var partes = hashGuardado.Split('$', StringSplitOptions.None);
+        var parts = storedHash.Split('$', StringSplitOptions.None);
 
         // ["", "argon2id", "v=19", "m=..,t=..,p=..", sal, hash]
-        if (partes.Length != 6 || !string.Equals(partes[2], Version, StringComparison.Ordinal))
+        if (parts.Length != 6 || !string.Equals(parts[2], Version, StringComparison.Ordinal))
         {
             return false;
         }
 
-        if (!IntentarLeerParametros(partes[3], out parametros))
+        if (!TryReadParameters(parts[3], out parameters))
         {
             return false;
         }
 
         try
         {
-            sal = FromBase64SinRelleno(partes[4]);
-            hashEsperado = FromBase64SinRelleno(partes[5]);
+            salt = FromBase64WithoutPadding(parts[4]);
+            expectedHash = FromBase64WithoutPadding(parts[5]);
         }
         catch (FormatException)
         {
             return false;
         }
 
-        if (sal.Length == 0 || hashEsperado.Length == 0)
+        if (salt.Length == 0 || expectedHash.Length == 0)
         {
             return false;
         }
@@ -169,48 +168,48 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
         return true;
     }
 
-    private static bool IntentarLeerParametros(string texto, out ParametrosDeArgon2 parametros)
+    private static bool TryReadParameters(string text, out Argon2Parameters parameters)
     {
-        parametros = new ParametrosDeArgon2();
+        parameters = new Argon2Parameters();
 
         var parsed = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var par in texto.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var pair in text.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            var separador = par.IndexOf('=');
+            var separator = pair.IndexOf('=');
 
-            if (separador <= 0)
+            if (separator <= 0)
             {
                 return false;
             }
 
-            parsed[par[..separador]] = par[(separador + 1)..];
+            parsed[pair[..separator]] = pair[(separator + 1)..];
         }
 
-        if (!parsed.TryGetValue("m", out var memoria) ||
-            !parsed.TryGetValue("t", out var iteraciones) ||
-            !parsed.TryGetValue("p", out var paralelismo))
+        if (!parsed.TryGetValue("m", out var memory) ||
+            !parsed.TryGetValue("t", out var iterations) ||
+            !parsed.TryGetValue("p", out var parallelism))
         {
             return false;
         }
 
-        if (!int.TryParse(memoria, NumberStyles.None, CultureInfo.InvariantCulture, out var memoriaKb) ||
-            !int.TryParse(iteraciones, NumberStyles.None, CultureInfo.InvariantCulture, out var vueltas) ||
-            !int.TryParse(paralelismo, NumberStyles.None, CultureInfo.InvariantCulture, out var hilos))
+        if (!int.TryParse(memory, NumberStyles.None, CultureInfo.InvariantCulture, out var memoryKb) ||
+            !int.TryParse(iterations, NumberStyles.None, CultureInfo.InvariantCulture, out var rounds) ||
+            !int.TryParse(parallelism, NumberStyles.None, CultureInfo.InvariantCulture, out var threads))
         {
             return false;
         }
 
-        parametros = new ParametrosDeArgon2(
-            MemoriaKb: memoriaKb,
-            Iteraciones: vueltas,
-            Paralelismo: hilos,
-            LongitudDeLaSalEnBytes: 16,
-            LongitudDelHashEnBytes: 32);
+        parameters = new Argon2Parameters(
+            MemoryKb: memoryKb,
+            Iterations: rounds,
+            Parallelism: threads,
+            SaltLengthInBytes: 16,
+            HashLengthInBytes: 32);
 
         try
         {
-            parametros.Validar();
+            parameters.Validate();
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -220,13 +219,13 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
         return true;
     }
 
-    private static string Base64SinRelleno(byte[] valor) =>
-        Convert.ToBase64String(valor).TrimEnd('=');
+    private static string Base64WithoutPadding(byte[] value) =>
+        Convert.ToBase64String(value).TrimEnd('=');
 
-    private static byte[] FromBase64SinRelleno(string valor)
+    private static byte[] FromBase64WithoutPadding(string value)
     {
-        var relleno = (4 - (valor.Length % 4)) % 4;
+        var padding = (4 - (value.Length % 4)) % 4;
 
-        return Convert.FromBase64String(valor + new string('=', relleno));
+        return Convert.FromBase64String(value + new string('=', padding));
     }
 }

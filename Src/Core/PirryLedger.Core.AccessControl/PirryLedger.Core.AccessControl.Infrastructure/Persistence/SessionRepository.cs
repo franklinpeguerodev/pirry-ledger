@@ -7,61 +7,61 @@ namespace PirryLedger.Core.AccessControl.Infrastructure;
 
 internal sealed class SessionRepository : ISessionRepository
 {
-    private readonly AccessControlDbContext _contexto;
+    private readonly AccessControlDbContext _context;
 
-    public SessionRepository(AccessControlDbContext contexto)
+    public SessionRepository(AccessControlDbContext context)
     {
-        _contexto = contexto;
+        _context = context;
     }
 
-    public async Task GuardarAsync(Sesion sesion, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(Session session, CancellationToken cancellationToken = default)
     {
-        if (_contexto.Sesiones.Local.Any(registrada => registrada.Id == sesion.Id))
+        if (_context.Sessions.Local.Any(registered => registered.Id == session.Id))
         {
-            _contexto.Sesiones.Update(sesion);
+            _context.Sessions.Update(session);
         }
         else
         {
-            _contexto.Sesiones.Add(sesion);
+            _context.Sessions.Add(session);
         }
 
-        await _contexto.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
-    // Devuelve la sesion aunque este cerrada o caducada. El punto de validacion
+    // Devuelve la session aunque este cerrada o caducada. El punto de validacion
     // decide, y filtrar aqui permitiria distinguir "caducada" de "no existe".
-    public async Task<Sesion?> BuscarPorHashAsync(string hashDelToken, CancellationToken cancellationToken = default)
+    public async Task<Session?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(hashDelToken))
+        if (string.IsNullOrWhiteSpace(tokenHash))
         {
             return null;
         }
 
-        var normalizado = hashDelToken.Trim().ToLowerInvariant();
+        var normalized = tokenHash.Trim().ToLowerInvariant();
 
-        return await _contexto.Sesiones
-            .FirstOrDefaultAsync(sesion => sesion.HashDelToken == normalizado, cancellationToken);
+        return await _context.Sessions
+            .FirstOrDefaultAsync(session => session.TokenHash == normalized, cancellationToken);
     }
 
-    // Cierra solo esa sesion. Si el token no existe o ya estaba cerrada, devuelve
+    // Cierra solo esa session. Si el token no existe o ya estaba cerrada, devuelve
     // false y el endpoint responde 204 igual: no se distingue un caso del otro.
-    public async Task<bool> CerrarPorHashAsync(
-        string hashDelToken,
-        DateTime ahoraUtc,
+    public async Task<bool> CloseByHashAsync(
+        string tokenHash,
+        DateTime utcNow,
         CancellationToken cancellationToken = default)
     {
-        var hash = hashDelToken.Trim().ToLowerInvariant();
+        var hash = tokenHash.Trim().ToLowerInvariant();
 
-        var sesion = await _contexto.Sesiones
-            .FirstOrDefaultAsync(registrada => registrada.HashDelToken == hash, cancellationToken);
+        var session = await _context.Sessions
+            .FirstOrDefaultAsync(registered => registered.TokenHash == hash, cancellationToken);
 
-        if (sesion is null || sesion.EstaCerrada)
+        if (session is null || session.IsClosed)
         {
             return false;
         }
 
-        sesion.Cerrar(ahoraUtc);
-        await _contexto.SaveChangesAsync(cancellationToken);
+        session.Close(utcNow);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return true;
     }

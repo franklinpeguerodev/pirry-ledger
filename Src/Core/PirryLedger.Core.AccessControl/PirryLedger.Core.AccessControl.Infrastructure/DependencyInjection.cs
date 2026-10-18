@@ -13,23 +13,23 @@ namespace PirryLedger.Core.AccessControl.Infrastructure;
 public static class DependencyInjection
 {
     // Decision de Franklin. El ADR justifica por que absoluta y no deslizante.
-    private static readonly TimeSpan DuracionDeLaSesion = TimeSpan.FromHours(8);
-    private static readonly TimeSpan DuracionDelCodigoDeRecuperacion = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan SessionDuration = TimeSpan.FromHours(8);
+    private static readonly TimeSpan RecoveryCodeDuration = TimeSpan.FromMinutes(15);
 
     public static IServiceCollection AddAccessControl(
         this IServiceCollection services,
         string connectionString,
-        string urlBase)
+        string baseUrl)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-        ArgumentException.ThrowIfNullOrWhiteSpace(urlBase);
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
 
-        services.AddDbContext<AccessControlDbContext>(opciones =>
-            opciones.UseNpgsql(connectionString));
+        services.AddDbContext<AccessControlDbContext>(options =>
+            options.UseNpgsql(connectionString));
 
         // RF-CA-02: una sola implementacion de hash en el sistema. La registrada
         // aqui es la unica capa que ve el paquete de Argon2id.
-        services.AddSingleton<ParametrosDeArgon2>();
+        services.AddSingleton<Argon2Parameters>();
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
         services.AddScoped<IUserRepository, UserRepository>();
@@ -37,47 +37,47 @@ public static class DependencyInjection
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
 
-        services.AddScoped<RegisterUser>(proveedor => new RegisterUser(
-            proveedor.GetRequiredService<IUserRepository>(),
-            proveedor.GetRequiredService<IActivationTokenRepository>(),
-            proveedor.GetRequiredService<IPasswordHasher>(),
-            proveedor.GetRequiredService<IEmailQueue>(),
-            proveedor.GetRequiredService<IClock>(),
-            urlBase));
+        services.AddScoped<RegisterUser>(provider => new RegisterUser(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IActivationTokenRepository>(),
+            provider.GetRequiredService<IPasswordHasher>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<IClock>(),
+            baseUrl));
 
         services.AddScoped<ActivateAccount>();
 
         // Decision de Franklin (docs/adr/001-session-credential.md): caducidad
-        // ABSOLUTA de 8 horas. La sesion no se renueva al usarla.
-        services.AddScoped<Login>(proveedor => new Login(
-            proveedor.GetRequiredService<IUserRepository>(),
-            proveedor.GetRequiredService<ISessionRepository>(),
-            proveedor.GetRequiredService<IPasswordHasher>(),
-            proveedor.GetRequiredService<IClock>(),
-            DuracionDeLaSesion));
+        // ABSOLUTA de 8 horas. La Session no se renueva al usarla.
+        services.AddScoped<Login>(provider => new Login(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<ISessionRepository>(),
+            provider.GetRequiredService<IPasswordHasher>(),
+            provider.GetRequiredService<IClock>(),
+            SessionDuration));
 
         services.AddScoped<Logout>();
-        services.AddScoped<Autenticar>();
+        services.AddScoped<Authenticate>();
 
         // RF-CA-05, RF-CA-08, RF-CA-20 y RF-CA-21. Los tres casos de uso reciben
-        // Autenticar y no el repositorio de sesiones: el rechazo de rol tiene que
-        // salir del punto unico (ExigenciasDeRol) y no de una comprobacion que
+        // Authenticate y no el repositorio de sesiones: el rechazo de role tiene que
+        // salir del punto unico (RoleRequirements) y no de una comprobacion que
         // cada endpoint pudiera escribir de su forma.
         services.AddScoped<ListUsers>();
         services.AddScoped<ChangeUserRole>();
         services.AddScoped<DeactivateUser>();
 
         // RF-CA-17. No necesita IPasswordHasher: el reenvio no toca la contrasena.
-        services.AddScoped<ResendActivationLink>(proveedor => new ResendActivationLink(
-            proveedor.GetRequiredService<IUserRepository>(),
-            proveedor.GetRequiredService<IActivationTokenRepository>(),
-            proveedor.GetRequiredService<IEmailQueue>(),
-            proveedor.GetRequiredService<IClock>(),
-            urlBase));
+        services.AddScoped<ResendActivationLink>(provider => new ResendActivationLink(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IActivationTokenRepository>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<IClock>(),
+            baseUrl));
 
-        // Primer Administrador (docs/adr/002-first-administrator.md). El Host lo
+        // Primer Administrator (docs/adr/002-first-administrator.md). El Host lo
         // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
-        // dispararlo: no es una operacion de negocio, es parte del despliegue.
+        // dispararlo: no es una operation de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();
 
         services.AddScoped<PasswordRecovery>(provider => new PasswordRecovery(
@@ -86,15 +86,15 @@ public static class DependencyInjection
             provider.GetRequiredService<IEmailQueue>(),
             provider.GetRequiredService<IClock>(),
             provider.GetRequiredService<IPasswordHasher>(),
-            DuracionDelCodigoDeRecuperacion));
+            RecoveryCodeDuration));
         services.AddScoped<ForcePasswordReset>(provider => new ForcePasswordReset(
             provider.GetRequiredService<IUserRepository>(),
             provider.GetRequiredService<IRecoveryCodeRepository>(),
             provider.GetRequiredService<IEmailQueue>(),
-            provider.GetRequiredService<Autenticar>(),
+            provider.GetRequiredService<Authenticate>(),
             provider.GetRequiredService<IClock>(),
             provider.GetRequiredService<IPasswordHasher>(),
-            DuracionDelCodigoDeRecuperacion));
+            RecoveryCodeDuration));
         services.AddScoped<ChangeOwnPassword>();
 
         return services;

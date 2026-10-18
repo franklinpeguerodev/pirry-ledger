@@ -11,36 +11,36 @@ internal sealed class RecoveryCodeRepository : IRecoveryCodeRepository
 
     public RecoveryCodeRepository(AccessControlDbContext context) => _context = context;
 
-    public Task<CodigoRecuperacion?> BuscarPorHashAsync(
-        string hashDelCodigo,
+    public Task<RecoveryCode?> FindByHashAsync(
+        string codeHash,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(hashDelCodigo))
+        if (string.IsNullOrWhiteSpace(codeHash))
         {
-            return Task.FromResult<CodigoRecuperacion?>(null);
+            return Task.FromResult<RecoveryCode?>(null);
         }
 
-        var normalized = hashDelCodigo.Trim().ToLowerInvariant();
-        return _context.CodigosDeRecuperacion
-            .FirstOrDefaultAsync(codigo => codigo.HashDelCodigo == normalized, cancellationToken);
+        var normalized = codeHash.Trim().ToLowerInvariant();
+        return _context.RecoveryCodes
+            .FirstOrDefaultAsync(code => code.CodeHash == normalized, cancellationToken);
     }
 
-    public async Task InvalidarPendientesAsync(Guid usuarioId, CancellationToken cancellationToken = default)
+    public async Task InvalidatePendingAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        await _context.CodigosDeRecuperacion
-            .Where(codigo => codigo.UsuarioId == usuarioId && codigo.UsadoUtc == null)
+        await _context.RecoveryCodes
+            .Where(code => code.UserId == userId && code.UsedAtUtc == null)
             .ExecuteDeleteAsync(cancellationToken);
     }
 
-    public async Task GuardarAsync(CodigoRecuperacion codigo, CancellationToken cancellationToken = default)
+    public async Task SaveAsync(RecoveryCode code, CancellationToken cancellationToken = default)
     {
-        if (_context.CodigosDeRecuperacion.Local.Any(existing => existing.Id == codigo.Id))
+        if (_context.RecoveryCodes.Local.Any(existing => existing.Id == code.Id))
         {
-            _context.CodigosDeRecuperacion.Update(codigo);
+            _context.RecoveryCodes.Update(code);
         }
         else
         {
-            _context.CodigosDeRecuperacion.Add(codigo);
+            _context.RecoveryCodes.Add(code);
         }
 
         await _context.SaveChangesAsync(cancellationToken);

@@ -6,42 +6,42 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace PirryLedger.Core.AccessControl.Infrastructure;
 
-internal sealed class SesionConfiguration : IEntityTypeConfiguration<Sesion>
+internal sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
 {
-    public void Configure(EntityTypeBuilder<Sesion> builder)
+    public void Configure(EntityTypeBuilder<Session> builder)
     {
-        builder.ToTable("ac_sesiones");
+        builder.ToTable("ac_sessions");
 
         // Columnas en snake_case (ADR 004), igual que en el resto de tablas ac_.
-        builder.HasKey(sesion => sesion.Id);
+        builder.HasKey(session => session.Id);
 
-        builder.Property(sesion => sesion.Id)
+        builder.Property(session => session.Id)
             .HasColumnName("id");
 
-        builder.Property(sesion => sesion.UsuarioId)
-            .HasColumnName("usuario_id");
+        builder.Property(session => session.UserId)
+            .HasColumnName("user_id");
 
         // El token en claro SI va en base64url, pero lo que se guarda es su SHA-256 en
         // hexadecimal: 64 caracteres. Se deja margen como en el resto de hashes del
         // proyecto.
-        builder.Property(sesion => sesion.HashDelToken)
-            .HasColumnName("hash_del_token")
+        builder.Property(session => session.TokenHash)
+            .HasColumnName("token_hash")
             .HasMaxLength(128)
             .IsRequired();
 
-        builder.Property(sesion => sesion.EmitidaUtc)
-            .HasColumnName("emitida_utc")
+        builder.Property(session => session.IssuedAtUtc)
+            .HasColumnName("issued_at_utc")
             .IsRequired();
 
-        builder.Property(sesion => sesion.ExpiraUtc)
-            .HasColumnName("expira_utc")
+        builder.Property(session => session.ExpiresAtUtc)
+            .HasColumnName("expires_at_utc")
             .IsRequired();
 
-        builder.Property(sesion => sesion.CerradaUtc)
-            .HasColumnName("cerrada_utc");
+        builder.Property(session => session.ClosedAtUtc)
+            .HasColumnName("closed_at_utc");
 
-        builder.Property(sesion => sesion.CredencialVersion)
-            .HasColumnName("credencial_version")
+        builder.Property(session => session.CredentialVersion)
+            .HasColumnName("credential_version")
             .IsRequired();
 
         // Unico sobre el hash: dos sesiones con el mismo token no pueden existir.
@@ -51,22 +51,22 @@ internal sealed class SesionConfiguration : IEntityTypeConfiguration<Sesion>
         //
         // Este indice es tambien el del camino caliente: el punto de validacion
         // busca por hash en cada peticion autenticada.
-        builder.HasIndex(sesion => sesion.HashDelToken)
+        builder.HasIndex(session => session.TokenHash)
             .IsUnique()
-            .HasDatabaseName("ix_ac_sesiones_hash");
+            .HasDatabaseName("ix_ac_sessions_hash");
 
         // Este indice no es para el camino caliente: es para la limpieza de
         // sesiones vencidas que describe el ADR. Sin el, limpiar seria un WHERE
         // sobre la tabla entera.
-        builder.HasIndex(sesion => sesion.ExpiraUtc)
-            .HasDatabaseName("ix_ac_sesiones_expira");
+        builder.HasIndex(session => session.ExpiresAtUtc)
+            .HasDatabaseName("ix_ac_sessions_expires");
 
-        builder.HasIndex(sesion => sesion.UsuarioId)
-            .HasDatabaseName("ix_ac_sesiones_usuario");
+        builder.HasIndex(session => session.UserId)
+            .HasDatabaseName("ix_ac_sessions_user");
 
-        builder.HasOne<Usuario>()
+        builder.HasOne<User>()
             .WithMany()
-            .HasForeignKey(sesion => sesion.UsuarioId)
+            .HasForeignKey(session => session.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
