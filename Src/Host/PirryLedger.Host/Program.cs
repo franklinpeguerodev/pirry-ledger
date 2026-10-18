@@ -11,7 +11,7 @@ using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Host;
 
-const string ComandoEnviarCorreo = "--send-mail";
+const string SendMailCommand = "--send-mail";
 
 // Archivo .env de desarrollo local: si existe, se cargan sus variables ANTES de
 // construir la configuracion, que las lee del entorno (RD-10: al final siguen
@@ -19,7 +19,7 @@ const string ComandoEnviarCorreo = "--send-mail";
 // variable ya definida en la terminal o en el sistema no la toca el archivo,
 // asi que un despliegue con variables reales sigue mandando. Si no hay archivo,
 // no pasa nada y siguen mandando las definidas de otra forma (README, paso 4).
-CargarArchivoEnv();
+LoadEnvFile();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,60 +31,60 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 
 // Las dos piezas reciben la misma cadena de conexion: una sola base de datos,
 // tablas separadas por prefijo. Ninguna de las dos ve los contextos de la otra.
-var conexion = LeerConexionObligatoria(builder.Configuration);
+var connection = ReadRequiredConnection(builder.Configuration);
 
 // La misma variable fija el puerto donde escucha la API y la direccion de los
 // enlaces de activacion. Una sola fuente para las dos cosas: no hay forma de
 // que se desincronicen (docs/adr/005-listen-address-from-public-base-url.md).
 // Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
-var urlBase = LeerUrlBaseObligatoria(builder.Configuration);
-builder.WebHost.UseUrls(urlBase);
+var baseUrl = ReadRequiredBaseUrl(builder.Configuration);
+builder.WebHost.UseUrls(baseUrl);
 
-builder.Services.AddAccessControl(conexion, urlBase);
+builder.Services.AddAccessControl(connection, baseUrl);
 builder.Services.AddNotifications(
-    conexion,
-    ConfiguracionEntorno.LeerSmtp(builder.Configuration) ?? SmtpConfiguracion.Vacia);
+    connection,
+    EnvironmentConfiguration.ReadSmtp(builder.Configuration) ?? SmtpConfiguration.Empty);
 
 var app = builder.Build();
 
-// Primer Administrador (docs/adr/002-first-administrator.md). Se ejecuta en el
-// arranque y es idempotente: si ya hay un Administrador, no hace nada y la
+// Primer Administrator (docs/adr/002-first-administrator.md). Se ejecuta en el
+// arranque y es idempotente: si ya hay un Administrator, no hace nada y la
 // aplicacion sigue igual. Solo corre si estan las variables, para que una base
 // de desarrollo sin ellas no produzca ruido en cada arranque.
-await SembrarPrimerAdministrador(app);
+await SeedFirstAdministrator(app);
 
-// El emisor de correo es un comando, no un endpoint ni un proceso que arranque
+// El emisor de Email es un comando, no un endpoint ni un proceso que arranque
 // solo (RF-NOT-09). Se lanza cuando alguien lo lanza, y correrlo dos veces no
 // duplica ningun envio (RF-NOT-12).
-if (args.Any(argumento => string.Equals(argumento, ComandoEnviarCorreo, StringComparison.OrdinalIgnoreCase)))
+if (args.Any(argument => string.Equals(argument, SendMailCommand, StringComparison.OrdinalIgnoreCase)))
 {
-    await using var alcance = app.Services.CreateAsyncScope();
+    await using var scope = app.Services.CreateAsyncScope();
 
-    var procesador = alcance.ServiceProvider.GetRequiredService<ProcesarColaDeCorreo>();
-    var resultado = await procesador.EjecutarAsync();
+    var processor = scope.ServiceProvider.GetRequiredService<ProcessEmailQueue>();
+    var result = await processor.ExecuteAsync();
 
-    Console.WriteLine($"Correos tomados: {resultado.Pendientes}");
-    Console.WriteLine($"Correos enviados: {resultado.Enviados}");
+    Console.WriteLine($"Correos tomados: {result.Pending}");
+    Console.WriteLine($"Correos enviados: {result.Sent}");
 
-    if (resultado.Fallidos.Count == 0)
+    if (result.Failures.Count == 0)
     {
         Console.WriteLine("Correos fallidos: 0");
     }
     else
     {
-        Console.WriteLine($"Correos fallidos: {resultado.Fallidos.Count}");
+        Console.WriteLine($"Correos fallidos: {result.Failures.Count}");
 
-        foreach (var fallo in resultado.Fallidos)
+        foreach (var failure in result.Failures)
         {
-            Console.WriteLine($"  - {fallo.Destinatario}: {fallo.Error}");
+            Console.WriteLine($"  - {failure.Recipient}: {failure.Error}");
         }
     }
 
-    if (resultado.Pendientes == 0)
+    if (result.Pending == 0)
     {
         Console.WriteLine("No habia correos pendientes de enviar.");
     }
-    else if (resultado.Enviados == 0)
+    else if (result.Sent == 0)
     {
         Console.WriteLine(
             "Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.");
@@ -111,26 +111,26 @@ if (app.Environment.IsDevelopment())
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
 app.UseRouting();
-app.Use(async (contexto, siguiente) =>
+app.Use(async (context, next) =>
 {
     try
     {
-        await siguiente(contexto);
+        await next(context);
     }
-    catch (OperacionSinDeclararException)
+    catch (OperationNotDeclaredException)
     {
-        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await contexto.Response.WriteAsJsonAsync(
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(
             new ErrorResponse("La operacion no tiene una exigencia de acceso declarada."));
     }
-    catch (OperacionSinExigenciaDeRolException)
+    catch (OperationWithoutRoleRequirementException)
     {
-        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await contexto.Response.WriteAsJsonAsync(
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(
             new ErrorResponse("La operacion no tiene una exigencia de acceso valida."));
     }
 });
-app.Use(PirryLedger.Core.AccessControl.Api.FiltroDeAcceso.ExigirOperacionDeclaradaAsync);
+app.Use(PirryLedger.Core.AccessControl.Api.AccessFilter.RequireDeclaredOperationAsync);
 
 app.MapAccessControl();
 app.MapNotifications();
@@ -139,112 +139,112 @@ app.Run();
 
 // Busca un .env desde el directorio de trabajo hacia arriba y lo carga en el
 // proceso. No es un error que falte: no encontrarlo significa que las variables
-// vienen de otro sitio (entorno del usuario o de la terminal).
-static void CargarArchivoEnv()
+// vienen de otro sitio (entorno del User o de la terminal).
+static void LoadEnvFile()
 {
-    var directorio = Directory.GetCurrentDirectory();
+    var directory = Directory.GetCurrentDirectory();
 
-    while (!string.IsNullOrWhiteSpace(directorio))
+    while (!string.IsNullOrWhiteSpace(directory))
     {
-        var archivo = Path.Combine(directorio, ".env");
+        var file = Path.Combine(directory, ".env");
 
-        if (File.Exists(archivo))
+        if (File.Exists(file))
         {
-            Env.NoClobber().Load(archivo);
+            Env.NoClobber().Load(file);
             return;
         }
 
-        directorio = Directory.GetParent(directorio)?.FullName;
+        directory = Directory.GetParent(directory)?.FullName;
     }
 }
 
 // Lee la cadena de conexion de ConnectionStrings__PirryLedger. Si falta, avisa
-// por el nombre de la variable y para: un error de configuracion no puede ser
+// por el Name de la variable y para: un error de configuracion no puede ser
 // una excepcion con traza (RD-08).
-static string LeerConexionObligatoria(IConfiguration configuracion)
+static string ReadRequiredConnection(IConfiguration configuration)
 {
-    var valor = configuracion.GetConnectionString(ConfiguracionDeBaseDeDatos.NombreDeConexion);
+    var value = configuration.GetConnectionString(DatabaseConfiguration.ConnectionName);
 
-    if (string.IsNullOrWhiteSpace(valor))
+    if (string.IsNullOrWhiteSpace(value))
     {
         Console.Error.WriteLine(
-            $"Falta la variable de entorno {ConfiguracionDeBaseDeDatos.VariableDeConexion}. " +
+            $"Falta la variable de entorno {DatabaseConfiguration.ConnectionVariable}. " +
             "El README explica como definirla.");
         Environment.Exit(1);
     }
 
-    return valor;
+    return value;
 }
 
 // Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de
-// activacion y con la que se fija el puerto de escucha de la API. La
+// activacion y con la que se fija el host:puerto donde escucha la API. La
 // recuperacion no lleva enlace: lleva un codigo suelto, y por eso esta variable
-// no entra en ese correo. Sin ella los enlaces saldrian con una direccion que no
+// no entra en ese Email. Sin ella los enlaces saldrian con una direccion que no
 // existe, asi que es obligatoria igual que la cadena de conexion.
-static string LeerUrlBaseObligatoria(IConfiguration configuracion)
+static string ReadRequiredBaseUrl(IConfiguration configuration)
 {
-    var valor = configuracion[ConfiguracionEntorno.VariableBaseUrl];
+    var value = configuration[EnvironmentConfiguration.BaseUrlVariable];
 
-    if (string.IsNullOrWhiteSpace(valor))
+    if (string.IsNullOrWhiteSpace(value))
     {
         Console.Error.WriteLine(
-            $"Falta la variable de entorno {ConfiguracionEntorno.VariableBaseUrl}. " +
+            $"Falta la variable de entorno {EnvironmentConfiguration.BaseUrlVariable}. " +
             "El README explica como definirla.");
         Environment.Exit(1);
     }
 
-    return valor.TrimEnd('/');
+    return value.TrimEnd('/');
 }
 
 // Si PIRRY_LEDGER_FIRST_ADMIN_EMAIL y ..._PASSWORD estan definidas, crea el
-// primer Administrador. Es opcional a proposito: sin ellas no hay
-// Administrador, que es justo lo que el seed viene a resolver, asi que exigir
+// primer Administrator. Es opcional a proposito: sin ellas no hay
+// Administrator, que es justo lo que el seed viene a resolver, asi que exigir
 // las variables solo molestaria a quien solo quiere registrarse.
 //
-// Los tres valores van por una variable cada uno y el nombre no se imprime con
-// su valor (RD-08, RD-10). El nombre por defecto es "Administrador" para que
-// basten dos variables, aunque el nombre se puede cambiar por una tercera.
-static async Task SembrarPrimerAdministrador(WebApplication app)
+// Los tres valores van por una variable cada uno y el Name no se imprime con
+// su valor (RD-08, RD-10). El Name por defecto es "Administrator" para que
+// basten dos variables, aunque el Name se puede cambiar por una tercera.
+static async Task SeedFirstAdministrator(WebApplication app)
 {
-    var correo = app.Configuration[ConfiguracionEntorno.VariableAdministradorCorreo];
-    var contrasena = app.Configuration[ConfiguracionEntorno.VariableAdministradorContrasena];
+    var email = app.Configuration[EnvironmentConfiguration.FirstAdminEmailVariable];
+    var password = app.Configuration[EnvironmentConfiguration.FirstAdminPasswordVariable];
 
-    if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(contrasena))
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
     {
         return;
     }
 
-    var nombrePorDefecto = "Administrador";
-    var nombre = app.Configuration[ConfiguracionEntorno.VariableAdministradorNombre];
+    var defaultName = "Administrator";
+    var name = app.Configuration[EnvironmentConfiguration.FirstAdminNameVariable];
 
-    if (string.IsNullOrWhiteSpace(nombre))
+    if (string.IsNullOrWhiteSpace(name))
     {
-        nombre = nombrePorDefecto;
+        name = defaultName;
     }
 
     // Ambito propio porque IUserRepository es scoped y el caso de uso recibe un
     // IUserRepository ya resuelto.
-    await using var alcance = app.Services.CreateAsyncScope();
+    await using var scope = app.Services.CreateAsyncScope();
 
-    var sembrador = alcance.ServiceProvider.GetRequiredService<SeedFirstAdministrator>();
+    var seeder = scope.ServiceProvider.GetRequiredService<SeedFirstAdministrator>();
 
     try
     {
-        var creado = await sembrador.EjecutarAsync(nombre, correo, contrasena);
+        var created = await seeder.ExecuteAsync(name, email, password);
 
         // Un solo mensaje. En el caso normal no dice nada, para no ensuciar el
-        // arranque de una base que ya tiene su Administrador.
-        if (creado)
+        // arranque de una base que ya tiene su Administrator.
+        if (created)
         {
-            Console.WriteLine("Se creo el primer Administrador desde las variables de entorno.");
+            Console.WriteLine("Se creo el primer Administrator desde las variables de entorno.");
         }
     }
     catch (FirstAdministratorNotSeededException error)
     {
         // El mensaje de la excepcion ya es apto para ver: dice el problema sin el
-        // correo ni la contrasena (RD-08). No se aborta el arranque, porque la
+        // Email ni la contrasena (RD-08). No se aborta el arranque, porque la
         // aplicacion sirve igual para registrarse; lo que no habra es
-        // Administrador.
-        Console.Error.WriteLine($"No se pudo crear el primer Administrador: {error.Message}");
+        // Administrator.
+        Console.Error.WriteLine($"No se pudo Create el primer Administrator: {error.Message}");
     }
 }
