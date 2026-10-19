@@ -14,6 +14,7 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 - `docs/current-iteration.md` defines what we are working on now: scope, requirement IDs, out-of-scope items and definition of done. Work only inside that scope. If the file is missing or looks stale, ask.
 - Requirements live in `docs/requirements/`. Read its `README.md` (the index) first, then open only the files that `docs/current-iteration.md` lists. Cite requirements by ID (`RD-03`, `RF-CA-19`) in commits and PRs. Their text is the professor's original Spanish; do not translate or paraphrase the IDs.
+- The brief and rubric of the current assignment live in `docs/assignments/`. Where the brief and a requirements file disagree, the brief wins.
 - If a requirement you need is not in `docs/`, ask for it. Never reconstruct it from memory.
 - An acceptance criterion that is not met means the requirement is not done, even if the code runs.
 - If two documents contradict each other, say so and ask. Do not pick one yourself.
@@ -21,7 +22,12 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 ## Language
 
-All development is in English: code, identifiers, comments, commit messages, branch names, technical docs and files for the agent. Course deliverables written for the professor (README, PR descriptions, logbooks in `docs/bitacoras/` named `bitacora-*.md`, architecture decision records in `docs/adr/`) stay in Spanish, following the existing PR template, unless Franklin says otherwise. ADRs are a deliberate exception to the "technical docs in English" rule: Franklin decided on 2026-09-30 that their content is written in Spanish because they are read as course deliverables. Fixed on 2026-10-04: the ADR filename and the ADR title are in English (`docs/adr/NNN-english-name.md`, `# ADR NNN - English title`) and the content stays in Spanish.
+- **Code is in English:** identifiers (classes, methods, variables, test names), commit messages and branch names.
+- **Code comments and every text the user sees are in Spanish:** error messages, API responses and console output.
+- **Course deliverables written for the professor are in Spanish:** `README.md`, PR descriptions (following the existing PR template), logbooks, `docs/maquina-de-estados.md` and architecture decision records in `docs/adr/`.
+- **Files for the agent are in English:** this file, `docs/current-iteration.md` and the notes of `docs/requirements/`. The requirement text itself stays in the professor's original Spanish; do not translate or paraphrase the IDs.
+- ADRs: the filename and the title are in English (`docs/adr/NNN-english-name.md`, `# ADR NNN - English title`) and the content stays in Spanish. Franklin decided this on 2026-09-30 and fixed it on 2026-10-04.
+- Spanish names that come from the course (`CorreoEnCola`, `SolicitudPermiso`, `Usuario`) may appear in requirement text and database naming notes; in code, propose English names and record the mapping in the README.
 
 ## Where the state lives
 
@@ -66,6 +72,16 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Wri
 - Flows that involve an email address (activation resend, password recovery) respond identically whether or not the email exists.
 - Outgoing email is never sent inside the operation that triggers it: it is queued and a separate process sends it. Sending twice must not duplicate emails.
 
+## Testing
+
+- Tests are xUnit, live in the module's test project and run without starting the application, a database or an SMTP server (RD-12): in-memory doubles and a fake clock.
+- Each test has three identifiable phases (arrange, act, assert), verifies one behavior and its name says which one.
+- Tests are independent: no shared mutable state, they pass in any order and one by one.
+- A test of a rejected operation also verifies that nothing changed (state and data).
+- A test must be able to fail. When writing a test for new behavior, show it failing for the right reason (or break the code on purpose) before showing it passing. Tests will later be checked by deliberately breaking the code.
+- Never delete or weaken an existing test to make a change pass. If a test must change, say why.
+- Every new module comes with its own test project from the start.
+
 ## Git
 
 - Branches: `type/short-description`, lowercase with hyphens. Types: `feature`, `chore`, `fix`, `docs`. One branch per feature.
@@ -80,7 +96,7 @@ Three rules. They exist because this repo already paid for breaking them.
 
 - **Documentation ships in the same pull request.** Every pull request that changes behaviour updates `README.md`, `docs/current-iteration.md` and the ADR in `docs/adr/` in the same PR. Documentation that a change makes wrong is part of that change, not a follow-up. The README section below is the same rule seen from the grading side: what the README does not say will not be looked for.
 - **ADRs need authorization first.** An important decision is documented in an ADR under `docs/adr/`, following the format of `001-session-credential.md`. **The agent never writes an ADR on its own initiative.** When it detects a decision that meets the bar, it stops, presents the alternatives with their trade-offs, and waits for Franklin's explicit authorization. Only then does it write the file. A decision is *important* when at least one of these is true: it chooses between alternatives that affect structure, persistence, the protocol or the security model; it contradicts or replaces an earlier decision; or it is the kind of question a reviewer asks as *"why not X?"*. A decision below that bar is explained in the pull request description instead.
-- **The logbook gets an entry in the same pull request.** Every pull request appends its entry to the current logbook in `docs/bitacoras/` (`bitacora-*.md`) in the same PR, as its own commit so the code commit stays atomic: what was asked, what the agent returned, what Franklin verified and with which command, and what changed or was corrected. The agent drafts; Franklin reviews before it is pushed.
+- **The logbook gets an entry in the same pull request.** Every pull request appends its entry to the current logbook in the same PR. The exact path of that logbook is fixed in `docs/current-iteration.md`, because each assignment dictates where it must be, as its own commit so the code commit stays atomic: what was asked, what the agent returned, what Franklin verified and with which command, and what changed or was corrected. The agent drafts; Franklin reviews before it is pushed.
 
 ## Workflow
 
