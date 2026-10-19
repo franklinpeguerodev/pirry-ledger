@@ -770,11 +770,11 @@ Compara estas cuatro peticiones: la respuesta debe ser el mismo `202` con el
 mismo body `{"enviado":true}` en los cuatro casos.
 
 ```powershell
-$reenviar = 'http://localhost:5243/api/auth/reenviar-activacion'
-Invoke-WebRequest $reenviar -Method Post -Body (@{email='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'    # pendiente de activar
-Invoke-WebRequest $reenviar -Method Post -Body (@{email='nadie@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json' # ese email no existe
-Invoke-WebRequest $reenviar -Method Post -Body (@{email='esto-no-es-email'}|ConvertTo-Json) -ContentType 'application/json' # mal formado
-Invoke-WebRequest $reenviar -Method Post -Body (@{email='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'    # ya activa
+$resendActivation = 'http://localhost:5243/api/auth/resend-activation'
+Invoke-WebRequest $resendActivation -Method Post -Body (@{email='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'    # pendiente de activar
+Invoke-WebRequest $resendActivation -Method Post -Body (@{email='nadie@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json' # ese email no existe
+Invoke-WebRequest $resendActivation -Method Post -Body (@{email='esto-no-es-email'}|ConvertTo-Json) -ContentType 'application/json' # mal formado
+Invoke-WebRequest $resendActivation -Method Post -Body (@{email='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'    # ya activa
 ```
 
 Son cuatro y no cinco porque son cuatro las salidas del caso de uso: el email
@@ -903,7 +903,7 @@ mensaje pendiente en `not_email_queue`.
 
 ```powershell
 $recuperacion = @{ email = 'ana@ejemplo.com' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/recuperacion `
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
   -Method Post -Body $recuperacion -ContentType 'application/json'
 ```
 
@@ -911,7 +911,7 @@ Ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
 $restablecer = @{ codigo = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/restablecer-password `
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
 
@@ -939,19 +939,19 @@ Con el token de Administrador y el `id` del usuario:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/forzar-restablecimiento' `
+  -Uri 'http://localhost:5243/api/admin/users/<id>/force-reset' `
   -Method Post -Headers $adminHeaders
 ```
 
 La contraseña anterior deja de funcionar inmediatamente y el nuevo código se
 encola. El usuario completa el cambio mediante
-`/api/auth/restablecer-password`.
+`/api/auth/reset-password`.
 
 #### RF-CA-22 — cambio autenticado
 
 ```powershell
 $cambio = @{ passwordActual = 'abc12345'; nuevapassword = 'nueva12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/cambiar-password `
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/change-password `
   -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" } `
   -Body $cambio -ContentType 'application/json'
 ```
@@ -968,7 +968,7 @@ rutas administrativas. Obtén el token del Administrador y sigue.
 
 ```powershell
 $adminHeaders = @{ Authorization = "Bearer <token-del-administrador>" }
-Invoke-RestMethod -Uri 'http://localhost:5243/api/admin/usuarios' `
+Invoke-RestMethod -Uri 'http://localhost:5243/api/admin/users' `
   -Headers $adminHeaders
 ```
 
@@ -999,7 +999,7 @@ administrativa, sin depender de ninguna interfaz:
 
 ```powershell
 Invoke-WebRequest `
-  -Uri 'http://localhost:5243/api/admin/usuarios' `
+  -Uri 'http://localhost:5243/api/admin/users' `
   -Headers @{ Authorization = 'Bearer <token-del-estandar>' }
 ```
 
@@ -1012,7 +1012,7 @@ Usa el `id` de otro usuario obtenido del listado:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/role' `
+  -Uri 'http://localhost:5243/api/admin/users/<id>/role' `
   -Method Post -Headers $adminHeaders -ContentType 'application/json' `
   -Body '{"role":"Administrador"}'
 ```
@@ -1025,11 +1025,11 @@ manualmente.
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/desactivar' `
+  -Uri 'http://localhost:5243/api/admin/users/<id>/deactivate' `
   -Method Post -Headers $adminHeaders
 
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/usuarios/<id>/reactivar' `
+  -Uri 'http://localhost:5243/api/admin/users/<id>/reactivate' `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1042,7 +1042,7 @@ operación de status produce `400`, no un `500`.
 #### RF-NOT-08 — la operación no necesita servidor de email
 
 Deja el email sin configurar y comprueba que encolar funciona igual. Una fila
-nace en `Pendiente` sin que ninguna operación abra una conexión SMTP.
+nace en `Pending` sin que ninguna operación abra una conexión SMTP.
 
 ```sql
 SELECT status, attempts FROM not_email_queue ORDER BY created_at_utc DESC;
@@ -1180,24 +1180,24 @@ del módulo Business.
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `POST` | `/api/auth/register` | Registra un usuario y encola el email de activación. Responde `202`. |
-| `POST` | `/api/auth/reenviar-activacion` | Reenvía el enlace. La respuesta es idéntica exista o no el email. |
+| `POST` | `/api/auth/resend-activation` | Reenvía el enlace. La respuesta es idéntica exista o no el email. |
 | `GET` | `/activate?token=<valor>` | Activa la cuenta con el token del enlace. |
 | `POST` | `/api/auth/login` | Devuelve el token de sesión en el body de la respuesta. |
 | `POST` | `/api/auth/logout` | Cierra la sesión del token que llega en la cabecera. Responde `204` siempre. |
-| `POST` | `/api/auth/recuperacion` | Encola un código de recuperación. Responde igual exista o no el email. |
-| `POST` | `/api/auth/restablecer-password` | Consume el código y establece una contraseña nueva. |
-| `POST` | `/api/auth/cambiar-password` | Cambia la contraseña propia y exige la contraseña actual. |
+| `POST` | `/api/auth/recovery` | Encola un código de recuperación. Responde igual exista o no el email. |
+| `POST` | `/api/auth/reset-password` | Consume el código y establece una contraseña nueva. |
+| `POST` | `/api/auth/change-password` | Cambia la contraseña propia y exige la contraseña actual. |
 | `GET` | `/me` | Nombre, email y role del usuario autenticado. Exige `Authorization: Bearer <token>`. |
 
 ### Endpoints de administración
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `GET` | `/api/admin/usuarios` | Lista usuarios con role y status. Exige Administrador. |
-| `POST` | `/api/admin/usuarios/{id}/role` | Cambia el role de otro usuario. Exige Administrador. |
-| `POST` | `/api/admin/usuarios/{id}/desactivar` | Desactiva otro usuario e invalida sus sesiones. Exige Administrador. |
-| `POST` | `/api/admin/usuarios/{id}/reactivar` | Reactiva otro usuario. Exige Administrador. |
-| `POST` | `/api/admin/usuarios/{id}/forzar-restablecimiento` | Invalida la contraseña anterior y encola un código nuevo. Exige Administrador. |
+| `GET` | `/api/admin/users` | Lista usuarios con role y status. Exige Administrador. |
+| `POST` | `/api/admin/users/{id}/role` | Cambia el role de otro usuario. Exige Administrador. |
+| `POST` | `/api/admin/users/{id}/deactivate` | Desactiva otro usuario e invalida sus sesiones. Exige Administrador. |
+| `POST` | `/api/admin/users/{id}/reactivate` | Reactiva otro usuario. Exige Administrador. |
+| `POST` | `/api/admin/users/{id}/force-reset` | Invalida la contraseña anterior y encola un código nuevo. Exige Administrador. |
 
 ### Esquema de la base de datos
 
