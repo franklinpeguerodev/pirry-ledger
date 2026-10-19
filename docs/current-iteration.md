@@ -23,7 +23,7 @@ Deliver three things at the tag `asignacion-2`: the Permissions management piece
 | Cross-cutting design | RD-04, RD-06, RD-07, RD-09, RD-12 |
 | Unit test suite on the piece (valid transition, forbidden transition) | assignment section 1.2 |
 | README: how to trigger each RF-GP criterion, and a section titled exactly `Pruebas` | assignment sections 1.1 and 1.2 |
-| Logbook `docs/bitacora-asignacion-2.md` | assignment section 1.3 |
+| Logbook `docs/bitacoras/bitacora-asignacion-2.md` | assignment section 1.3 |
 
 ## Out of scope (do not build)
 
@@ -65,7 +65,11 @@ Deliver three things at the tag `asignacion-2`: the Permissions management piece
 
 ## Logbook
 
-File: `docs/bitacora-asignacion-2.md`, directly in `docs/` (the assignment fixes the path and it must be inside the tag). It documents at least one real task of this assignment delegated to the agent: what was asked, what it returned, and at least one case where the agent was wrong, how it was detected and how it was corrected, with evidence of the real session. Nothing is invented and nothing is reused from Asignación 1. The agent drafts each entry; Franklin reviews it before it is pushed.
+File: `docs/bitacoras/bitacora-asignacion-2.md`.
+
+> Note: the assignment brief fixes the path as `docs/bitacora-asignacion-2.md` directly inside `docs/`. Before the tag `asignacion-2` is created, the file must be moved to that path with `git mv`, unless Franklin confirms with the professor that `docs/bitacoras/` is acceptable.
+
+It documents at least one real task of this assignment delegated to the agent: what was asked, what it returned, and at least one case where the agent was wrong, how it was detected and how it was corrected, with evidence of the real session. Nothing is invented and nothing is reused from Asignación 1. The agent drafts each entry; Franklin reviews it before it is pushed.
 
 ## Definition of done
 
@@ -78,7 +82,7 @@ File: `docs/bitacora-asignacion-2.md`, directly in `docs/` (the assignment fixes
 
 ## How it will be checked
 
-The repo is cloned and `asignacion-2` checked out; the README is followed to the letter. Then: create, approve, reject with a reason and approve twice a request; run the command of the `Pruebas` section as written; read the valid-transition and forbidden-transition tests (what they prepare, execute and verify); read `docs/bitacora-asignacion-2.md`.
+The repo is cloned and `asignacion-2` checked out; the README is followed to the letter. Then: create, approve, reject with a reason and approve twice a request; run the command of the `Pruebas` section as written; read the valid-transition and forbidden-transition tests (what they prepare, execute and verify); read `docs/bitacoras/bitacora-asignacion-2.md`.
 
 ## Delivered earlier
 
