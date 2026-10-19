@@ -56,9 +56,9 @@
 # correo es el que asumen los comentarios de administración: $[0] el estándar,
 # $[1] el administrador. Nunca pongas aquí una cuenta real tuya: esta sección
 # desactiva, cambia el rol y bloquea esa cuenta durante la corrida.
-@nombre = Franklin Junior
-@correo = juniorpujol0248@gmail.com
-@contrasena = abc123456
+@nombre = Ana
+@correo = ana@ejemplo.com
+@contrasena = <contrasena-de-prueba>
 
 # Administrador creado por la semilla (README, "El primer Administrador"). Sus
 # valores viven en tu `.env` (PIRRY_LEDGER_FIRST_ADMIN_EMAIL y
@@ -67,8 +67,8 @@
 # compartido, ni siquiera en un comentario de este archivo.
 # Cuidado: un valor equivocado aquí cuenta como intento fallido, y cinco de
 # ellos bloquean la cuenta durante quince minutos (RF-CA-19).
-@correoAdmin = franklinpeguero1.dev@gmail.com
-@contrasenaAdmin = Jr@17259020Pirry
+@correoAdmin = administrador@ejemplo.com
+@contrasenaAdmin = <contrasena-del-administrador>
 
 # Respuestas que deben ser idénticas exista o no la cuenta (RF-CA-09, RF-CA-17):
 # una cuenta inexistente y una dirección mal formada.
@@ -77,7 +77,7 @@
 
 # Contraseña que fijan los flujos de recuperación. Debe cumplir RF-CA-14: 8+
 # caracteres con letras y números.
-@contrasenaNueva = abc123456
+@contrasenaNueva = <contrasena-nueva-de-prueba>
 
 # --- Valores de las pausas manuales -------------------------------------------
 # PAUSA 1 (token de activación) y PAUSA 2 (código de recuperación) no pueden
