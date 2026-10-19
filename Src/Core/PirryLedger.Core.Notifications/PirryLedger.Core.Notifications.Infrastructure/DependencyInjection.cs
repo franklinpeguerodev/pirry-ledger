@@ -1,7 +1,9 @@
+using PirryLedger.Core.Notifications.Application;
+using PirryLedger.Core.Notifications.Domain.Entities;
+using PirryLedger.Core.Notifications.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Core.Contracts.Notifications;
-using PirryLedger.Core.Notifications.Application;
 
 namespace PirryLedger.Core.Notifications.Infrastructure;
 
@@ -12,18 +14,18 @@ public static class DependencyInjection
     public static IServiceCollection AddNotifications(
         this IServiceCollection services,
         string connectionString,
-        SmtpConfiguracion smtp)
+        SmtpConfiguration smtp)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-        services.AddDbContext<NotificationsDbContext>(opciones =>
-            opciones.UseNpgsql(connectionString));
+        services.AddDbContext<NotificationsDbContext>(options =>
+            options.UseNpgsql(connectionString));
 
         services.AddSingleton(smtp);
         services.AddSingleton<IEmailTransporter, MailKitEmailTransporter>();
-        services.AddScoped<ICorreoEnColaRepository, CorreoEnColaRepository>();
+        services.AddScoped<IEmailQueueRepository, EmailQueueRepository>();
         services.AddScoped<IEmailQueue, EmailQueue>();
-        services.AddScoped<ProcesarColaDeCorreo>();
+        services.AddScoped<ProcessEmailQueue>();
 
         return services;
     }

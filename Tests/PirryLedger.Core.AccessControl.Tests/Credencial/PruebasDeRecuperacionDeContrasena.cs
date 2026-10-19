@@ -1,5 +1,8 @@
+using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
-using PirryLedger.Core.AccessControl.Domain;
+using PirryLedger.Core.AccessControl.Domain.Entities;
+using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Contracts.Notifications;
 using Xunit;
 
@@ -10,84 +13,84 @@ public sealed class PruebasDeRecuperacionDeContrasena
     [Fact]
     public async Task SolicitudDesconocidaYConocidaRespondenIgual()
     {
-        var reloj = new RelojFalso(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc));
-        var usuarios = new UsuarioEnMemoria();
-        var cola = new ColaEnMemoria();
+        var Clock = new FakeClock(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc));
+        var Users = new FakeUserRepository();
+        var queue = new InMemoryEmailQueue();
         var caso = new PasswordRecovery(
-            usuarios,
-            new CodigosEnMemoria(),
-            cola,
-            reloj,
-            new HasherDePrueba(),
+            Users,
+            new InMemoryRecoveryCodeRepository(),
+            queue,
+            Clock,
+            new FakePasswordHasher(),
             TimeSpan.FromMinutes(15));
 
         await caso.RequestAsync("no-existe@ejemplo.com");
-        usuarios.Crear("Ana", "ana@ejemplo.com", "old", reloj.UtcNow, activo: true);
+        Users.Create("Ana", "ana@ejemplo.com", "old", Clock.UtcNow, active: true);
         await caso.RequestAsync("ana@ejemplo.com");
 
-        Assert.Single(cola.Correos);
-        Assert.Contains("15 minutos", cola.Correos[0].Cuerpo);
+        Assert.Single(queue.Emails);
+        Assert.Contains("15 minutos", queue.Emails[0].Body);
     }
 
     [Fact]
     public async Task CodigoEsDeUnSoloUsoYExpiraEnQuinceMinutos()
     {
-        var reloj = new RelojFalso(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc));
-        var usuarios = new UsuarioEnMemoria();
-        var usuario = usuarios.Crear("Ana", "ana@ejemplo.com", "old", reloj.UtcNow, activo: true);
-        var codigos = new CodigosEnMemoria();
-        var cola = new ColaEnMemoria();
-        var caso = new PasswordRecovery(usuarios, codigos, cola, reloj, new HasherDePrueba(), TimeSpan.FromMinutes(15));
+        var Clock = new FakeClock(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc));
+        var Users = new FakeUserRepository();
+        var user = Users.Create("Ana", "ana@ejemplo.com", "old", Clock.UtcNow, active: true);
+        var codes = new InMemoryRecoveryCodeRepository();
+        var queue = new InMemoryEmailQueue();
+        var caso = new PasswordRecovery(Users, codes, queue, Clock, new FakePasswordHasher(), TimeSpan.FromMinutes(15));
 
-        await caso.RequestAsync(usuario.Correo);
-        var codigo = cola.Correos[0].Cuerpo.Split('\n', StringSplitOptions.TrimEntries)
-            .First(line => line.Length == OneTimeCodeGenerator.LongitudEnBytes * 2);
+        await caso.RequestAsync(user.Email);
+        var Code = queue.Emails[0].Body.Split('\n', StringSplitOptions.TrimEntries)
+            .First(line => line.Length == OneTimeCodeGenerator.LengthInBytes * 2);
 
-        await caso.CompleteAsync(codigo, "new12345");
-        await Assert.ThrowsAsync<RecoveryRejectedException>(() => caso.CompleteAsync(codigo, "other123"));
+        await caso.CompleteAsync(Code, "new12345");
+        await Assert.ThrowsAsync<RecoveryRejectedException>(() => caso.CompleteAsync(Code, "other123"));
 
-        reloj.Avanzar(TimeSpan.FromMinutes(15));
-        await Assert.ThrowsAsync<RecoveryRejectedException>(() => caso.CompleteAsync(codigo, "other123"));
+        Clock.Advance(TimeSpan.FromMinutes(15));
+        await Assert.ThrowsAsync<RecoveryRejectedException>(() => caso.CompleteAsync(Code, "other123"));
     }
 
-    private sealed class ColaEnMemoria : IEmailQueue
+    private sealed class InMemoryEmailQueue : IEmailQueue
     {
-        public List<QueuedEmail> Correos { get; } = [];
+        public List<QueuedEmail> Emails { get; } = [];
 
         public Task EnqueueAsync(QueuedEmail email, CancellationToken cancellationToken = default)
         {
-            Correos.Add(email);
+            Emails.Add(email);
             return Task.CompletedTask;
         }
     }
 
-    private sealed class CodigosEnMemoria : IRecoveryCodeRepository
+    private sealed class InMemoryRecoveryCodeRepository : IRecoveryCodeRepository
     {
-        private readonly List<CodigoRecuperacion> _codes = [];
+        private readonly List<RecoveryCode> _codes = [];
 
-        public Task<CodigoRecuperacion?> BuscarPorHashAsync(string hashDelCodigo, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_codes.FirstOrDefault(code => code.HashDelCodigo == hashDelCodigo));
+        public Task<RecoveryCode?> FindByHashAsync(string codeHash, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_codes.FirstOrDefault(code => code.CodeHash == codeHash));
 
-        public Task InvalidarPendientesAsync(Guid usuarioId, CancellationToken cancellationToken = default)
+        public Task InvalidatePendingAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            _codes.RemoveAll(code => code.UsuarioId == usuarioId && !code.EstaUsado);
+            _codes.RemoveAll(code => code.UserId == userId && !code.IsUsed);
             return Task.CompletedTask;
         }
 
-        public Task GuardarAsync(CodigoRecuperacion codigo, CancellationToken cancellationToken = default)
+        public Task SaveAsync(RecoveryCode code, CancellationToken cancellationToken = default)
         {
-            _codes.RemoveAll(existing => existing.Id == codigo.Id);
-            _codes.Add(codigo);
+            _codes.RemoveAll(existing => existing.Id == code.Id);
+            _codes.Add(code);
             return Task.CompletedTask;
         }
     }
 
-    private sealed class HasherDePrueba : IPasswordHasher
+    private sealed class FakePasswordHasher : IPasswordHasher
     {
-        public string Hash(string contrasena) => $"hash:{contrasena}";
+        public string Hash(string password) => $"hash:{password}";
 
-        public bool Verificar(string contrasena, string hashGuardado) => hashGuardado == Hash(contrasena);
+        public bool Verify(string password, string storedHash) => storedHash == Hash(password);
 
-        public string CrearHashSenaluelo() => "dummy";
+        public string CreateDummyHash() => "dummy";
     }
 }

@@ -1,55 +1,58 @@
+using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
-using PirryLedger.Core.AccessControl.Domain;
+using PirryLedger.Core.AccessControl.Domain.Entities;
+using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.AccessControl.Infrastructure;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 
 // RF-CA-06: 401 y 403 son cosas distintas y el punto de validacion las
 // distingue.
 //
-// No es un detalle de codigo de estado: un 401 dice "no se quien eres, identificate"
+// No es un detalle de Code de Status: un 401 dice "no se quien eres, identificate"
 // y un 403 dice "se quien eres y no te alcanza". Confundirlos hace que el
-// frontend pida la contrasena a un usuario que ya la puso bien, o que le oculte
-// una operacion que si podria hacer.
+// frontend pida la Password a un user que ya la puso bien, o que le oculte
+// una Operation que si podria hacer.
 public sealed class PruebasDeRolYEstado
 {
     private static readonly TimeSpan VentanaDeSesion = TimeSpan.FromHours(8);
 
-    private static async Task<EscenarioDeSesion> EscenarioConRolAsync(Rol rol)
+    private static async Task<SessionScenario> EscenarioConRolAsync(Role role)
     {
-        var ahora = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-        var escenario = new EscenarioDeSesion(ahora);
+        var utcNow = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        var scenario = new SessionScenario(utcNow);
 
-        // El escenario ya trae un Estandar. Se anade un segundo usuario con el rol
-        // que interesa, para no tener que construir el escenario entero otra vez.
-        escenario.Usuarios.Crear(
-            "Con Rol", "conrol@ejemplo.com", escenario.Hasher.Hash("abc12345"), ahora, activo: true, rol: rol);
+        // El scenario ya trae un Standard. Se anade un segundo user con el Role
+        // que interesa, para no tener que construir el scenario entero otra vez.
+        scenario.Users.Create(
+            "Con Role", "conrol@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true, role: role);
 
-        return escenario;
+        return scenario;
     }
 
     [Fact]
     public async Task RolSuficientePasaYDevuelveElUsuario()
     {
-        var escenario = await EscenarioConRolAsync(Rol.Administrador);
-        var token = await escenario.Entrar.EjecutarAsync("conrol@ejemplo.com", "abc12345");
+        var scenario = await EscenarioConRolAsync(Role.Administrator);
+        var token = await scenario.Login.ExecuteAsync("conrol@ejemplo.com", "abc12345");
 
-        var usuario = await escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador);
+        var user = await scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator);
 
-        Assert.Equal(Rol.Administrador, usuario.Rol);
-        Assert.Equal("conrol@ejemplo.com", usuario.Correo);
+        Assert.Equal(Role.Administrator, user.Role);
+        Assert.Equal("conrol@ejemplo.com", user.Email);
     }
 
     [Fact]
     public async Task RolInsuficienteLanzaLaExcepcionDeRolYNoLaDeSesion()
     {
-        var escenario = await EscenarioConRolAsync(Rol.Estandar);
-        var token = await escenario.Entrar.EjecutarAsync("conrol@ejemplo.com", "abc12345");
+        var scenario = await EscenarioConRolAsync(Role.Standard);
+        var token = await scenario.Login.ExecuteAsync("conrol@ejemplo.com", "abc12345");
 
-        // Este es el 403. Y NO es SesionInvalidaException, que es el 401: por eso
-        // estan separadas, para que el endpoint elija el codigo solo mirando el
-        // tipo de la excepcion.
-        var error = await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador));
+        // Este es el 403. Y NO es InvalidSessionException, que es el 401: por eso
+        // estan separadas, para que el endpoint elija el Code solo mirando el
+        // Type de la excepcion.
+        var error = await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
 
         Assert.NotNull(error);
     }
@@ -57,89 +60,89 @@ public sealed class PruebasDeRolYEstado
     [Fact]
     public async Task SinSesionEsUn401YConRolInsuficienteEsUn403()
     {
-        var escenario = await EscenarioConRolAsync(Rol.Estandar);
+        var scenario = await EscenarioConRolAsync(Role.Standard);
 
-        var sinToken = await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarConRolAsync(string.Empty, Rol.Administrador));
+        var sinToken = await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(string.Empty, Role.Administrator));
 
-        var token = await escenario.Entrar.EjecutarAsync("conrol@ejemplo.com", "abc12345");
-        var rolInsuficiente = await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador));
+        var token = await scenario.Login.ExecuteAsync("conrol@ejemplo.com", "abc12345");
+        var rolInsuficiente = await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
 
         // Dos tipos distintos a proposito: el endpoint traduce cada uno a su
-        // codigo. Si fueran el mismo tipo, habria que adivinar cual de los dos
+        // Code. Si fueran el mismo Type, habria que adivinar cual de los dos
         // es y el 403 se perderia.
-        Assert.IsType<SesionInvalidaException>(sinToken);
-        Assert.IsType<RolInsuficienteException>(rolInsuficiente);
+        Assert.IsType<InvalidSessionException>(sinToken);
+        Assert.IsType<InsufficientRoleException>(rolInsuficiente);
         Assert.NotEqual(sinToken.GetType(), rolInsuficiente.GetType());
     }
 
     [Fact]
     public async Task ElRolSeCompruebaDESPUESDeValidarLaSesion()
     {
-        var escenario = await EscenarioConRolAsync(Rol.Estandar);
-        var token = await escenario.Entrar.EjecutarAsync("conrol@ejemplo.com", "abc12345");
+        var scenario = await EscenarioConRolAsync(Role.Standard);
+        var token = await scenario.Login.ExecuteAsync("conrol@ejemplo.com", "abc12345");
 
-        await escenario.Salir.EjecutarAsync(token);
+        await scenario.Logout.ExecuteAsync(token);
 
-        // Sesion cerrada y rol insuficiente a la vez. Gana el 401, porque sin
-        // sesion valida no hay nada que saber de roles: decir "no tienes
+        // session cerrada y Role insuficiente a la vez. Gana el 401, porque sin
+        // session valida no hay nada que saber de roles: decir "no tienes
         // permisos" confirmaria que el token fue real alguna vez.
-        var error = await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador));
+        var error = await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
 
-        Assert.Equal(typeof(SesionInvalidaException), error.GetType());
+        Assert.Equal(typeof(InvalidSessionException), error.GetType());
     }
 
     [Fact]
     public async Task CambiarDeRolNoInvalidaLaSesion()
     {
-        var ahora = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-        var escenario = new EscenarioDeSesion(ahora);
-        var usuario = escenario.Usuarios.Crear(
-            "Cambio Rol", "cambiorol@ejemplo.com", escenario.Hasher.Hash("abc12345"), ahora, activo: true, rol: Rol.Administrador);
+        var utcNow = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        var scenario = new SessionScenario(utcNow);
+        var user = scenario.Users.Create(
+            "Cambio Role", "cambiorol@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true, role: Role.Administrator);
 
-        var token = await escenario.Entrar.EjecutarAsync("cambiorol@ejemplo.com", "abc12345");
+        var token = await scenario.Login.ExecuteAsync("cambiorol@ejemplo.com", "abc12345");
 
-        // Con rol de Administrador, entra.
-        await escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador);
+        // Con Role de Administrator, entra.
+        await scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator);
 
-        usuario.CambiarRol(Rol.Estandar);
+        user.ChangeRole(Role.Standard);
 
-        // Tras el cambio, la sesion sigue viva (no se toco CredencialVersion),
-        // pero ya no alcanza para lo de Administrador.
-        await escenario.Autenticar.EjecutarAsync(token);
-        await Assert.ThrowsAsync<RolInsuficienteException>(
-            () => escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador));
+        // Tras el cambio, la session sigue viva (no se toco CredentialVersion),
+        // pero ya no alcanza para lo de Administrator.
+        await scenario.Authenticate.ExecuteAsync(token);
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
     }
 
     [Fact]
     public async Task HaySesionValidaEsTrueYFalseSinSesionNiTrasCerrar()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        Assert.True(await escenario.Autenticar.HaySesionValidaAsync(token));
+        Assert.True(await scenario.Authenticate.HasValidSessionAsync(token));
 
-        await escenario.Salir.EjecutarAsync(token);
+        await scenario.Logout.ExecuteAsync(token);
 
-        Assert.False(await escenario.Autenticar.HaySesionValidaAsync(token));
+        Assert.False(await scenario.Authenticate.HasValidSessionAsync(token));
     }
 
     [Fact]
     public async Task DesactivarElUsuarioTambienCortaElAccesoConRol()
     {
-        var ahora = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
-        var escenario = new EscenarioDeSesion(ahora);
-        var usuario = escenario.Usuarios.Crear(
-            "Se Desactiva", "sedesactiva@ejemplo.com", escenario.Hasher.Hash("abc12345"), ahora, activo: true, rol: Rol.Administrador);
+        var utcNow = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        var scenario = new SessionScenario(utcNow);
+        var user = scenario.Users.Create(
+            "Se Desactiva", "sedesactiva@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true, role: Role.Administrator);
 
-        var token = await escenario.Entrar.EjecutarAsync("sedesactiva@ejemplo.com", "abc12345");
-        await escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador);
+        var token = await scenario.Login.ExecuteAsync("sedesactiva@ejemplo.com", "abc12345");
+        await scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator);
 
-        usuario.Desactivar();
+        user.Deactivate();
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarConRolAsync(token, Rol.Administrador));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
     }
 }

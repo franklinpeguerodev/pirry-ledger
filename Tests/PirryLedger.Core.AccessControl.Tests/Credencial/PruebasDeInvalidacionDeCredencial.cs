@@ -1,4 +1,8 @@
+using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
+using PirryLedger.Core.AccessControl.Domain.Entities;
+using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.AccessControl.Infrastructure;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 
@@ -6,8 +10,8 @@ namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 //
 // El criterio de aceptacion de RF-CA-18 es "la credencial cerrada deja de servir:
 // usarla despues se rechaza". Estas pruebas comprueban las cuatro maneras de
-// invalidarla que enumera current-iteration.md: cerrar sesion, cambiar la
-// contrasena, restablecerla y desactivar al usuario.
+// invalidarla que enumera current-iteration.md: Close session, cambiar la
+// Password, restablecerla y Deactivate al user.
 public sealed class PruebasDeInvalidacionDeCredencial
 {
     private static readonly TimeSpan VentanaDeSesion = TimeSpan.FromHours(8);
@@ -15,144 +19,144 @@ public sealed class PruebasDeInvalidacionDeCredencial
     [Fact]
     public async Task UnaSesionValidaPermiteConsultarQuienEres()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        var usuario = await escenario.Autenticar.EjecutarAsync(token);
+        var user = await scenario.Authenticate.ExecuteAsync(token);
 
-        Assert.Equal(escenario.Usuario.Id, usuario.Id);
-        Assert.Equal("empleado@ejemplo.com", usuario.Correo);
+        Assert.Equal(scenario.User.Id, user.Id);
+        Assert.Equal("empleado@ejemplo.com", user.Email);
     }
 
     [Fact]
     public async Task CerrarSesionInvalidaEsaCredencial()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        // Antes de cerrar, funciona.
-        await escenario.Autenticar.EjecutarAsync(token);
+        // Antes de Close, funciona.
+        await scenario.Authenticate.ExecuteAsync(token);
 
-        await escenario.Salir.EjecutarAsync(token);
+        await scenario.Logout.ExecuteAsync(token);
 
         // RF-CA-18: usarla despues se rechaza.
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(token));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(token));
     }
 
     [Fact]
     public async Task CerrarSesionNoInvalidaLasSesionesOtrasDelMismoUsuario()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        var tokenMovil = await escenario.AbrirSesionAsync();
-        var tokenPortatil = await escenario.AbrirSesionAsync();
+        var tokenMovil = await scenario.OpenSessionAsync();
+        var tokenPortatil = await scenario.OpenSessionAsync();
 
-        Assert.Equal(2, escenario.Sesiones.Guardadas);
+        Assert.Equal(2, scenario.Sessions.SavedCount);
 
-        await escenario.Salir.EjecutarAsync(tokenMovil);
+        await scenario.Logout.ExecuteAsync(tokenMovil);
 
-        // El portatil sigue abierto: cerrar el movil no echa del otro dispositivo.
-        var usuario = await escenario.Autenticar.EjecutarAsync(tokenPortatil);
-        Assert.Equal(escenario.Usuario.Id, usuario.Id);
+        // El portatil sigue abierto: Close el movil no echa del otro dispositivo.
+        var user = await scenario.Authenticate.ExecuteAsync(tokenPortatil);
+        Assert.Equal(scenario.User.Id, user.Id);
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(tokenMovil));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(tokenMovil));
     }
 
     [Fact]
     public async Task CerrarDosVecesLaMismaSesionNoFalla()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        await escenario.Salir.EjecutarAsync(token);
+        await scenario.Logout.ExecuteAsync(token);
 
-        // Dos pestanas cerrando a la vez no es un fallo del usuario (RF-CA-18).
-        await escenario.Salir.EjecutarAsync(token);
+        // Dos pestanas cerrando a la vez no es un failure del user (RF-CA-18).
+        await scenario.Logout.ExecuteAsync(token);
     }
 
     [Fact]
     public async Task UnTokenQueNoExisteSeRechazaSinLanzarErrorDistinto()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync("token-inventado"));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync("token-inventado"));
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(string.Empty));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(string.Empty));
     }
 
     [Fact]
     public async Task CambiarLaContrasenaInvalidaLasCredencialesYaEmitidas()
     {
-        var escenario = new EscenarioDeSesion();
-        var tokenAntiguo = await escenario.AbrirSesionAsync();
-        var cambioUtc = escenario.Reloj.UtcNow;
+        var scenario = new SessionScenario();
+        var tokenAntiguo = await scenario.OpenSessionAsync();
+        var cambioUtc = scenario.Clock.UtcNow;
 
-        // RF-CA-12: el cambio sube CredencialVersion.
-        escenario.Usuario.CambiarContrasena(escenario.Hasher.Hash("nueva12345"), cambioUtc);
+        // RF-CA-12: el cambio sube CredentialVersion.
+        scenario.User.ChangePassword(scenario.Hasher.Hash("nueva12345"), cambioUtc);
 
-        Assert.Equal(cambioUtc, escenario.Usuario.ContrasenaCambiadaUtc);
+        Assert.Equal(cambioUtc, scenario.User.PasswordChangedAtUtc);
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(tokenAntiguo));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(tokenAntiguo));
     }
 
     [Fact]
     public async Task RestablecerLaContrasenaInvalidaLasCredencialesYaEmitidas()
     {
-        var escenario = new EscenarioDeSesion();
-        var tokenAntiguo = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var tokenAntiguo = await scenario.OpenSessionAsync();
 
         // RF-CA-13: el restablecimiento forzado pasa por el mismo camino que un
         // cambio normal, asi que sube la version igual.
-        escenario.Usuario.CambiarContrasena(escenario.Hasher.Hash("restablecida1"), escenario.Reloj.UtcNow);
+        scenario.User.ChangePassword(scenario.Hasher.Hash("restablecida1"), scenario.Clock.UtcNow);
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(tokenAntiguo));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(tokenAntiguo));
 
-        // Y con la contrasena nueva si se puede entrar de nuevo.
-        var tokenNuevo = await escenario.Entrar.EjecutarAsync(escenario.Correo, "restablecida1");
-        await escenario.Autenticar.EjecutarAsync(tokenNuevo);
+        // Y con la Password nueva si se puede Login de nuevo.
+        var tokenNuevo = await scenario.Login.ExecuteAsync(scenario.Email, "restablecida1");
+        await scenario.Authenticate.ExecuteAsync(tokenNuevo);
     }
 
     [Fact]
     public async Task DesactivarAlUsuarioInvalidaSuSesionAbierta()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        // RF-CA-20: desactivar con una sesion abierta la tira.
-        escenario.Usuario.Desactivar();
+        // RF-CA-20: Deactivate con una session abierta la tira.
+        scenario.User.Deactivate();
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(token));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(token));
     }
 
     [Fact]
     public async Task UnaSesionVencidaSeRechaza()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
         // Todavia no ha vencido.
-        await escenario.Autenticar.EjecutarAsync(token);
+        await scenario.Authenticate.ExecuteAsync(token);
 
-        // Se pasa el vencimiento absoluto de 8 horas, sin esperar: el reloj es
+        // Se pasa el vencimiento absoluto de 8 horas, sin esperar: el Clock es
         // inyectable (RD-11).
-        escenario.Reloj.Avanzar(VentanaDeSesion + TimeSpan.FromMinutes(1));
+        scenario.Clock.Advance(VentanaDeSesion + TimeSpan.FromMinutes(1));
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(token));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(token));
     }
 
     [Fact]
     public async Task UnaSesionNoSeRenuevaAlUsarla()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
         // Decision del ADR: vencimiento absoluto, no deslizante. Aunque se use
         // sin parar, no se estira.
@@ -161,38 +165,38 @@ public sealed class PruebasDeInvalidacionDeCredencial
         // las 8 horas.
         for (var i = 0; i < 23; i++)
         {
-            escenario.Reloj.Avanzar(TimeSpan.FromMinutes(20));
-            await escenario.Autenticar.EjecutarAsync(token);
+            scenario.Clock.Advance(TimeSpan.FromMinutes(20));
+            await scenario.Authenticate.ExecuteAsync(token);
         }
 
-        // Se pasa de las 8 horas (490 minutos) sin haber cerrado sesion. Con
+        // Se pasa de las 8 horas (490 minutos) sin haber cerrado session. Con
         // vencimiento deslizante esto seguiria vivo; con absoluto, no.
-        escenario.Reloj.Avanzar(TimeSpan.FromMinutes(30));
+        scenario.Clock.Advance(TimeSpan.FromMinutes(30));
 
-        await Assert.ThrowsAsync<SesionInvalidaException>(
-            () => escenario.Autenticar.EjecutarAsync(token));
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(token));
     }
 
     [Fact]
     public async Task ElTokenNoSeGuardaEnClaroEnLaBase()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        var sesion = escenario.Sesiones.Buscar(SessionTokenGenerator.CalcularHash(token));
+        var session = scenario.Sessions.Find(SessionTokenGenerator.CalculateHash(token));
 
-        Assert.NotNull(sesion);
-        Assert.NotEqual(token, sesion.HashDelToken);
-        Assert.DoesNotContain(token, sesion.HashDelToken, StringComparison.Ordinal);
+        Assert.NotNull(session);
+        Assert.NotEqual(token, session.TokenHash);
+        Assert.DoesNotContain(token, session.TokenHash, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task ElTokenEsDistintoEnCadaInicioDeSesion()
     {
-        var escenario = new EscenarioDeSesion();
+        var scenario = new SessionScenario();
 
-        var primero = await escenario.AbrirSesionAsync();
-        var segundo = await escenario.AbrirSesionAsync();
+        var primero = await scenario.OpenSessionAsync();
+        var segundo = await scenario.OpenSessionAsync();
 
         Assert.NotEqual(primero, segundo);
     }
@@ -200,10 +204,10 @@ public sealed class PruebasDeInvalidacionDeCredencial
     [Fact]
     public async Task ElTokenNoUsaCaracteresQueNoViajenEnUnaCabecera()
     {
-        var escenario = new EscenarioDeSesion();
-        var token = await escenario.AbrirSesionAsync();
+        var scenario = new SessionScenario();
+        var token = await scenario.OpenSessionAsync();
 
-        // base64url: sin '+', sin '/' y sin '='. Con la base64 estandar el token
+        // base64url: sin '+', sin '/' y sin '='. Con la base64 Standard el token
         // no podria ir en Authorization sin escapar.
         Assert.DoesNotContain('+', token);
         Assert.DoesNotContain('/', token);

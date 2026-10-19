@@ -1,184 +1,186 @@
+using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
-using PirryLedger.Core.AccessControl.Domain;
+using PirryLedger.Core.AccessControl.Domain.Entities;
+using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 
-// El seed del primer Administrador (docs/adr/002-primer-administrator.md).
+// El seed del primer Administrator (docs/adr/002-primer-administrator.md).
 //
 // Estas pruebas cubren los tres motivos por los que un seed puede ser
-// peligroso: que se ejecute dos veces, que convierta en Administrador una cuenta
-// ajena por error, y que no respete la politica de contrasena.
+// peligroso: que se ejecute dos veces, que convierta en Administrator una cuenta
+// ajena por error, y que no respete la politica de Password.
 public sealed class PruebasDelPrimerAdministrador
 {
     private const string ContrasenaValida = "abc12345";
     private const string CorreoDelAdministrador = "admin@ejemplo.com";
 
-    private static readonly DateTime Ahora = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime utcNow = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private static (SeedFirstAdministrator Sembrar, UsuarioEnMemoria Usuarios, Argon2idPasswordHasher Hasher) Escenario()
+    private static (SeedFirstAdministrator Sembrar, FakeUserRepository Users, Argon2idPasswordHasher Hasher) scenario()
     {
-        var usuarios = new UsuarioEnMemoria();
-        var reloj = new RelojFalso(Ahora);
+        var Users = new FakeUserRepository();
+        var Clock = new FakeClock(utcNow);
 
         // El Argon2id real, como en las demas pruebas: si el seed usara otro
         // hasher, estas pruebas no lo detectarian.
-        var hasher = new Argon2idPasswordHasher(new ParametrosDeArgon2(
-            MemoriaKb: 19456,
-            Iteraciones: 2,
-            Paralelismo: 1));
+        var hasher = new Argon2idPasswordHasher(new Argon2Parameters(
+            MemoryKb: 19456,
+            Iterations: 2,
+            Parallelism: 1));
 
-        var sembrar = new SeedFirstAdministrator(usuarios, hasher, reloj);
+        var sembrar = new SeedFirstAdministrator(Users, hasher, Clock);
 
-        return (sembrar, usuarios, hasher);
+        return (sembrar, Users, hasher);
     }
 
     [Fact]
     public async Task CreaUnAdministradorActivo()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        var creado = await sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida);
+        var creado = await sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida);
 
         Assert.True(creado);
 
-        var guardado = await usuarios.BuscarPorCorreoAsync(CorreoDelAdministrador);
+        var guardado = await Users.FindByEmailAsync(CorreoDelAdministrador);
 
         Assert.NotNull(guardado);
-        Assert.Equal(Rol.Administrador, guardado!.Rol);
+        Assert.Equal(Role.Administrator, guardado!.Role);
 
-        // Activo, al contrario que el registro. Sin enlace de activacion no hay
-        // quien lo abra, y activar es operacion de Administrador.
-        Assert.True(guardado.Activo);
+        // Active, al contrario que el registro. Sin enlace de activacion no hay
+        // quien lo abra, y Activate es Operation de Administrator.
+        Assert.True(guardado.Active);
     }
 
     [Fact]
     public async Task LaContrasenaQuedaHasheadaYConSalPropia()
     {
-        var (sembrar, usuarios, hasher) = Escenario();
+        var (sembrar, Users, hasher) = scenario();
 
-        await sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida);
+        await sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida);
 
-        var guardado = await usuarios.BuscarPorCorreoAsync(CorreoDelAdministrador);
+        var guardado = await Users.FindByEmailAsync(CorreoDelAdministrador);
 
-        // RF-CA-02: nunca la contrasena.
-        Assert.NotEqual(ContrasenaValida, guardado!.HashDeContrasena);
-        Assert.StartsWith("$argon2id$", guardado.HashDeContrasena);
+        // RF-CA-02: nunca la Password.
+        Assert.NotEqual(ContrasenaValida, guardado!.PasswordHash);
+        Assert.StartsWith("$argon2id$", guardado.PasswordHash);
 
-        // Sal por usuario (RF-CA-02): dos cuentas con la MISMA contrasena no
+        // Sal por User (RF-CA-02): dos cuentas con la MISMA Password no
         // pueden compartir el valor almacenado.
         //
-        // La segunda cuenta se crea con el registro publico, no con el seed: el
-        // seed ya corrio una vez y por idempotencia no vuelve a crear nada. La
-        // comparacion es entre el hash del Administrador y el de un Estándar con
-        // la misma contrasena, que es donde se ve la sal.
-        usuarios.Crear("Estandar", "estandar@ejemplo.com", hasher.Hash(ContrasenaValida), Ahora, activo: true);
-        var otro = await usuarios.BuscarPorCorreoAsync("estandar@ejemplo.com");
+        // La segunda cuenta se crea con el registro Public, no con el seed: el
+        // seed ya corrio una vez y por idempotencia no vuelve a Create nada. La
+        // comparacion es entre el hash del Administrator y el de un Estándar con
+        // la misma Password, que es donde se ve la sal.
+        Users.Create("Standard", "Standard@ejemplo.com", hasher.Hash(ContrasenaValida), utcNow, active: true);
+        var otro = await Users.FindByEmailAsync("Standard@ejemplo.com");
 
-        Assert.NotEqual(guardado.HashDeContrasena, otro!.HashDeContrasena);
+        Assert.NotEqual(guardado.PasswordHash, otro!.PasswordHash);
 
         // Y el hash verifica de verdad, con el mismo hasher.
-        Assert.True(hasher.Verificar(ContrasenaValida, guardado.HashDeContrasena));
+        Assert.True(hasher.Verify(ContrasenaValida, guardado.PasswordHash));
     }
 
     [Fact]
     public async Task EjecutarloDosvecesNoCreaDosAdministradores()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        var primero = await sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida);
-        var segundo = await sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida);
+        var primero = await sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida);
+        var segundo = await sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida);
 
-        // Es el requisito: arrancar la aplicacion dos veces no puede crear dos
+        // Es el requisito: arrancar la aplicacion dos veces no puede Create dos
         // Administradores.
         Assert.True(primero);
         Assert.False(segundo);
 
-        Assert.True(await usuarios.ExisteAlgunAdministradorAsync());
-        Assert.Single(await usuarios.BuscarTodosLosAdministradoresAsync());
+        Assert.True(await Users.AnyAdministratorExistsAsync());
+        Assert.Single(await Users.FindAllAdministratorsAsync());
     }
 
     [Fact]
     public async Task NoCreaUnSegundoAdministradorAunqueElCorreoSeaDistinto()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        await sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida);
+        await sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida);
 
-        // Mismo caso de uso, otro correo. La idempotencia no compara correos:
-        // pregunta si ya hay un Administrador.
-        var segundo = await sembrar.EjecutarAsync("Otro", "otro@ejemplo.com", ContrasenaValida);
+        // Mismo caso de uso, otro Email. La idempotencia no compara correos:
+        // pregunta si ya hay un Administrator.
+        var segundo = await sembrar.ExecuteAsync("Otro", "otro@ejemplo.com", ContrasenaValida);
 
         Assert.False(segundo);
-        Assert.Null(await usuarios.BuscarPorCorreoAsync("otro@ejemplo.com"));
+        Assert.Null(await Users.FindByEmailAsync("otro@ejemplo.com"));
     }
 
     [Fact]
     public async Task NoPromueveUnaCuentaQueYaExiste()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        // Alguien se registro con ese correo antes de que existiera el seed.
-        usuarios.Crear("Antes", CorreoDelAdministrador, "hash-cualquiera", Ahora, activo: true);
+        // Alguien se registro con ese Email antes de que existiera el seed.
+        Users.Create("Antes", CorreoDelAdministrador, "hash-cualquiera", utcNow, active: true);
 
         // Promover a un Estándar por el camino del seed seria el escalamiento que
         // RF-CA-08 quiere impedir, asi que se rechaza.
         var error = await Assert.ThrowsAsync<FirstAdministratorNotSeededException>(
-            () => sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida));
+            () => sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida));
 
         Assert.NotNull(error);
 
         // La cuenta sigue siendo Estándar: el seed no la toco.
-        var guardado = await usuarios.BuscarPorCorreoAsync(CorreoDelAdministrador);
-        Assert.Equal(Rol.Estandar, guardado!.Rol);
-        Assert.Equal("hash-cualquiera", guardado.HashDeContrasena);
+        var guardado = await Users.FindByEmailAsync(CorreoDelAdministrador);
+        Assert.Equal(Role.Standard, guardado!.Role);
+        Assert.Equal("hash-cualquiera", guardado.PasswordHash);
     }
 
     [Fact]
     public async Task AplicaLaPoliticaDeContrasenaDelRegistro()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        // RF-CA-14 alcanza al seed aunque la contrasena venga de una variable de
-        // entorno y no de un formulario: una contrasena debil en un
-        // Administrador es peor que en un Estándar.
+        // RF-CA-14 alcanza al seed aunque la Password venga de una variable de
+        // entorno y no de un formulario: una Password debil en un
+        // Administrator es peor que en un Estándar.
         await Assert.ThrowsAsync<FirstAdministratorNotSeededException>(
-            () => sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, "corta"));
+            () => sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, "corta"));
 
         // Solo letras y con longitud de sobra: la politica exige las dos cosas,
         // letras y numeros, no una de las dos.
         await Assert.ThrowsAsync<FirstAdministratorNotSeededException>(
-            () => sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, "sololetrasnodigitos"));
+            () => sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, "sololetrasnodigitos"));
 
-        Assert.False(await usuarios.ExisteAlgunAdministradorAsync());
+        Assert.False(await Users.AnyAdministratorExistsAsync());
     }
 
     [Fact]
     public async Task RechazaCorreoMalFormadoYNombreVacio()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
         await Assert.ThrowsAsync<FirstAdministratorNotSeededException>(
-            () => sembrar.EjecutarAsync("Administrador", "no-es-un-correo", ContrasenaValida));
+            () => sembrar.ExecuteAsync("Administrator", "no-es-un-Email", ContrasenaValida));
 
         await Assert.ThrowsAsync<FirstAdministratorNotSeededException>(
-            () => sembrar.EjecutarAsync("   ", CorreoDelAdministrador, ContrasenaValida));
+            () => sembrar.ExecuteAsync("   ", CorreoDelAdministrador, ContrasenaValida));
 
-        Assert.False(await usuarios.ExisteAlgunAdministradorAsync());
+        Assert.False(await Users.AnyAdministratorExistsAsync());
     }
 
     [Fact]
     public async Task LosMensajesNoLlevanElCorreoNiLaContrasena()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        usuarios.Crear("Antes", CorreoDelAdministrador, "hash-cualquiera", Ahora, activo: true);
+        Users.Create("Antes", CorreoDelAdministrador, "hash-cualquiera", utcNow, active: true);
 
         var error = await Assert.ThrowsAsync<FirstAdministratorNotSeededException>(
-            () => sembrar.EjecutarAsync("Administrador", CorreoDelAdministrador, ContrasenaValida));
+            () => sembrar.ExecuteAsync("Administrator", CorreoDelAdministrador, ContrasenaValida));
 
-        // RD-08: el mensaje dice que paso, no con que datos. Este texto sale por
-        // consola al arrancar, asi que no puede llevar el correo.
+        // RD-08: el Message dice que paso, no con que datos. Este texto sale por
+        // consola al arrancar, asi que no puede llevar el Email.
         Assert.DoesNotContain(CorreoDelAdministrador, error.Message);
         Assert.DoesNotContain(ContrasenaValida, error.Message);
     }
@@ -186,36 +188,36 @@ public sealed class PruebasDelPrimerAdministrador
     [Fact]
     public async Task ElCorreoSeNormalizaComoEnElRegistro()
     {
-        var (sembrar, usuarios, _) = Escenario();
+        var (sembrar, Users, _) = scenario();
 
-        await sembrar.EjecutarAsync("Administrador", "  Admin@Ejemplo.COM  ", ContrasenaValida);
+        await sembrar.ExecuteAsync("Administrator", "  Admin@Ejemplo.COM  ", ContrasenaValida);
 
-        // La misma normalizacion que en Usuario.Crear, para que el indice unico
+        // La misma normalizacion que en User.Create, para que el indice unico
         // de RF-CA-01 no tenga dos formas de decidir que dos correos son la misma
         // persona.
-        var guardado = await usuarios.BuscarPorCorreoAsync("admin@ejemplo.com");
+        var guardado = await Users.FindByEmailAsync("admin@ejemplo.com");
         Assert.NotNull(guardado);
-        Assert.Equal("admin@ejemplo.com", guardado!.Correo);
+        Assert.Equal("admin@ejemplo.com", guardado!.Email);
     }
 
     [Fact]
     public void CrearComoAdministradorEsLaSegundaPuertaYElRegistroSigueSiendoEstandar()
     {
-        var ahora = Ahora;
+        var utcNow = DateTime.UtcNow;
 
-        var porRegistro = Usuario.Crear("Registro", "registro@ejemplo.com", "hash", ahora);
-        var porSeed = Usuario.CrearComoAdministrador("Seed", "seed@ejemplo.com", "hash", ahora);
+        var porRegistro = User.Create("Registro", "registro@ejemplo.com", "hash", utcNow);
+        var porSeed = User.CreateAsAdministrator("Seed", "seed@ejemplo.com", "hash", utcNow);
 
         // La puerta publica no cambio: sigue dando Estándar e inactivo, que es lo
         // que exigen RF-CA-15 y RF-CA-04.
-        Assert.Equal(Rol.Estandar, porRegistro.Rol);
-        Assert.False(porRegistro.Activo);
+        Assert.Equal(Role.Standard, porRegistro.Role);
+        Assert.False(porRegistro.Active);
 
-        // Y la nueva puerta no toca CredencialVersion: el Administrador arranca
-        // con las sesiones limpias, sin el numero alterado que habria dejado
-        // Crear seguido de CambiarRol y Activar.
-        Assert.Equal(Rol.Administrador, porSeed.Rol);
-        Assert.True(porSeed.Activo);
-        Assert.Equal(0, porSeed.CredencialVersion);
+        // Y la nueva puerta no toca CredentialVersion: el Administrator arranca
+        // con las Sessions limpias, sin el numero alterado que habria dejado
+        // Create seguido de ChangeRole y Activate.
+        Assert.Equal(Role.Administrator, porSeed.Role);
+        Assert.True(porSeed.Active);
+        Assert.Equal(0, porSeed.CredentialVersion);
     }
 }

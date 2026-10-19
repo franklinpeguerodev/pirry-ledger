@@ -25,7 +25,7 @@ Deliver the first working Core piece, Access control, from registration with ema
 | Passwords (recovery, forced reset, change) | RF-CA-09, 10, 11, 12, 13, 22 |
 | Minimal outgoing mail queue | RF-NOT-08, 09, 12, 13 |
 | Business state machine (structure only) | RF-NEG-03, 04, 05, RD-04 |
-| Cross-cutting design | RD-05, 06, 07, 08, 09, 10 |
+| Cross-cutting design | RD-05, 06, 07, 08, 09, 10, 11, 12 |
 
 ## Out of scope (do not build)
 
