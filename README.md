@@ -214,7 +214,7 @@ Done.
 
 ```
 Acquiring an exclusive lock for migration application. ...
-Applying migration '20261018191419_InitialSchema'.
+Applying migration '20261018213308_InitialSchema'.
 Done.
 ```
 
@@ -1048,7 +1048,7 @@ nace en `Pendiente` sin que ninguna operación abra una conexión SMTP.
 SELECT status, attempts FROM not_email_queue ORDER BY created_at_utc DESC;
 ```
 
-`status = 0` es `Pendiente` y `attempts = 0`.
+`status = 0` es `Pending` y `attempts = 0`.
 
 #### RF-NOT-09 — el envío ocurre en un proceso aparte
 
@@ -1256,7 +1256,7 @@ erDiagram
         string recipient
         string subject
         string body
-        string status
+        int status
         int attempts
         datetime created_at_utc
         datetime sent_at_utc "nullable"
@@ -1269,8 +1269,8 @@ erDiagram
 ```
 
 `password_hash`, `code_hash` y `token_hash` almacenan hashes, no
-valores secretos en claro. `status` de `not_email_queue` usa `Pending`, `Processing` y `Sent` (se
-guarda como texto con `HasConversion<string>`, no como entero).
+valores secretos en claro. `status` de `not_email_queue` usa `0 = Pending`,
+`1 = Processing` y `2 = Sent`.
 
 La tabla `ac_sessions` de esta fase queda así:
 

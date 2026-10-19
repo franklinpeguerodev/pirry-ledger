@@ -19,7 +19,7 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                     recipient = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false),
                     subject = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     body = table.Column<string>(type: "text", nullable: false),
-                    status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    status = table.Column<int>(type: "integer", nullable: false),
                     attempts = table.Column<int>(type: "integer", nullable: false),
                     created_at_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     sent_at_utc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),

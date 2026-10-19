@@ -35,8 +35,6 @@ internal sealed class EmailQueueItemConfiguration : IEntityTypeConfiguration<Ema
 
         builder.Property(email => email.Status)
             .HasColumnName("status")
-            .HasConversion<string>()
-            .HasMaxLength(20)
             .IsRequired();
 
         builder.Property(email => email.Attempts)
