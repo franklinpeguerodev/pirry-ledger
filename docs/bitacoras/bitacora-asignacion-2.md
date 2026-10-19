@@ -1,5 +1,8 @@
 # Bitácora de la Asignación 2 — Refactor previo a la siguiente iteración
 
+- **Parte 1: refactor previo (preparación de esta asignación)** — contenido actual del archivo, escrito antes de empezar la pieza de permisos.
+- **Parte 2: construcción de Gestión de permisos** — entradas que se irán anexando al final del archivo conforme se le deleguen tareas al agente para esta pieza.
+
 ## Contexto
 
 - Repositorio: `franklinpeguerodev/pirry-ledger`.
