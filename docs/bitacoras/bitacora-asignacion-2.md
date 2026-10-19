@@ -195,17 +195,21 @@ Bloque 3, así que no requiere acción adicional, pero conviene tenerla
 en cuenta: los correos que `--send-mail` encoló durante la regresión
 del 2026-10-19 no llegaron a salir.
 
-### Riesgo que aún no corregí: rutas en español en el `README.md`
+### Riesgo corregido en este lote: rutas en español en el `README.md`
 
-El `README.md` tiene **quince referencias** a rutas y nombres de
-campo en español (`/api/auth/recuperacion`, `/api/admin/usuarios`,
-`desactivar`, `reactivar`, `forzar-restablecimiento`, ejemplos de
-PowerShell y cURL de las secciones 3.x y la tabla de puntos de acceso
-de la sección 3.4, más un "nace en `Pendiente`"). Esas instrucciones
-ya no funcionan contra la API y el profesor corrige siguiendo el
-`README.md`, así que conviene arreglarlas en el mismo pull request de
-sincronización o en uno previo. **Pendiente de autorización para
-hacerlo.**
+El `README.md` tenía dieciséis rutas con nombre en español que ya no
+existían en la API (`/api/auth/reenviar-activacion`,
+`/api/auth/recuperacion`, `/api/auth/restablecer-password`,
+`/api/auth/cambiar-password`,
+`/api/admin/usuarios/<id>/forzar-restablecimiento`,
+`/api/admin/usuarios/<id>/desactivar`,
+`/api/admin/usuarios/<id>/reactivar` y `/api/admin/usuarios`,
+más la variable PowerShell `$reenviar` y la frase suelta "nace en
+`Pendiente`"). Esas instrucciones ya no funcionaban contra la API y
+la corrección entra en este mismo lote, en el commit
+`7e0cf67 Translate README endpoints and examples to English routes`.
+La prosa en español (verbos como "reenviar") se queda en español
+según `AGENTS.md`.
 
 ---
 
@@ -280,6 +284,12 @@ la cuenta tras cinco intentos. Nota: correrlo dos veces seguidas sin
 recrear la base da el `409` esperado del registro duplicado (paso 2);
 es la respuesta correcta, no una regresión; el escenario se
 restablece con el bloque de reinicio del propio archivo.
+
+Tras el commit `7e0cf67` (las rutas del `README.md` pasadas a
+inglés) se volvió a correr la regresión sobre una base recién
+migrada y el resultado se mantuvo en
+`Peticiones: 53 | No cumplen lo esperado: 0`: la guía escrita y la
+guía ejecutable convergen en los mismos puntos de acceso.
 
 ---
 
