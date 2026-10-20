@@ -419,3 +419,28 @@ La base del plan de la pieza (`develop` en `7ce15f3`) sigue siendo la de antes d
 
 - `README.md`: el árbol del repositorio menciona ahora que `PirryLedger.Core.Contracts` contiene también `Auth (Operation, AccessLevel)`.
 - `docs/current-iteration.md`: nuevo punto 5 en "Decisions taken by Franklin" que documenta la decisión parcial, explica la desviación del plan §6 opción B y registra la consecuencia operativa para `Permissions.Api`.
+
+### Entrada 5 — Esqueleto de `PirryLedger.Core.Permissions` (2026-10-20)
+
+**Qué se pidió.** Empezar la pieza de Gestión de permisos. El plan §3.2 "Estructura del módulo, su proyecto de pruebas, la solución y las referencias" define los cinco proyectos (Domain, Application, Infrastructure, Api) más el proyecto de pruebas, todos sin lógica de negocio todavía. La mudanza de ADR 008 y ADR 009 ya está mergeada en `develop`, así que la base es la correcta.
+
+**Qué devolví.** Rama `feature/permissions-skeleton` desde `develop` (`5729655`), con cinco commits atómicos:
+
+1. `b9a993a Add permissions module skeleton (RF-GP-*)` — cinco `.csproj` nuevos (Domain, Application, Infrastructure, Api + el test project), `pirry-ledger.slnx` actualizado con las carpetas `Src/Core/PirryLedger.Core.Permissions/` y `Tests/PirryLedger.Core.Permissions.Tests/`, y `PirryLedger.Host.csproj` con los `ProjectReference` a los nuevos Infrastructure y Api.
+2. `efb446c Add permissions Domain layer (RF-GP-*, RF-NEG-09, RD-04)` — `PermissionRequestState` enum (Pending, Approved, Applied, Rejected), `PermissionCatalog` con la constante `ViewSalesSummary`, `PermissionRequestStateMachine` con la tabla de transiciones (`Pending→Approved`, `Approved→Applied`, `Pending→Rejected`) y `InvalidPermissionRequestTransitionException`, y las entidades `PermissionRequest` y `PermissionGrant` con sus fabricas (`Create`) y mutaciones (`Approve`, `MarkApplied`, `Reject`) que delegan a la máquina de estados.
+3. `195dce3 Add IPermissionAuthority contract (RF-GP-05)` — la interfaz `IPermissionAuthority` en `PirryLedger.Core.Contracts/Permissions/` con `IsKnown` y `UserHasPermissionAsync`.
+4. `349fa0a Add permissions application ports` — `IPermissionRequestRepository` y `IPermissionGrantRepository` en `Application/Ports/`. Las implementaciones EF se añaden en el siguiente commit.
+5. `a96774e Add permissions infrastructure and migration (RF-GP-*, ADR 008, ADR 004)` — `PermissionsDbContext`, las configuraciones EF (`PermissionRequestConfiguration` con snake_case, FK por nombre de tabla a `ac_users` sin propiedad de navegación, índices por `state` y `requester_id`; `PermissionGrantConfiguration` con índice único `(user_id, permission_name)` segundo ADR 008), las implementaciones `EfPermissionRequestRepository` y `EfPermissionGrantRepository`, la implementación `EfPermissionAuthority` que usa el catálogo y la tabla de concesiones, `DependencyInjection.AddPermissions(connectionString)` que registra el `DbContext` y los puertos, y la migración `20261020100523_InitialSchema` que crea las dos tablas `per_permission_requests` y `per_permission_grants` con sus FK a `ac_users`.
+
+**Lo que NO se hizo en este PR.** Casos de uso (`CreatePermissionRequest`, `ApprovePermissionRequest`, `RejectPermissionRequest`, `ListOwnPermissionRequests`, `ListPendingPermissionRequests`), endpoints HTTP, ruta de demostración `/api/permissions/sales-summary`, y entradas en `RoleRequirements` para `Operation.CreatePermissionRequest`/`ListOwnPermissionRequests`/`ListPendingPermissionRequests`/`ApprovePermissionRequest`/`RejectPermissionRequest`/`ViewSalesSummary`. Todo eso entra en PR #39.
+
+**Lo que se verificó.**
+
+- `dotnet build pirry-ledger.slnx --nologo -v q` con 0 errores (las 8 advertencias NU1902/NU1903 son preexistentes del paquete Pkcs).
+- `dotnet test pirry-ledger.slnx --nologo` con **100 verde, 0 con error** (85 AccessControl + 6 Notifications + 9 Permissions nuevas).
+- `dotnet test --filter "FullyQualifiedName~MaquinaDeEstados"` → 9 verde. Las nueve pruebas (Pending a Aprobada, Pending a Rechazada, Aprobada a Aplicada, Pending directo a Aplicada lanza, Aprobada a Rechazada lanza, Applied terminal, Rejected terminal, transición al mismo estado lanza, las dos máquinas no comparten proyecto) cubren cada celda de la tabla de transiciones de RF-GP-*.
+- `dotnet build pirry-ledger.slnx` con cero referencias rotas: `git grep "PirryLedger.Core.AccessControl.Domain"` desde `Src/Core/PirryLedger.Core.Permissions/` devuelve cero resultados. El módulo de Permissions no ve entidades de AccessControl; las FK se declaran por nombre de tabla en la migración.
+
+**Documentación en el mismo PR.**
+
+- `README.md`: el árbol de `Src/Core/` muestra ahora los cinco módulos; un aviso bajo el mapa de requisitos indica que la Asignación 2 está en marcha y que el alcance vigente para el resto del README sigue siendo el de Práctica 1.
