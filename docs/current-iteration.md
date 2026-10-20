@@ -36,12 +36,12 @@ Deliver three things at the tag `asignacion-2`: the Permissions management piece
 ## Decisions taken by Franklin
 
 1. **What a permission is.** A fixed catalog of named permissions defined in one place in the code, plus one demonstration operation that is only allowed to users who hold the granted permission. Franklin's choice for the demonstration: a single permission `ViewSalesSummary` and a route that returns a fixed sales summary sample, living in the permissions module (not in the business module). The permission requirement of that route must be readable in the same single place where the other routes declare their access, not hidden inside the handler. The agent confirms the route name and the exact shape in the plan and waits for approval.
-2. **Who creates and who resolves.** A Standard user creates requests; an Administrator approves or rejects them.
+2. **Who creates and who resolves.** A Standard user creates requests (RF-GP-01); an Administrator approves or rejects them. An Administrator holds access to every operation by role, so the permission check passes for an Administrator without any request, and no rule forbids an Administrator from creating a request. Nobody resolves their own request (RF-GP-07), and the rule compares identities, not roles: it rejects whoever resolves a request when they are the same user who created it, whatever role they had then or have now. The README shows two ways to trigger it, the direct one (an Administrator creates a request and tries to resolve it) and the one the rule exists for (a Standard user creates a request, is promoted to Administrator while it is Pending, and then tries to resolve it). The README leads with the realistic path as the main demonstration of RF-GP-07; the direct path stays as a second, shorter check.
 3. **Where it lives.** A new module `PirryLedger.Core.Permissions`, layered like the existing ones (Domain, Application, Infrastructure, Api), owner of its data. Other pieces consult granted permissions through an interface declared in `PirryLedger.Core.Contracts`. A new test project `Tests/PirryLedger.Core.Permissions.Tests`.
 
 ## Open decisions (ask, do not assume)
 
-- **Can an Administrator create a request?** Franklin will decide later. RF-GP-07 describes an Administrator trying to resolve a request created by themselves, so if Administrators cannot create requests that criterion cannot be triggered through the API and the README could not show how to provoke it. When this reaches the plan, the agent presents the options and the consequence for RF-GP-07 and waits.
+None for this iteration.
 
 ## Constraints
 
