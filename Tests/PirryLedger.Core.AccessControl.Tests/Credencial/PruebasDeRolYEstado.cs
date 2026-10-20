@@ -94,8 +94,12 @@ public sealed class PruebasDeRolYEstado
         Assert.Equal(typeof(InvalidSessionException), error.GetType());
     }
 
+    // RF-CA-08 + ADR 009: cambiar el role invalida las sesiones abiertas (mismo
+    // mecanismo que ChangePassword y Deactivate). El usuario promovido (o
+    // degradado) tiene que re-login para que su siguiente peticion refleje el
+    // nuevo role.
     [Fact]
-    public async Task CambiarDeRolNoInvalidaLaSesion()
+    public async Task CambiarDeRolInvalidaLaSesion()
     {
         var utcNow = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
         var scenario = new SessionScenario(utcNow);
@@ -109,11 +113,11 @@ public sealed class PruebasDeRolYEstado
 
         user.ChangeRole(Role.Standard);
 
-        // Tras el cambio, la session sigue viva (no se toco CredentialVersion),
-        // pero ya no alcanza para lo de Administrator.
-        await scenario.Authenticate.ExecuteAsync(token);
-        await Assert.ThrowsAsync<InsufficientRoleException>(
-            () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
+        // Tras el cambio, CredentialVersion se incremento y la session queda
+        // invalidada: el token anterior ya no sirve ni siquiera para preguntar
+        // quien es. La regla es la misma que para ChangePassword y Deactivate.
+        await Assert.ThrowsAsync<InvalidSessionException>(
+            () => scenario.Authenticate.ExecuteAsync(token));
     }
 
     [Fact]

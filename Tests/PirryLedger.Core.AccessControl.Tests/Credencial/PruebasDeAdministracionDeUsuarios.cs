@@ -231,6 +231,25 @@ public sealed class PruebasDeAdministracionDeUsuarios
         Assert.Equal(Role.Administrator, admin!.Role);
     }
 
+    // ADR 009: cambiar el role incrementa CredentialVersion, igual que
+    // ChangePassword y Deactivate. Esto es lo que invalida la session abierta
+    // del usuario promovido (ver PruebasDeRolYEstado.CambiarDeRolInvalidaLaSesion).
+    [Fact]
+    public void ElCambioDeRolIncrementaCredentialVersion()
+    {
+        var utcNow = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        var scenario = new SessionScenario(utcNow);
+        var user = scenario.Users.Create(
+            "Cambio Role", "cambiorol@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true, role: Role.Administrator);
+
+        var versionInicial = user.CredentialVersion;
+
+        user.ChangeRole(Role.Standard);
+
+        Assert.Equal(versionInicial + 1, user.CredentialVersion);
+        Assert.Equal(Role.Standard, user.Role);
+    }
+
     // --- RF-CA-20: Deactivate ---
 
     [Fact]
