@@ -385,3 +385,37 @@ La base del plan de la pieza (`develop` en `7ce15f3`) sigue siendo la de antes d
 - Post-cambio: tras añadir `CredentialVersion++` al cuerpo de `ChangeRole`, ambas pasan.
 - Suite completa: `dotnet test pirry-ledger.slnx --nologo` da **91 verde, 0 con error** (85 AccessControl — el viejo test se reemplazó por el nuevo, mismo conteo más uno — y 6 Notifications). Ninguna prueba existente se debilitó; las 84 AccessControl que ya existían siguen verdes.
 - `git grep CredentialVersion Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Domain/Entities/User.cs` muestra exactamente tres puntos de incremento: `ChangePassword` (línea 177), `Deactivate` (línea 203) y `ChangeRole` (línea 214). El mecanismo es uniforme, como exige la decisión.
+
+### Entrada 4 — Mudanza parcial de `Operation` y `AccessLevel` a `PirryLedger.Core.Contracts.Auth` (2026-10-20)
+
+**Qué se pidió.** Aplicar el primer paso del plan §6 opción B (mover `Operation`, `AccessLevel`, `Requirement`, `RoleRequirements`, `WithAccess` y `OperationMetadata` de `PirryLedger.Core.AccessControl.*` a `PirryLedger.Core.Contracts.Auth`) antes de empezar la pieza de Permissions. La mudanza completa es necesaria para que el módulo de Permissions pueda declarar rutas y casos de uso en la misma tabla de exigencias de acceso, sin duplicar el filtro.
+
+**Qué devolví.** Mudanza parcial en el commit `06d928f Move Operation and AccessLevel enums to Contracts (RF-CA-05)`. Lo que se movió y lo que no:
+
+- **Movido a `Src/Core/PirryLedger.Core.Contracts/Auth/Operation.cs`**: el enum `Operation` y el enum `AccessLevel`. Son tipos de datos puros que no dependen de nada de AccessControl.
+- **Borrado**: `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Application/Helpers/Operation.cs`.
+- **NO se movió (desviación del plan)**: `RoleRequirements` (la tabla que empareja operaciones con niveles), `Role` (el enum), `WithAccess`, `OperationMetadata`, `AccessFilter` (incluyendo `ApplyAsync` y `RequireDeclaredOperationAsync`).
+
+**Desviación explicada.** Mudar `RoleRequirements` a `Contracts` exigiría que `Contracts` referencie `AccessControl.Domain.Enums` (por `Role`) o mover `Role` también. Mudar `Role` arrastra cambios en `User.cs`, en `AccessControlDbContext`, en todas las configuraciones EF, en los `FakeUserRepository` de los tests y en los seeds: una cascada mucho mayor que el alcance de esta iteración. Mudar `WithAccess`/`ApplyAsync` a `Contracts` crearía una dependencia circular: `ApplyAsync` (que vive en el filtro) llama a `Authenticate.ExecuteWithRoleAsync` (que vive en `AccessControl.Application`); mover `ApplyAsync` obligaría a `Contracts` a referenciar `AccessControl.Application`, invirtiendo la dirección de dependencia. Para desacoplar `ApplyAsync` de `Authenticate` hace falta introducir una interfaz `IAuthenticator` en `Contracts` con implementaciones en `AccessControl.Application` y (en su día) en `Permissions.Application`. Es factible y se deja como "futuro"; en esta iteración no es necesario.
+
+**Consecuencia operativa.** `PirryLedger.Core.Permissions.Api` (en PR #38) declarará sus rutas con `.WithAccess(Operation.X)`. Para ello referenciará `PirryLedger.Core.AccessControl.Api` por `WithAccess` (igual que ya referencia `PirryLedger.Core.AccessControl.Application` para `Authenticate`). Es la dependencia cruzada entre módulos del Core que el plan §6 quería evitar y que se mantiene hasta que `IAuthenticator` se introduzca.
+
+**Archivos tocados.** 12 archivos, +14/-8 (más un rename detectado por git al 91%):
+
+- Nuevo: `Src/Core/PirryLedger.Core.Contracts/Auth/Operation.cs` (contiene `Operation` y `AccessLevel`).
+- Borrado: `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Application/Helpers/Operation.cs` (git lo cuenta como rename del 91%).
+- Modificados con `using PirryLedger.Core.Contracts.Auth;` añadido: `RoleRequirements.cs` (Application), `OperationWithoutRoleRequirementException.cs` (Application), `ChangeUserRole.cs`, `DeactivateUser.cs`, `ForcePasswordReset.cs`, `ListUsers.cs` (Application), `AccessFilter.cs`, `EndpointRegistration.cs` (Api), `PruebasDelPuntoUnicoDeAcceso.cs`, `PruebasDeAdministracionDeUsuarios.cs`, `PruebasDeAccesoHttp.cs` (Tests).
+
+**Riesgo principal:** la prueba `PruebasDelPuntoUnicoDeAcceso` reflexiona sobre `RouteEndpoint` reales del Host. La mitigación que acordamos (mover el tipo tal cual, solo cambia el namespace; la prueba solo añade el `using`) funciona.
+
+**Verificación:**
+
+- `dotnet build pirry-ledger.slnx` con 0 errores.
+- `dotnet test pirry-ledger.slnx` con todos los tests verdes: **91 verde, 0 con error** (85 AccessControl — la mudanza no añade ni quita tests — y 6 Notifications).
+- `dotnet test --filter "FullyQualifiedName~PruebasDelPuntoUnicoDeAcceso"` → **14 verde**. La prueba que enumera las rutas reales del Host sigue funcionando: sigue leyendo `OperationMetadata` (que sigue en `AccessFilter.cs`, en `PirryLedger.Core.AccessControl.Api.Auth`) y los tipos que el metadato referencia (`Operation`, `AccessLevel`, ahora en `PirryLedger.Core.Contracts.Auth`). El conjunto de rutas reales no cambia; la prueba los enumera, los cruza con `RoleRequirements.DeclaredOperations()`, y comprueba que cada entrada del enum tiene una ruta y viceversa.
+- `git grep -n "Application\.Helpers"` → cero resultados en `Src/` y `Tests/`. La mudanza está limpia.
+
+**Documentación en el mismo PR:**
+
+- `README.md`: el árbol del repositorio menciona ahora que `PirryLedger.Core.Contracts` contiene también `Auth (Operation, AccessLevel)`.
+- `docs/current-iteration.md`: nuevo punto 5 en "Decisions taken by Franklin" que documenta la decisión parcial, explica la desviación del plan §6 opción B y registra la consecuencia operativa para `Permissions.Api`.

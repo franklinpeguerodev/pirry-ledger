@@ -550,7 +550,7 @@ pirry-ledger/
 │   └── requirements/               Requisitos originales
 ├── Src/
 │   ├── Core/
-│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones
+│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
 │   │   └── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
 │   ├── Business/
