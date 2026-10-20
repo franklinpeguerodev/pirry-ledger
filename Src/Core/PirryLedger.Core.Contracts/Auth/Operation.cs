@@ -1,6 +1,4 @@
-using PirryLedger.Core.AccessControl.Domain.Entities;
-using PirryLedger.Core.AccessControl.Domain.Enums;
-namespace PirryLedger.Core.AccessControl.Application;
+namespace PirryLedger.Core.Contracts.Auth;
 
 // RF-CA-05: "existe un punto del codigo donde se puede leer la Requirement de role
 // de cada operation".
@@ -20,8 +18,7 @@ namespace PirryLedger.Core.AccessControl.Application;
 // elijiera un清单 escrito a mano, que es justo lo que hay que evitar.
 //
 // Ojo con el Name: una entrada en este enum NO abre ni cierra nada por si
-// sola. Si se declara aqui y no en RoleRequirements, la route se rechaza (ver
-// EseAccesoFallo).
+// sola. Si se declara aqui y no en RoleRequirements, la route se rechaza.
 public enum Operation
 {
     // Registro y activacion. Abiertas a cualquiera: no hay Session todavia.
