@@ -9,3 +9,4 @@ One-line index of the ADRs in this folder. The title and date below come from ea
 - `005-listen-address-from-public-base-url.md` (2026-10-04) — Listen address comes from `PIRRY_LEDGER_PUBLIC_BASE_URL`.
 - `006-local-env-configuration.md` (2026-10-04) — Local configuration from a `.env` file loaded with `DotNetEnv`.
 - `007-mail-sender-cli-command.md` (2026-10-04) — Mail sender: CLI command `--send-mail` in the Host.
+- `008-permission-grants-table.md` (2026-10-20) — Permission grants live in their own table.
