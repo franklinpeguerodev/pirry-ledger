@@ -1201,6 +1201,22 @@ del módulo Business.
 | `POST` | `/api/auth/change-password` | Cambia la contraseña propia y exige la contraseña actual. |
 | `GET` | `/me` | Nombre, email y role del usuario autenticado. Exige `Authorization: Bearer <token>`. |
 
+### Endpoints de la Asignación 2 (gestión de permisos)
+
+Estos endpoints llegan con el PR #39 (`feature/permissions-pipeline`). El módulo
+`PirryLedger.Core.Permissions` está activo pero la lista siguiente es la
+**API vigente para esta pieza**; el resto del README sigue describiendo Práctica
+1. Los tokens son los mismos que en la sección anterior.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/permissions/requests` | Crea una solicitud de permiso. Cuerpo `{"requestedPermission":"ViewSalesSummary"}`. Responde `202` con el id. |
+| `GET` | `/api/permissions/requests/mine` | Lista las solicitudes del solicitante actual. Responde `200`. |
+| `GET` | `/api/permissions/requests/pending` | Lista solicitudes en `Pending`. Exige `Administrator`. |
+| `POST` | `/api/permissions/requests/{id}/approve` | Aprueba una solicitud pendiente. Aplica el permiso en la misma operación. Responde `204`. |
+| `POST` | `/api/permissions/requests/{id}/reject` | Rechaza con motivo escrito. Cuerpo `{"reason":"..."}`. Responde `204`. |
+| `GET` | `/api/permissions/sales-summary` | Ruta de demostración del sistema de permisos. Responde `200` con datos fijos (`date`, `totalInvoices`, `totalAmount`, `branch`). Exige el permiso `ViewSalesSummary` concedido. |
+
 ### Endpoints de administración
 
 | Método | Ruta | Qué hace |
