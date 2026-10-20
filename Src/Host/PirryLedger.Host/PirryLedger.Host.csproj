@@ -18,6 +18,8 @@
     <ProjectReference Include="..\..\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
     <ProjectReference Include="..\..\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Infrastructure\PirryLedger.Core.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Api\PirryLedger.Core.Notifications.Api.csproj" />
+    <ProjectReference Include="..\..\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Infrastructure\PirryLedger.Core.Permissions.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Api\PirryLedger.Core.Permissions.Api.csproj" />
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
   </ItemGroup>
