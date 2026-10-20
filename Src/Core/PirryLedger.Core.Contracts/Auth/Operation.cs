@@ -48,14 +48,31 @@ public enum Operation
     ResetPassword,
     ChangeOwnPassword,
     ForceReset,
+
+    // Gestion de permisos (RF-GP-*). Las rutas de la pieza PirryLedger.Core.Permissions
+    // usan estos identificadores para declararse en RoleRequirements y para que
+    // el filtro de AccessControl (que sigue siendo el mismo, por la decision de
+    // PR #37) decida que nivel exigen.
+    CreatePermissionRequest,
+    ListOwnPermissionRequests,
+    ListPendingPermissionRequests,
+    ApprovePermissionRequest,
+    RejectPermissionRequest,
+
+    // Demostracion del sistema de permisos (RF-GP-05): la ruta del resumen de
+    // ventas exige este permiso, no un role. Se declara con AccessLevel.Permission
+    // y el nombre del permiso vive en Requirement.Permission.
+    ViewSalesSummary,
 }
 
-// Los tres niveles de Requirement. El orden va de menos a mas: una route publica
-// no necesita Session, una de Session acepta a cualquiera con una Session valida, y
-// una de Administrator exige ese role concreto (RD-06).
+// Los niveles de Requirement. El orden va de menos a mas: una route publica
+// no necesita Session, una de Session acepta a cualquiera con una Session valida,
+// una de Administrator exige ese role concreto (RD-06), y una de Permission
+// exige tener concedida una entrada en per_permission_grants (RF-GP-05).
 public enum AccessLevel
 {
     Public,
     AnySession,
     Administrator,
+    Permission,
 }

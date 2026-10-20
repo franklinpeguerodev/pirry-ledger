@@ -83,6 +83,21 @@ public static class AccessFilter
             return sessionRejection ?? await next(context);
         }
 
+        // RF-GP-05: la operation exige un permiso concedido. La pieza de
+        // Permissions implementa IPermissionAuthority (consulta per_permission_grants);
+        // el filtro solo conoce el contrato. Authenticate distingue el 401 del 403:
+        // primero la sesion, despues el permiso (mismo orden que con role).
+        if (level == AccessLevel.Permission)
+        {
+            var permissionRejection = await ValidatePermissionAsync(
+                context,
+                authenticate,
+                plainToken,
+                RoleRequirements.RequiredPermission(operation.Value));
+
+            return permissionRejection ?? await next(context);
+        }
+
         // Administrator. Authenticate distingue el 401 del 403: primero comprueba la
         // sesion y despues el role (RF-CA-06).
         var roleRejection = await ValidateRoleAsync(
@@ -139,6 +154,34 @@ public static class AccessFilter
             return AccessDenied(error.Message, isRoleShortage: false);
         }
         catch (InsufficientRoleException error)
+        {
+            return AccessDenied(error.Message, isRoleShortage: true);
+        }
+    }
+
+    // RF-GP-05: misma forma que ValidateRoleAsync pero para AccessLevel.Permission.
+    // El 401 sale antes que el 403 porque sin sesion no se puede saber que
+    // permisos tiene.
+    private static async Task<IResult?> ValidatePermissionAsync(
+        EndpointFilterInvocationContext context,
+        Authenticate authenticate,
+        string plainToken,
+        string permissionName)
+    {
+        try
+        {
+            await authenticate.ExecuteWithPermissionAsync(
+                plainToken,
+                permissionName,
+                context.HttpContext.RequestAborted);
+
+            return null;
+        }
+        catch (InvalidSessionException error)
+        {
+            return AccessDenied(error.Message, isRoleShortage: false);
+        }
+        catch (InsufficientPermissionException error)
         {
             return AccessDenied(error.Message, isRoleShortage: true);
         }

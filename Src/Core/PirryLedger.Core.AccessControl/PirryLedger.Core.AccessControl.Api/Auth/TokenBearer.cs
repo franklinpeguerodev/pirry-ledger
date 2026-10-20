@@ -14,7 +14,21 @@ namespace PirryLedger.Core.AccessControl.Api;
 //
 // El prefix se compara sin distinguir mayusculas porque el esquema HTTP lo
 // especifica asi, y "bearer" tiene que funcionar igual que "Bearer".
-internal static class TokenBearer
+// Lectura de la header Authorization: Bearer <token>.
+//
+// Vive aqui y no en cada endpoint porque el formato tiene que interpretarse igual
+// en todos lados. Un endpoint que lo leyera por su cuenta tarde o temprano
+// aceptaria "token" sin "Bearer" y se saltaria la validacion.
+//
+// El prefix se compara sin distinguir mayusculas porque el esquema HTTP lo
+// especifica asi, y "bearer" tiene que funcionar igual que "Bearer".
+//
+// Es public para que PirryLedger.Core.Permissions.Api pueda leer el token
+// en sus endpoints con la misma logica. Moverlo a Contracts es otra opcion
+// (un ITokenReader con implementacion en AccessControl); se deja como
+// trabajo futuro del PR de "mover el filtro a Contracts" apuntado en el
+// PR #37.
+public static class TokenBearer
 {
     private const string Scheme = "Bearer";
 
