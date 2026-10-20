@@ -366,3 +366,22 @@ guía ejecutable convergen en los mismos puntos de acceso.
 - `git diff develop..HEAD -- docs/current-iteration.md`: solo los dos reemplazos pedidos, ninguna otra línea tocada.
 
 La base del plan de la pieza (`develop` en `7ce15f3`) sigue siendo la de antes del cambio. La única manera de que llegue a `develop` es por el merge del PR abierto desde esta rama, que es lo que la instrucción exigía.
+
+### Entrada 3 — Invalidación de sesiones al cambiar el role (ADR 009) (2026-10-20)
+
+**Qué se pidió.** Implementar ADR 009 en código: `User.ChangeRole` debe incrementar `CredentialVersion`, igual que `ChangePassword` y `Deactivate`, para que un cambio de role (en particular una promoción) invalide las sesiones abiertas y el usuario tenga que re-login. Como esto contradice el comportamiento previo (`ChangeRole` no incrementaba), el cambio se documentó en `docs/adr/009-role-changes-invalidate-sessions.md` antes de tocar código. La prueba existente `CambiarDeRolNoInvalidaLaSesion` (en `PruebasDeRolYEstado`) afirmaba el comportamiento viejo y debe actualizarse: el nombre y el cuerpo del test se invierten para reflejar la nueva regla. La firma de `ChangeRole(Role)` se mantiene (no se añade un parámetro `utcNow` que no se usa en el cuerpo: sería código muerto; `CredentialVersion` no necesita timestamp porque el incremento es atómico).
+
+**Qué devolví.** Commit `9592ad9 Invalidate sessions on role change (ADR 009, RF-CA-08)` en la rama `chore/accesscontrol-permissions-foundations` desde `develop` (`10ef228`). Tres archivos tocados:
+
+- `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Domain/Entities/User.cs`: `ChangeRole(Role newRole)` ahora hace `Role = newRole; CredentialVersion++;`. Comentario actualizado para explicar la regla y referenciar ADR 009.
+- `Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeRolYEstado.cs`: el test `CambiarDeRolNoInvalidaLaSesion` se renombra a `CambiarDeRolInvalidaLaSesion` y su cuerpo se invierte: tras `ChangeRole(Role.Standard)`, la sesión anterior queda invalidada y `Authenticate.ExecuteAsync(token)` lanza `InvalidSessionException` en vez de pasar.
+- `Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeAdministracionDeUsuarios.cs`: nuevo test `ElCambioDeRolIncrementaCredentialVersion` que verifica que `user.CredentialVersion` pasa de `versionInicial` a `versionInicial + 1` tras `ChangeRole(Role.Standard)`.
+
+`ChangeUserRole` (Application) y `FakeUserRepository.Create` no se tocan: ambos ya llaman a `user.ChangeRole(role)` con la firma anterior, que sigue siendo válida.
+
+**Qué verifiqué.** El patrón pedido por AGENTS.md: la prueba se ve fallar por la razón correcta antes de pasar.
+
+- Pre-cambio: corrí `dotnet test --filter "CambiarDeRolInvalida|ElCambioDeRolIncrementa"`: ambas pruebas fallan. `ElCambioDeRolIncrementaCredentialVersion` falla con `Expected: 1, Actual: 0` (la versión no se incrementa). `CambiarDeRolInvalidaLaSesion` falla con `No exception was thrown` (la sesión no se invalida).
+- Post-cambio: tras añadir `CredentialVersion++` al cuerpo de `ChangeRole`, ambas pasan.
+- Suite completa: `dotnet test pirry-ledger.slnx --nologo` da **91 verde, 0 con error** (85 AccessControl — el viejo test se reemplazó por el nuevo, mismo conteo más uno — y 6 Notifications). Ninguna prueba existente se debilitó; las 84 AccessControl que ya existían siguen verdes.
+- `git grep CredentialVersion Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Domain/Entities/User.cs` muestra exactamente tres puntos de incremento: `ChangePassword` (línea 177), `Deactivate` (línea 203) y `ChangeRole` (línea 214). El mecanismo es uniforme, como exige la decisión.

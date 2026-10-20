@@ -590,6 +590,8 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-listen-address-from-public-base-url.md` |
 | Variables de entorno de desarrolelo local desde un archivo `.env` cargado con `DotNetEnv` | `docs/adr/006-local-env-configuration.md` |
 | Enviador de correo: comando CLI `--send-mail` en el Host, no servicio en segundo plano | `docs/adr/007-mail-sender-cli-command.md` |
+| Concesiones de permisos viven en su propia tabla `per_permission_grants`, independiente de `per_permission_requests` | `docs/adr/008-permission-grants-table.md` |
+| Cambiar el role invalida las sesiones abiertas vía `CredentialVersion`, igual que cambiar la contraseña o desactivar | `docs/adr/009-role-changes-invalidate-sessions.md` |
 
 ---
 
@@ -1021,6 +1023,12 @@ Invoke-RestMethod `
 Un Administrador no puede cambiarse su propio role. Un role inexistente produce
 `400`. Un usuario Estándar recibe `403`, incluso si construye la petición
 manualmente.
+
+El cambio invalida la sesión del usuario afectado (`CredentialVersion` se
+incrementa): tras un cambio de role, el usuario debe volver a iniciar sesión
+para que su siguiente petición refleje el nuevo role. Lo mismo ocurre al
+cambiar la contraseña (RF-CA-12) o al desactivar la cuenta (RF-CA-20). Ver
+`docs/adr/009-role-changes-invalidate-sessions.md`.
 
 #### RF-CA-20 — desactivar y reactivar
 
