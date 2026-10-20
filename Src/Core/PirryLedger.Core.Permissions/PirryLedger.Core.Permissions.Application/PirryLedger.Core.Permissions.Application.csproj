@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PirryLedger.Core.Permissions.Domain\PirryLedger.Core.Permissions.Domain.csproj" />
+    <!-- Solo los contratos: IClock (RD-11), IPermissionAuthority (RF-GP-05).
+         Nunca una implementacion, para que esta capa no dependa de Infrastructure. -->
+    <ProjectReference Include="..\..\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

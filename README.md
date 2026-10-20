@@ -550,9 +550,10 @@ pirry-ledger/
 │   └── requirements/               Requisitos originales
 ├── Src/
 │   ├── Core/
-│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel)
+│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
-│   │   └── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
+│   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
+│   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
 │   ├── Business/
 │   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application
 │   └── Host/
@@ -576,6 +577,8 @@ ni servidor SMTP.
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
 | Máquina de estados (estructura) | RF-NEG-03, 04, 05, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
+
+> **Asignación 2** — el árbol anterior es la Práctica 1. Desde `develop` con PR #37 mergeado hay un quinto módulo en construcción: `PirryLedger.Core.Permissions` (gestión de solicitudes de permiso, RF-GP-01..07). Su pieza de demo (`ViewSalesSummary`) y sus rutas llegan en PR #38 y PR #39. Esta tabla y los enlaces a las secciones 3.x siguen siendo del alcance vigente.
 
 ### Decisiones documentadas
 
