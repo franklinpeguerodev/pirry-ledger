@@ -1,5 +1,5 @@
-using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.Contracts.Auth;
 namespace PirryLedger.Core.AccessControl.Application;
 
 // RF-CA-05: una operation existe en el enum pero nadie declaro que role la ejecuta.

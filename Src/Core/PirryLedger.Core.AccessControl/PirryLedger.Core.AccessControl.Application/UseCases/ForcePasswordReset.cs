@@ -1,5 +1,6 @@
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Contracts.Time;
 
