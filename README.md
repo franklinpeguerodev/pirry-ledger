@@ -181,8 +181,7 @@ dotnet build pirry-ledger.slnx --configuration Release
 dotnet test pirry-ledger.slnx --configuration Release
 ```
 
-Resultado esperado: `0 Advertencia(s)`, `0 Errores` y **90 pruebas superadas**
-(84 de AccessControl y 6 de Notifications), 0 con error.
+Resultado esperado: `0 Errores` y todas las pruebas pasan.
 
 ### Paso 6: aplicar las migraciones
 
@@ -545,7 +544,8 @@ pirry-ledger/
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
-│   ├── adr/                        Decisiones técnicas 001 a 006: nombre y título en inglés, contenido en español
+│   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
+│   ├── adr/                        Decisiones técnicas 001 a 007: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -558,8 +558,8 @@ pirry-ledger/
 │   └── Host/
 │       └── PirryLedger.Host/                    Composición + comando --send-mail
 └── Tests/
-    ├── PirryLedger.Core.AccessControl.Tests/    xUnit, 84 pruebas
-    └── PirryLedger.Core.Notifications.Tests/    xUnit, 6 pruebas
+    ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
+    └── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
 ```
 
 Las pruebas usan dobles en memoria y un reloj falso: no necesitan base de datos
@@ -589,6 +589,7 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Columnas de AccessControl en snake_case, declaradas con `HasColumnName` | `docs/adr/004-snake-case-column-naming.md` |
 | Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-listen-address-from-public-base-url.md` |
 | Variables de entorno de desarrolelo local desde un archivo `.env` cargado con `DotNetEnv` | `docs/adr/006-local-env-configuration.md` |
+| Enviador de correo: comando CLI `--send-mail` en el Host, no servicio en segundo plano | `docs/adr/007-mail-sender-cli-command.md` |
 
 ---
 
@@ -625,13 +626,13 @@ emails se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
 contadores y los estados de la cola se comprueban con las consultas SQL de cada
 sección.
 
-### Pruebas automatizadas
+### Pruebas
 
 ```powershell
 dotnet test pirry-ledger.slnx
 ```
 
-Termina con 90 pruebas superadas y ninguna con error. AccessControl y
+Termina con todas las pruebas superadas y ninguna con error. AccessControl y
 Notifications no necesitan base de datos ni servidor SMTP: usan dobles en
 memoria y un reloj falso. Notifications cubre la entidad de cola, los estados,
 el envío único, el retorno a `Pendiente` cuando falla el transporte, el contador
