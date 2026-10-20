@@ -25,6 +25,14 @@
          porque algunas pruebas del modulo verifican el mapeo de EF Core
          (FK a ac_users, snake_case, ADR 004) sin levantar la aplicacion. -->
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Infrastructure\PirryLedger.Core.Permissions.Infrastructure.csproj" />
+    <!-- Authenticate vive en AccessControl.Application y las pruebas lo
+         instancian directamente con repositorios en memoria para validar
+         sesion, role y permiso (RF-GP-02, RF-GP-07). Tambien los
+         Argon2idPasswordHasher y Argon2Parameters reales para que la
+         verificacion de contrasena no sea un fake (mismo argumento que en
+         AccessControl.Tests). -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

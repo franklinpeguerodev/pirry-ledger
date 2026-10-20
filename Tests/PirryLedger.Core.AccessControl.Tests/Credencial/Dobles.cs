@@ -3,6 +3,7 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;
@@ -95,6 +96,28 @@ internal sealed class FakeUserRepository : IUserRepository
     // Sirve para comprobar que el seed no creo dos.
     public Task<List<User>> FindAllAdministratorsAsync() =>
         Task.FromResult(_users.Where(user => user.Role == Role.Administrator).ToList());
+}
+
+// RF-GP-05: doble de IPermissionAuthority para las pruebas de AccessControl que
+// no son del modulo de Permissions. Por defecto nadie tiene permisos; los
+// nombres de permisos conocidos se declaran en el constructor.
+internal sealed class FakePermissionAuthority : IPermissionAuthority
+{
+    private readonly HashSet<string> _known;
+
+    public FakePermissionAuthority(params string[] known)
+    {
+        _known = new HashSet<string>(known, StringComparer.Ordinal);
+    }
+
+    public bool IsKnown(string permissionName) =>
+        !string.IsNullOrWhiteSpace(permissionName) && _known.Contains(permissionName);
+
+    public Task<bool> UserHasPermissionAsync(
+        Guid userId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(IsKnown(permissionName) && userId != Guid.Empty);
 }
 
 internal sealed class FakeSessionRepository : ISessionRepository

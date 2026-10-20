@@ -444,3 +444,30 @@ La base del plan de la pieza (`develop` en `7ce15f3`) sigue siendo la de antes d
 **Documentación en el mismo PR.**
 
 - `README.md`: el árbol de `Src/Core/` muestra ahora los cinco módulos; un aviso bajo el mapa de requisitos indica que la Asignación 2 está en marcha y que el alcance vigente para el resto del README sigue siendo el de Práctica 1.
+
+### Entrada 6 — Pieza completa de Gestión de permisos (2026-10-20)
+
+**Qué se pidió.** PR #39 (`feature/permissions-pipeline`) sobre `develop` (`75c66ee`). El plan §3 fija los casos de uso (RF-GP-01..04), la regla de auto-resolución por identidades (RF-GP-07), la aplicación automática en la misma transacción (RF-GP-05), las seis rutas HTTP, la ruta de demostración con `ViewSalesSummary` y la suite completa de pruebas.
+
+**Qué devolví.** Tres commits atómicos más uno de docs:
+
+- `6a1ecb7 Add Permission access level to auth machinery (RF-GP-05, RF-GP-07)` — `AccessLevel.Permission` con un nuevo campo `Permission: string?` en `Requirement`; `Operation` recibe `CreatePermissionRequest`, `ListOwnPermissionRequests`, `ListPendingPermissionRequests`, `ApprovePermissionRequest`, `RejectPermissionRequest` y `ViewSalesSummary`; `RoleRequirements` declara cada uno; `RequiredPermission` se añade al lado de `RequiredRole`; nueva excepción `InsufficientPermissionException` (403); `Authenticate.ExecuteWithPermissionAsync(token, permissionName)` consulta `IPermissionAuthority.UserHasPermissionAsync` y lanza 403 si false; `AccessFilter.ApplyAsync` maneja el nuevo nivel (mismo orden de 401→403 que role); `TokenBearer` se hace `public` (la alternativa era moverlo a `Contracts`, apuntado como trabajo futuro); DI de AccessControl inyecta `IPermissionAuthority`; tests de AccessControl añaden `FakePermissionAuthority` y enumeran `MapPermissions()`.
+- `2483524 Add permissions use cases and endpoints (RF-GP-01..07)` — `PermissionRequestDtos` con `ListedPermissionRequest` y `PermissionRequestMapping`; excepciones `PermissionRequestRejectedException`, `InvalidPermissionRequestTransitionApplicationException` y `SelfResolutionRejectedException`; los cinco casos de uso (`Create`, `ListOwn`, `ListPending`, `Approve`, `Reject`); la ruta de demostración `/api/permissions/sales-summary` que devuelve datos fijos; `EndpointRegistration.MapPermissions()` con las seis rutas declaradas con `.WithAccess(Operation.X)`; DI de Permissions registra los cinco casos de uso; `Program.cs` llama a `AddPermissions(connection)` y `MapPermissions()`.
+- `532d38f Add full permissions test suite (RF-GP-01..07)` — diez pruebas de casos de uso que cubren: crear válida, crear con permiso inexistente (RF-GP-01), aprobar pendiente con `Applied + INSERT en grants` (RF-GP-03 + RF-GP-05), aprobar dos veces (RF-GP-06), aprobar inexistente (RF-CA-12), auto-resolución directa (Admin) y realista (Estándar ascendido — RF-GP-07), rechazar con motivo (RF-GP-04), rechazar sin motivo, rechazar auto-resolución, listar propias (RF-GP-02 caso propio), listar pendientes (RF-GP-02 caso Administrador). Cada prueba con tres fases, independientes, con `FakeClock`, `FakePermissionRequestRepository`, `FakePermissionGrantRepository` y `FakePermissionAuthority`.
+
+**Lo que NO se hizo en este PR.** Revocación de permisos (futura). Notificaciones al solicitante y al resolverdor (semana 11). Auditoría completa (semana 14). Lotes pendientes en la ruta `sales-summary` (la ruta devuelve datos fijos; no consulta base de datos). Pruebas a nivel de endpoint HTTP (las pruebas son a nivel de caso de uso; el endpoint HTTP queda cubierto por la prueba `TodaOperacionDeLaTablaTieneUnaRuta` de AccessControl, que ahora también recorre `MapPermissions()`).
+
+**Lo que se verificó.**
+
+- `dotnet build pirry-ledger.slnx --nologo -v q` con 0 errores.
+- `dotnet test pirry-ledger.slnx --no-build --nologo` con **110 verde, 0 con error** (85 AccessControl + 6 Notifications + 19 Permissions: 9 de la máquina de estados y 10 de casos de uso nuevas).
+- `dotnet test --filter "FullyQualifiedName~TodaOperacionDeLaTablaTieneUnaRuta"` → 1 verde. La prueba reflexiona las rutas reales del Host tras añadir `MapPermissions()`: las seis nuevas entradas de `RoleRequirements` están cubiertas por sus rutas correspondientes; si alguien añadiera una operación al enum sin ruta, la prueba falla con la frase "estas operaciones están en la tabla pero ninguna Route las usa" y enumera cuál falta.
+- `dotnet test --filter "FullyQualifiedName~AprobarUnaSolicitudPendiente"` → 1 verde: tras aprobar, la solicitud queda en `Applied` con `ApproverId` igual al `Admin.Id`, `ApprovedAtUtc` y `AppliedAtUtc` rellenos, y una fila nueva en `per_permission_grants` (RF-GP-05 + ADR 008).
+- `dotnet test --filter "FullyQualifiedName~UnEstandarAscendidoNoPuede"` → 1 verde: el camino realista de RF-GP-07 — un Estándar crea, el Admin lo asciende (`User.ChangeRole` incrementa `CredentialVersion` por ADR 009), el usuario re-inicia sesión ya como Administrator, intenta aprobar su propia solicitud y es rechazado por identidad (`request.RequesterId == caller.Id`).
+- `dotnet test --filter "FullyQualifiedName~RechazarSinMotivo"` → 1 verde: el motivo vacío lanza antes de tocar la solicitud.
+- `dotnet test --filter "FullyQualifiedName~UnEstandarSoloVeSusPropiasSolicitudes"` → 1 verde: el filtro `requesterId == caller.Id` se aplica en el caso de uso, no en el endpoint.
+- `git grep -n "Application\.Helpers"` → cero resultados: la mudanza del PR #37 sigue limpia.
+
+**Documentación en el mismo PR.**
+
+- `README.md`: nueva sección "Endpoints de la Asignación 2 (gestión de permisos)" con las seis rutas y un párrafo explicativo de que el resto del README sigue describiendo Práctica 1.

@@ -4,6 +4,7 @@ using PirryLedger.Core.AccessControl.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Core.Contracts.Notifications;
+using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 
 namespace PirryLedger.Core.AccessControl.Infrastructure;
@@ -57,7 +58,11 @@ public static class DependencyInjection
             SessionDuration));
 
         services.AddScoped<Logout>();
-        services.AddScoped<Authenticate>();
+        services.AddScoped<Authenticate>(provider => new Authenticate(
+            provider.GetRequiredService<ISessionRepository>(),
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<IPermissionAuthority>()));
 
         // RF-CA-05, RF-CA-08, RF-CA-20 y RF-CA-21. Los tres casos de uso reciben
         // Authenticate y no el repositorio de sesiones: el rechazo de role tiene que

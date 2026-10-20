@@ -4,6 +4,7 @@ using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Contracts.Auth;
+using PirryLedger.Core.Permissions.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +38,13 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(ChangeUserRole),
         typeof(DeactivateUser),
         typeof(PirryLedger.Core.Contracts.Time.IClock),
+        // Casos de uso del modulo de Permissions que el filtro resuelve al
+        // construir las Route de MapPermissions().
+        typeof(PirryLedger.Core.Permissions.Application.UseCases.CreatePermissionRequest),
+        typeof(PirryLedger.Core.Permissions.Application.UseCases.ListOwnPermissionRequests),
+        typeof(PirryLedger.Core.Permissions.Application.UseCases.ListPendingPermissionRequests),
+        typeof(PirryLedger.Core.Permissions.Application.UseCases.ApprovePermissionRequest),
+        typeof(PirryLedger.Core.Permissions.Application.UseCases.RejectPermissionRequest),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de
@@ -55,6 +63,7 @@ public class PruebasDelPuntoUnicoDeAcceso
         var app = builder.Build();
 
         app.MapAccessControl();
+        app.MapPermissions();
 
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(fuente => fuente.Endpoints)
