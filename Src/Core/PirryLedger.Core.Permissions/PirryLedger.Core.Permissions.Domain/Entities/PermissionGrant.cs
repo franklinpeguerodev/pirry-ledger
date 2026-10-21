@@ -53,4 +53,16 @@ public sealed class PermissionGrant
             grantedAtUtc,
             grantedByUserId);
     }
+
+    // RF-GP-05: si el par (user_id, permission_name) ya existe, una nueva
+    // aprobacion re-asigna los sellos de tiempo y autor sin crear una fila
+    // nueva. Asi se respeta el indice unico
+    // ux_per_permission_grants_user_permission (ADR 008) y la semantica "el
+    // permiso sigue concedido a partir de esta aprobacion". Llamado por el
+    // repositorio cuando detecta la fila existente antes de hacer el INSERT.
+    public void Regrant(DateTime grantedAtUtc, Guid? grantedByUserId)
+    {
+        GrantedAtUtc = grantedAtUtc;
+        GrantedByUserId = grantedByUserId;
+    }
 }
