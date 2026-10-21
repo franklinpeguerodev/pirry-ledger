@@ -617,9 +617,15 @@ ni servidor SMTP.
 | rolees y administración de usuarios | RF-CA-04, 05, 06, 08, 20, 21 | [3.4](#34-administración-de-usuarios) |
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
 | Máquina de estados (estructura) | RF-NEG-03, 04, 05, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
+| **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 
-> **Asignación 2** — el árbol anterior es la Práctica 1. Desde `develop` con PR #37 mergeado hay un quinto módulo en construcción: `PirryLedger.Core.Permissions` (gestión de solicitudes de permiso, RF-GP-01..07). Su pieza de demo (`ViewSalesSummary`) y sus rutas llegan en PR #38 y PR #39. Esta tabla y los enlaces a las secciones 3.x siguen siendo del alcance vigente.
+> **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
+> `PirryLedger.Core.Permissions` (solicitudes de permiso, RF-GP-01 a RF-GP-07) con
+> su suite de pruebas, su migración propia y su sección
+> [3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07), donde está cómo provocar
+> cada criterio. La tabla de arriba y los enlaces a las secciones 3.x cubren
+> ambas.
 
 ### Decisiones documentadas
 
@@ -678,14 +684,16 @@ sección.
 dotnet test pirry-ledger.slnx
 ```
 
-Termina con todas las pruebas superadas y ninguna con error. AccessControl y
-Notifications no necesitan base de datos ni servidor SMTP: usan dobles en
-memoria y un reloj falso. Notifications cubre la entidad de cola, los estados,
-el envío único, el retorno a `Pendiente` cuando falla el transporte, el contador
-de attempts y la validación del tamaño del lote. El envío SMTP real y la lectura
-de sus credenciales desde variables de entorno se verifican manualmente con
-`--send-mail`, más abajo. Las pruebas de la máquina de estados quedan para la
-semana 8.
+Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (85), Notifications (6) y
+Permissions (22), que cubren la máquina de estados de la solicitud, los casos de
+uso y el repositorio de concesiones. Todas usan dobles en memoria y un reloj
+falso (RD-12).
+
+Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
+y la lectura de sus credenciales desde variables de entorno se verifican
+manualmente con `--send-mail`, más abajo. Las pruebas de la máquina de estados
+de `Invoice` llegan en la semana 8.
 
 ### Preparación común
 
@@ -1223,6 +1231,202 @@ del módulo Business.
 | RD-10 | La conexión, el primer Administrador y SMTP se configuran mediante variables de entorno (sección 1, paso 4). |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
 | RD-12 | AccessControl y Notifications tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
+
+### 3.8 Gestión de permisos (RF-GP-01 a RF-GP-07)
+
+Todo lo de esta sección se ejecutó contra la API levantada siguiendo los pasos 1
+a 7, y las salidas son reales. La colección de peticiones está en
+`Src/Host/PirryLedger.Host/PirryLedger.Permissions.http`: son las mismas, en
+orden, para quien prefiera el cliente HTTP de VS Code o el de JetBrains.
+
+Antes de empezar necesitas un usuario **activado** (paso 8) y el token del
+Administrador (sección [El primer Administrador](#el-primer-administrador)).
+
+#### RF-GP-01 — un Estándar crea una solicitud y nace en Pendiente
+
+```powershell
+$solicitud = Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests' -Method Post `
+  -Headers $estHeaders -ContentType 'application/json' `
+  -Body (@{ requestedPermission = 'ViewSalesSummary' } | ConvertTo-Json)
+```
+
+```
+202  {"id":"4b08f67b-60f3-440b-8e15-ad789927bea2"}
+```
+
+La solicitud nace en `Pending`. Un permiso que no está en el catálogo se
+rechaza con `400` y un mensaje en español, sin crear nada:
+
+```
+400  {"message":"El permiso solicitado no existe."}
+```
+
+Sin cabecera `Authorization` responde `401` y `{"message":"Sesion no valida."}`.
+
+#### RF-GP-02 — el Administrador ve las pendientes; el Estándar, no las de otros
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/mine' -Headers $estHeaders
+Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/pending' -Headers $adminHeaders
+```
+
+El Estándar recibe `200` con **sus** solicitudes y solo las suyas (el filtro por
+solicitante vive en el caso de uso, no en la ruta). Con el mismo usuario
+Estándar, la lista global responde:
+
+```
+403  {"message":"No tiene permisos para esta operacion."}
+```
+
+y el Administrador recibe `200` con todas las que están en `Pending`.
+
+#### RF-GP-03 — aprobar registra quién y cuándo
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$($solicitud.id)/approve" `
+  -Method Post -Headers $adminHeaders
+```
+
+```
+204
+```
+
+```sql
+SELECT state, approver_id, approved_at_utc, applied_at_utc
+FROM per_permission_requests WHERE id = '<id>';
+```
+
+Vuelve `Applied`, con `approver_id` y las dos marcas de tiempo. El aprobador y
+el instante los escribe `PermissionRequest.Approve` desde el reloj inyectable
+(RD-11), nunca desde la petición.
+
+#### RF-GP-04 — rechazar exige motivo escrito
+
+Sin motivo, o con el motivo vacío, el rechazo **no** se completa:
+
+```
+400  {"message":"El motivo del rechazo es obligatorio."}
+```
+
+Con motivo, responde `204` y la solicitud queda en `Rejected` con el motivo
+guardado:
+
+```sql
+SELECT state, approver_id, rejection_reason FROM per_permission_requests WHERE id = '<id>';
+```
+
+#### RF-GP-05 — el permiso queda aplicado sin ninguna intervención extra
+
+Inmediatamente después de la aprobación, el solicitante ya puede ejecutar la
+acción que pidió:
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/sales-summary' -Headers $estHeaders
+```
+
+```
+200  {"date":"2026-10-20","totalInvoices":12,"totalAmount":3500,"branch":"Sucursal Principal"}
+```
+
+Antes de aprobar, esa misma ruta responde `403`. La fila que lo hace posible:
+
+```sql
+SELECT u.email, g.permission_name, g.granted_by_user_id, g.granted_at_utc
+FROM per_permission_grants g JOIN ac_users u ON u.id = g.user_id;
+```
+
+Una fila por par `(usuario, permiso)`: si el mismo usuario recibe otra
+aprobación del mismo permiso, la fila se actualiza en lugar de duplicarse (el
+índice único `ux_per_permission_grants_user_permission` lo impide).
+
+#### RF-GP-06 — solo las transiciones de la tabla
+
+Aprobar dos veces la misma solicitud se rechaza y **el estado no cambia**:
+
+```
+400  {"message":"Solo se pueden aprobar solicitudes en estado Pendiente."}
+```
+
+```sql
+SELECT state FROM per_permission_requests WHERE id = '<id>';   -- Applied
+```
+
+Lo mismo al aprobar una solicitud ya rechazada: `400` y sigue en `Rejected`. La
+tabla de transiciones vive entera en `PermissionRequestStateMachine` (RD-04).
+
+#### RF-GP-07 — nadie resuelve su propia solicitud
+
+**Camino realista (principal).** Un Estándar crea una solicitud, mientras está
+`Pending` se le asciende a Administrador, vuelve a iniciar sesión y aun así no
+puede resolverla. La regla compara identidades, no roles.
+
+```powershell
+# 1. El Estándar crea la solicitud y se queda con el id.
+# 2. El Administrador lo asciende (RF-CA-08). Esto invalida su sesión (ADR 009).
+Invoke-WebRequest -Uri "http://localhost:5243/api/admin/users/$idEstandar/role" `
+  -Method Post -Headers $adminHeaders -ContentType 'application/json' `
+  -Body (@{ role = 'Administrator' } | ConvertTo-Json)
+
+# 3. Con el token viejo ya no hay sesión válida.
+Invoke-WebRequest -Uri 'http://localhost:5243/me' -Headers $estHeaders
+# 401  {"message":"Sesion no valida."}
+
+# 4. Vuelve a iniciar sesión: el token nuevo ya trae el rol nuevo.
+Invoke-RestMethod -Uri 'http://localhost:5243/me' -Headers $estHeadersNuevo
+# 200  {"name":"Ana","email":"ana@ejemplo.com","role":"Administrator"}
+
+# 5. Intenta aprobar su propia solicitud.
+Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$id/approve" `
+  -Method Post -Headers $estHeadersNuevo
+# 400  {"message":"No puede resolver su propia solicitud de permiso."}
+```
+
+La solicitud sigue en `Pending` y el Administrador original sí puede
+resolverla (`204`).
+
+**Camino directo (comprobación corta).** Un Administrador crea una solicitud
+para sí mismo e intenta resolverla:
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$idPropia/approve" `
+  -Method Post -Headers $adminHeaders
+# 400  {"message":"No puede resolver su propia solicitud de permiso."}
+```
+
+Lo mismo al rechazar. Un detalle de orden: si el motivo va vacío, la respuesta
+es la del motivo (`"El motivo del rechazo es obligatorio."`), porque la
+validación del motivo corre antes que la de auto-resolución; con motivo
+presente, la respuesta es la de RF-GP-07.
+
+Un Estándar que intenta aprobar, sin haber sido ascendido, recibe `403` y no un
+`400`: el filtro de rol act��a antes de llegar al caso de uso (RD-06).
+
+#### RD-09 — las solicitudes sobreviven al reinicio
+
+Crea una solicitud, anota su estado y para la aplicación (Ctrl+C). Vuelve a
+levantarla (paso 7) y comprueba que la solicitud sigue ahí:
+
+```sql
+SELECT state, approver_id, rejection_reason, created_at_utc
+FROM per_permission_requests ORDER BY created_at_utc;
+```
+
+Lo mismo con `per_permission_grants`: las concesiones sobreviven porque las
+dos tablas están en PostgreSQL, no en memoria.
+
+#### Nombres de la pieza
+
+El enunciado llama a esta entidad `SolicitudPermiso` y a sus estados `Pendiente`,
+`Aprobada`, `Aplicada` y `Rechazada`. En el código, en inglés:
+
+| Enunciado | En el código | Dónde |
+|---|---|---|
+| `SolicitudPermiso` | `PermissionRequest` | `PirryLedger.Core.Permissions.Domain` |
+| `Pendiente` | `PermissionRequestState.Pending` | `PirryLedger.Core.Permissions.Domain.Enums` |
+| `Aprobada` | `PermissionRequestState.Approved` | ídem |
+| `Aplicada` | `PermissionRequestState.Applied` | ídem |
+| `Rechazada` | `PermissionRequestState.Rejected` | ídem |
+| Tabla de concesiones | `PermissionGrant` (`per_permission_grants`) | ADR 008 |
 
 ---
 
