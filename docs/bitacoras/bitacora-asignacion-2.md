@@ -575,3 +575,55 @@ marca de tiempo del archivo**, MSBuild lo vio más viejo que el ensamblado, no
 recompiló y ejecuté las pruebas contra el binario anterior. El síntoma fue un
 "falla con el arreglo puesto" que no era real. A partir de ese momento, antes de
 medir, se compila con `dotnet build --no-incremental`.
+
+### Corrección de la Entrada 6 — 2026-10-20
+
+La Entrada 6 afirma que la suite de la pieza cubre "crear válida, crear con
+permiso inexistente (RF-GP-01)". **Es inexacto: esas dos pruebas no existían.**
+La suite que se entregó con el PR #39 tenía diez pruebas de casos de uso
+(aprobar, aprobar dos veces, aprobar inexistente, auto-resolución directa,
+auto-resolución realista, rechazar, rechazar sin motivo, rechazar
+auto-resolución, listar propias, listar pendientes) y ninguna verificaba el
+criterio de aceptación de RF-GP-01.
+
+Cómo se detectó: en una auditoría de la entrega, al contar las pruebas del
+proyecto y contrastarlas con los siete criterios de aceptación del enunciado. No
+salió de ninguna ejecución fallida: la cuenta estaba bien, la afirmación que la
+rodeaba no.
+
+Es un error mío de redacción: describí la cobertura *pretendida* en lugar de la
+*entregada*, y lo escribí sin abrir el proyecto de pruebas para contarla. La
+prueba que falta (que la solicitud nace en `Pending` con solicitante y fecha) se
+escribe después del tag; el criterio queda verificado a mano en la sección 3.8
+del `README.md` mientras tanto.
+
+### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
+
+**Qué se pidió.** Corregir en el guion HTTP las expectativas que no coincidían
+con lo que responde la API, ejecutándola antes.
+
+**Qué se vio.** Al recorrer la pieza con la API levantada, una petición de
+rechazo **sin cuerpo** respondió:
+
+```text
+500 {"message":"La operacion no tiene una exigencia de acceso declarada."}
+```
+
+Con cuerpo presente y el motivo vacío, el `400` controlado sí llega. El
+problema es que el parámetro de cuerpo de esa ruta no es opcional: el binding
+falla antes de que corra el caso de uso y el filtro de acceso responde con su
+mensaje de exigencia no declarada. Es una violación de RD-07/RD-08 (entrada
+inválida produce un rechazo controlado, nunca una excepción sin manejar) y
+contradice la restricción explícita de `docs/current-iteration.md`.
+
+**Qué devolví.** Se intentó hacer opcional el cuerpo de la ruta y la prueba no
+dio el resultado: la respuesta siguió siendo `500`, y el JSON malformado
+devolvió un `400` **con traza de excepción** en el entorno de desarrollo. Como
+el tiempo de la entrega estaba encima, se revirtió el cambio en vez de dejar a
+medias un arreglo sin verificar, y el guion HTTP documenta esa petición como
+defecto conocido en lugar de presentarla como resultado esperado. RF-GP-04 no se
+ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
+`400`.
+
+**Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
+después del tag, junto con lo que ya estaba diferido.
