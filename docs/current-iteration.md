@@ -23,7 +23,7 @@ Deliver three things at the tag `asignacion-2`: the Permissions management piece
 | Cross-cutting design | RD-04, RD-06, RD-07, RD-09, RD-12 |
 | Unit test suite on the piece (valid transition, forbidden transition) | assignment section 1.2 |
 | README: how to trigger each RF-GP criterion, and a section titled exactly `Pruebas` | assignment sections 1.1 and 1.2 |
-| Logbook `docs/bitacoras/bitacora-asignacion-2.md` | assignment section 1.3 |
+| Logbook `docs/bitacora-asignacion-2.md` | assignment section 1.3 |
 
 ## Out of scope (do not build)
 
@@ -44,6 +44,29 @@ Deliver three things at the tag `asignacion-2`: the Permissions management piece
 ## Open decisions (ask, do not assume)
 
 None for this iteration.
+
+## Deferred
+
+Work and decisions consciously left out of this iteration. Nothing here is
+waiting for a decision: each item states what it blocks and why it is not being
+resolved now.
+
+- **Do not run `dotnet ef migrations add` in the permissions module.** Its model
+  declares no foreign keys to `ac_users`, and its migration snapshot was only
+  generated on 2026-10-20. Until it is settled whether those keys belong in the
+  model (declared by table name) or stay out of the database for good, any new
+  migration would be generated from a model that contradicts how the tables were
+  designed. The alternatives and their consequences are in the logbook, Entry 8.
+- **The four foreign keys to `ac_users` are not in the database.**
+  `requester_id`, `approver_id`, `user_id` and `granted_by_user_id` carry no
+  referential constraint. Integrity comes from the application, which takes both
+  identities from the authenticated session rather than from the request body.
+  It stays that way until the decision above is taken.
+- **Missing migration metadata is caught by hand, not by a test.** A migration
+  committed without its `.Designer.cs` sits in the repository while EF Core
+  ignores it silently, and `dotnet ef database update` reports the database as
+  up to date. That is how the permissions migration went unnoticed until the run
+  of 2026-10-20 (logbook, Entry 8). No automated check guards it yet.
 
 ## Constraints
 
@@ -67,10 +90,7 @@ None for this iteration.
 
 ## Logbook
 
-File: `docs/bitacoras/bitacora-asignacion-2.md`.
-
-> Note: the assignment brief fixes the path as `docs/bitacora-asignacion-2.md` directly inside `docs/`. Before the tag `asignacion-2` is created, the file must be moved to that path with `git mv`, unless Franklin confirms with the professor that `docs/bitacoras/` is acceptable.
-
+File: `docs/bitacora-asignacion-2.md`, the path the assignment brief fixes.
 It documents at least one real task of this assignment delegated to the agent: what was asked, what it returned, and at least one case where the agent was wrong, how it was detected and how it was corrected, with evidence of the real session. Nothing is invented and nothing is reused from Asignación 1. The agent drafts each entry; Franklin reviews it before it is pushed.
 
 ## Definition of done
@@ -84,7 +104,7 @@ It documents at least one real task of this assignment delegated to the agent: w
 
 ## How it will be checked
 
-The repo is cloned and `asignacion-2` checked out; the README is followed to the letter. Then: create, approve, reject with a reason and approve twice a request; run the command of the `Pruebas` section as written; read the valid-transition and forbidden-transition tests (what they prepare, execute and verify); read `docs/bitacoras/bitacora-asignacion-2.md`.
+The repo is cloned and `asignacion-2` checked out; the README is followed to the letter. Then: create, approve, reject with a reason and approve twice a request; run the command of the `Pruebas` section as written; read the valid-transition and forbidden-transition tests (what they prepare, execute and verify); read `docs/bitacora-asignacion-2.md`.
 
 ## Delivered earlier
 

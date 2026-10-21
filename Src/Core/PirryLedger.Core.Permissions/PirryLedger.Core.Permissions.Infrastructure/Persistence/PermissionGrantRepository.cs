@@ -15,9 +15,28 @@ internal sealed class PermissionGrantRepository : IPermissionGrantRepository
 
     public async Task SaveAsync(PermissionGrant grant, CancellationToken cancellationToken = default)
     {
-        if (!_context.PermissionGrants.Local.Any(local => local.Id == grant.Id))
+        // Upsert por (user_id, permission_name). El indice unico
+        // ux_per_permission_grants_user_permission (ADR 008) impide que el camino
+        // de insercion funcione dos veces para el mismo par. Si la fila existe,
+        // re-asignamos los sellos de tiempo y autor sobre la entidad existente
+        // en vez de intentar un INSERT que la BD rechaza con 23505. Si no,
+        // anadimos la nueva fila.
+        var existing = await _context.PermissionGrants
+            .FirstOrDefaultAsync(g =>
+                g.UserId == grant.UserId &&
+                g.PermissionName == grant.PermissionName,
+                cancellationToken);
+
+        if (existing is not null)
         {
-            _context.PermissionGrants.Add(grant);
+            existing.Regrant(grant.GrantedAtUtc, grant.GrantedByUserId);
+        }
+        else
+        {
+            if (!_context.PermissionGrants.Local.Any(local => local.Id == grant.Id))
+            {
+                _context.PermissionGrants.Add(grant);
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);

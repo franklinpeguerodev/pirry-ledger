@@ -471,3 +471,159 @@ La base del plan de la pieza (`develop` en `7ce15f3`) sigue siendo la de antes d
 **Documentación en el mismo PR.**
 
 - `README.md`: nueva sección "Endpoints de la Asignación 2 (gestión de permisos)" con las seis rutas y un párrafo explicativo de que el resto del README sigue describiendo Práctica 1.
+
+### Entrada 7 — Concesión duplicada: el `23505` que la aprobación anterior no vio (2026-10-20)
+
+**Qué se pidió.** Cerrar la pieza de permisos antes del tag: reproducir el
+script de regresión HTTP contra la base local y corregir lo que fallara.
+
+**Qué devolví.** El guion HTTP de regresión devolvió un `500` en el segundo
+bloque de aprobación. La causa estaba en `PermissionGrantRepository.SaveAsync`:
+insertaba una fila nueva cada vez, sin mirar si el par `(user_id,
+permission_name)` ya existía. Como el índice único
+`ux_per_permission_grants_user_permission` (ADR 008) rechaza el segundo
+`INSERT`, la segunda aprobación de un permiso que el usuario ya tenía moría
+con `23505`, y el endpoint lo devolvía como `500` sin explicación.
+
+El arreglo busca primero el par y, si existe, re-sella la fila con
+`PermissionGrant.Regrant` en vez de insertar. La decisión vive en el
+repositorio porque es una cuestión de persistencia; la entidad solo expone el
+re-sello.
+
+**Lo que se verificó.**
+
+- La prueba nueva cubre el repositorio real sobre un contexto EF Core en
+  memoria, no un doble: sin el arreglo, dos de las tres pruebas fallan con
+  `Assert.Single() Failure: The collection contained 2 items`, que es
+  exactamente la fila duplicada. Con el arreglo, las tres pasan.
+- Se añadió `Microsoft.EntityFrameworkCore.InMemory` **solo al proyecto de
+  pruebas**; ningún proyecto de producción lo referencia.
+- El proveedor en memoria **no aplica índices únicos**, y por eso no reproduce
+  el `23505` por sí solo: sirve para afirmar la lógica del repositorio, no para
+  reproducir el error de la base. Esa limitación quedó anotada en el mensaje del
+  commit.
+- Suite completa: `dotnet test pirry-ledger.slnx` → 85 + 6 + 22 = **113, 0 con
+  error**.
+
+### Entrada 8 — Una migración que EF nunca aplicaba (2026-10-20)
+
+**Qué se pidió.** Auditar la entrega contra los criterios de aceptación antes
+del tag.
+
+**Qué devolví, y un error mío.** En la auditoría afirmé que la migración de
+permisos creaba sus tablas y que el profesor no se vería afectado al arrancar la
+pieza. **Era falso, y lo dije sin ejecutarlo**: leí el SQL del archivo de
+migración y di por bueno que eso era lo que pasaba en la base. El error fue de
+método, no de lectura: afirmé un comportamiento de ejecución sin ejecutar.
+
+**Cómo se detectó.** Con una base de datos nueva creada para la prueba y los
+tres comandos del paso 6 del `README.md`, en orden:
+
+```text
+=== dotnet ef database update --project .../AccessControl.Infrastructure ===
+   Applying migration '20261018191406_InitialSchema'.
+   Done.
+=== dotnet ef database update --project .../Notifications.Infrastructure ===
+   Applying migration '20261018213308_InitialSchema'.
+   Done.
+=== dotnet ef database update --project .../Permissions.Infrastructure ===
+   No migrations were applied. The database is already up to date.
+   Done.                                      exit=0
+```
+
+El tercer comando terminaba con éxito y **no creaba nada**. En la base solo
+quedaban `__EFMigrationsHistory` (vacía), las cuatro tablas `ac_` y
+`not_email_queue`.
+
+**La causa.** El repositorio tenía un solo archivo de migración para la pieza,
+sin su `.Designer.cs` ni su `PermissionsDbContextModelSnapshot.cs`. El
+`.Designer.cs` es el que lleva los atributos `[DbContext]` y `[Migration]` con
+los que EF descubre una migración; sin él, EF ignora el archivo **en silencio** y
+responde que la base está al día. AccessControl y Notifications sí tienen sus
+tres archivos.
+
+**Cómo se corrigió.** Se borró el archivo huérfano y se regeneró la migración con
+`dotnet ef migrations add InitialSchema`, que emite los tres archivos. Antes, la
+fábrica en tiempo de diseño de la pieza llevaba una **cadena de conexión fija**,
+así que `dotnet ef` apuntaba a otra base y nunca leía la variable de entorno; ahora
+lee `ConnectionStrings__PirryLedger` por `DatabaseConfiguration.ConnectionVariable`,
+igual que las otras dos piezas, y falla con el mismo mensaje si falta.
+
+**Lo que se verificó después.**
+
+- `dotnet ef migrations list` ahora lista la migración (antes no listaba ninguna).
+- `dotnet ef migrations has-pending-model-changes` → `No changes have been made to the model since the last migration.`
+- Base nueva, tres migraciones aplicadas: aparecen `per_permission_requests` y
+  `per_permission_grants` con `ux_per_permission_grants_user_permission`.
+- Orden inverso (permisos primero) aplicado sin error, así que el paso 6
+  documenta que el orden da igual.
+
+**Diferencia con la migración anterior, y lo que se aplaza.** La migración
+anterior declaraba cuatro claves foráneas hacia `ac_users`; la regenerada **no
+tiene ninguna**, porque el modelo nunca las declaró y EF solo genera lo que el
+modelo dice. Las tablas, columnas e índices son idénticos, incluido el único.
+La integridad de esas cuatro columnas (`requester_id`, `approver_id`, `user_id`,
+`granted_by_user_id`) **pasa a la aplicación**, que es de donde salen las
+identidades. Queda anotado como diferido en `docs/current-iteration.md`: declarar
+las claves foráneas en el modelo por nombre de tabla, o dejarlas fuera de
+permanente, es una decisión que roza la regla de que ningún módulo toca las
+tablas de otro.
+
+**Otro error mío, de medición.** Al reproducir el fallo del `23505` obtuve un
+falso negativo: restauré el repositorio viejo con `Copy-Item`, que **conserva la
+marca de tiempo del archivo**, MSBuild lo vio más viejo que el ensamblado, no
+recompiló y ejecuté las pruebas contra el binario anterior. El síntoma fue un
+"falla con el arreglo puesto" que no era real. A partir de ese momento, antes de
+medir, se compila con `dotnet build --no-incremental`.
+
+### Corrección de la Entrada 6 — 2026-10-20
+
+La Entrada 6 afirma que la suite de la pieza cubre "crear válida, crear con
+permiso inexistente (RF-GP-01)". **Es inexacto: esas dos pruebas no existían.**
+La suite que se entregó con el PR #39 tenía diez pruebas de casos de uso
+(aprobar, aprobar dos veces, aprobar inexistente, auto-resolución directa,
+auto-resolución realista, rechazar, rechazar sin motivo, rechazar
+auto-resolución, listar propias, listar pendientes) y ninguna verificaba el
+criterio de aceptación de RF-GP-01.
+
+Cómo se detectó: en una auditoría de la entrega, al contar las pruebas del
+proyecto y contrastarlas con los siete criterios de aceptación del enunciado. No
+salió de ninguna ejecución fallida: la cuenta estaba bien, la afirmación que la
+rodeaba no.
+
+Es un error mío de redacción: describí la cobertura *pretendida* en lugar de la
+*entregada*, y lo escribí sin abrir el proyecto de pruebas para contarla. La
+prueba que falta (que la solicitud nace en `Pending` con solicitante y fecha) se
+escribe después del tag; el criterio queda verificado a mano en la sección 3.8
+del `README.md` mientras tanto.
+
+### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
+
+**Qué se pidió.** Corregir en el guion HTTP las expectativas que no coincidían
+con lo que responde la API, ejecutándola antes.
+
+**Qué se vio.** Al recorrer la pieza con la API levantada, una petición de
+rechazo **sin cuerpo** respondió:
+
+```text
+500 {"message":"La operacion no tiene una exigencia de acceso declarada."}
+```
+
+Con cuerpo presente y el motivo vacío, el `400` controlado sí llega. El
+problema es que el parámetro de cuerpo de esa ruta no es opcional: el binding
+falla antes de que corra el caso de uso y el filtro de acceso responde con su
+mensaje de exigencia no declarada. Es una violación de RD-07/RD-08 (entrada
+inválida produce un rechazo controlado, nunca una excepción sin manejar) y
+contradice la restricción explícita de `docs/current-iteration.md`.
+
+**Qué devolví.** Se intentó hacer opcional el cuerpo de la ruta y la prueba no
+dio el resultado: la respuesta siguió siendo `500`, y el JSON malformado
+devolvió un `400` **con traza de excepción** en el entorno de desarrollo. Como
+el tiempo de la entrega estaba encima, se revirtió el cambio en vez de dejar a
+medias un arreglo sin verificar, y el guion HTTP documenta esa petición como
+defecto conocido en lugar de presentarla como resultado esperado. RF-GP-04 no se
+ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
+`400`.
+
+**Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
+después del tag, junto con lo que ya estaba diferido.

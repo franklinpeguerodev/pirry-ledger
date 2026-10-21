@@ -95,7 +95,7 @@
 # recuperar invalidan los códigos pendientes).
 
 @tokenActivacion = <pega-aqui-el-token-de-64-hex-del-correo-de-activacion>
-@codigoRecuperacion = edba8dbaf7b0f7f360f9fb2fd3ed15f34743e5bcb50e0ba6fcf870df772966b4
+@codigoRecuperacion = <pega-aqui-el-codigo-de-64-hex-del-correo-de-recuperacion>
 # --- Contrato (artefacto de desarrollo, no un caso de negocio) -----------------
 
 ### Documento OpenAPI -> 200. Describe el contrato; no ejercita ninguna regla de
