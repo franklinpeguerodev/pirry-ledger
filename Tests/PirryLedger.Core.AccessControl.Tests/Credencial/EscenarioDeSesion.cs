@@ -32,7 +32,10 @@ internal sealed class SessionScenario
 
         User = Users.Create("Empleado", UserEmail, Hasher.Hash(ValidPassword), start, active: true);
 
-        Authenticate = new Authenticate(Sessions, Users, Clock);
+        // RF-GP-05: las pruebas de Session de AccessControl no necesitan el modulo
+        // de Permissions. Un doble local que devuelve false para todos los permisos
+        // basta: ninguna ruta de las que prueban estas tests exige AccessLevel.Permission.
+        Authenticate = new Authenticate(Sessions, Users, Clock, new FakePermissionAuthority());
         Login = new Login(Users, Sessions, Hasher, Clock, TimeSpan.FromHours(8));
         Logout = new Logout(Sessions, Clock);
     }

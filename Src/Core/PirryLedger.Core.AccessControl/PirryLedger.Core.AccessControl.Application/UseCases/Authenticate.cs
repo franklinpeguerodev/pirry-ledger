@@ -1,5 +1,6 @@
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 
 namespace PirryLedger.Core.AccessControl.Application;
@@ -42,12 +43,18 @@ public sealed class Authenticate
     private readonly ISessionRepository _sessions;
     private readonly IUserRepository _users;
     private readonly IClock _clock;
+    private readonly IPermissionAuthority _permissions;
 
-    public Authenticate(ISessionRepository sessions, IUserRepository users, IClock clock)
+    public Authenticate(
+        ISessionRepository sessions,
+        IUserRepository users,
+        IClock clock,
+        IPermissionAuthority permissions)
     {
         _sessions = sessions;
         _users = users;
         _clock = clock;
+        _permissions = permissions;
     }
 
     // Lanza InvalidSessionException si no hay sesion valida. Devuelve el usuario
@@ -86,6 +93,28 @@ public sealed class Authenticate
         if (user.Role != requiredRole)
         {
             throw new InsufficientRoleException();
+        }
+
+        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role);
+    }
+
+    // RF-GP-05: la misma idea que ExecuteWithRoleAsync pero consultando
+    // IPermissionAuthority. La pieza de Permissions registra la implementacion
+    // en DI; AccessControl solo ve el contrato (en Core.Contracts).
+    //
+    // Si la sesion no es valida, lanza InvalidSessionException (401). Si el
+    // usuario no tiene el permiso concedido, lanza InsufficientPermissionException
+    // (403). Mismas dos capas de rechazo que el caso de role, mismo orden.
+    public async Task<AuthenticatedUser> ExecuteWithPermissionAsync(
+        string plainToken,
+        string permissionName,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await ValidateAsync(plainToken, cancellationToken);
+
+        if (!await _permissions.UserHasPermissionAsync(user.Id, permissionName, cancellationToken))
+        {
+            throw new InsufficientPermissionException();
         }
 
         return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role);

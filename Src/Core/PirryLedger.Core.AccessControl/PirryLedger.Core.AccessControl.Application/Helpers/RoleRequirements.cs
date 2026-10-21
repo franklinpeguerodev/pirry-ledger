@@ -1,5 +1,5 @@
-using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.Contracts.Auth;
 
 namespace PirryLedger.Core.AccessControl.Application;
 
@@ -75,11 +75,33 @@ public static class RoleRequirements
         [Operation.ResetPassword] = new(AccessLevel.Public),
         [Operation.ChangeOwnPassword] = new(AccessLevel.AnySession),
         [Operation.ForceReset] = new(AccessLevel.Administrator),
+
+        // RF-GP-01..04: la pieza de permisos vive en
+        // PirryLedger.Core.Permissions, pero la tabla es el unico punto del sistema
+        // que decide el nivel de cada operation. El filtro (todavia en
+        // PirryLedger.Core.AccessControl.Api) consulta esta tabla para esas rutas.
+        [Operation.CreatePermissionRequest] = new(AccessLevel.AnySession),
+        [Operation.ListOwnPermissionRequests] = new(AccessLevel.AnySession),
+        [Operation.ListPendingPermissionRequests] = new(AccessLevel.Administrator),
+        [Operation.ApprovePermissionRequest] = new(AccessLevel.Administrator),
+        [Operation.RejectPermissionRequest] = new(AccessLevel.Administrator),
+
+        // RF-GP-05: la ruta de demostracion exige el permiso ViewSalesSummary,
+        // no un role. El filtro consulta IPermissionAuthority (inyectado via DI
+        // por el Host, registrado por PirryLedger.Core.Permissions.Infrastructure).
+        [Operation.ViewSalesSummary] = new(AccessLevel.Permission, Permission: PermissionName),
     };
 
-    // La Requirement completa de una operation: que Level pide y si tolera que la
-    // credencial no sea valida.
-    public sealed record Requirement(AccessLevel Level, bool IsTolerant = false);
+    // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui
+    // (en lugar de en PirryLedger.Core.Permissions.Domain.PermissionCatalog)
+    // para que la tabla de RoleRequirements pueda declararlo sin depender de la
+    // pieza de Permissions. PermissionCatalog hace la validacion de los nombres
+    // que llegan por HTTP.
+    public const string PermissionName = "ViewSalesSummary";
+
+    // La Requirement completa de una operation: que Level pide, si tolera una
+    // credencial invalida y, para AccessLevel.Permission, el nombre del permiso.
+    public sealed record Requirement(AccessLevel Level, bool IsTolerant = false, string? Permission = null);
 
     // Que acceso exige la operation. Si alguien anade una operation al enum y
     // olvida esta tabla, esto lanza al SER llamada, en vez de dejar la operation
@@ -91,6 +113,20 @@ public static class RoleRequirements
     // no exigir una Session que el endpoint no necesita.
     public static bool ToleratesInvalidCredential(Operation operation) =>
         RequirementFor(operation).IsTolerant;
+
+    // RF-GP-05: nombre del permiso cuando la operation exige AccessLevel.Permission.
+    // Lanza si la operation no es de tipo Permission: misma regla que
+    // RequiredRole para Administrator.
+    public static string RequiredPermission(Operation operation) =>
+        RequiredLevel(operation) switch
+        {
+            AccessLevel.Permission => RequirementFor(operation).Permission
+                ?? throw new InvalidOperationException(
+                    $"La operation {operation} exige Permission pero la entrada de RoleRequirements no declara cual."),
+            _ => throw new ArgumentException(
+                $"La operation {operation} no exige un Permission concreto: es {RequiredLevel(operation)}.",
+                nameof(operation)),
+        };
 
     private static Requirement RequirementFor(Operation operation)
     {

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <!-- Proveedor en memoria de EF Core: permite ejercitar el repositorio real
+         (PermissionGrantRepository) sin PostgreSQL, que es donde vive la regla
+         de upsert de las concesiones. Un doble en memoria probaria el doble,
+         no el repositorio. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Domain\PirryLedger.Core.Permissions.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Application\PirryLedger.Core.Permissions.Application.csproj" />
+    <!-- Infrastructure aporta el DbContext y la migracion. Se importa tambien
+         porque algunas pruebas del modulo verifican el mapeo de EF Core
+         (FK a ac_users, snake_case, ADR 004) sin levantar la aplicacion. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Infrastructure\PirryLedger.Core.Permissions.Infrastructure.csproj" />
+    <!-- Authenticate vive en AccessControl.Application y las pruebas lo
+         instancian directamente con repositorios en memoria para validar
+         sesion, role y permiso (RF-GP-02, RF-GP-07). Tambien los
+         Argon2idPasswordHasher y Argon2Parameters reales para que la
+         verificacion de contrasena no sea un fake (mismo argumento que en
+         AccessControl.Tests). -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

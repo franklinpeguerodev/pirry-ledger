@@ -28,6 +28,13 @@
     <!-- La capa Api, para que la prueba de RF-CA-05 pueda enumerar las rutas REALES
          que registra MapAccessControl en vez de escribir una lista a mano. -->
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
+    <!-- Los casos de uso de Permissions que la prueba de RF-CA-05 enumera
+         para confirmar que las nuevas rutas del modulo (Create, List,
+         Approve, Reject) declaran su Operation en RoleRequirements. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Application\PirryLedger.Core.Permissions.Application.csproj" />
+    <!-- MapPermissions se llama desde RutasReales para incluir las nuevas
+         rutas en la enumeracion que valida RF-CA-05. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Api\PirryLedger.Core.Permissions.Api.csproj" />
   </ItemGroup>
 
   <!-- MapAccessControl devuelve IEndpointRouteBuilder, asi que la prueba necesita el

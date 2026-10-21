@@ -1,6 +1,4 @@
-using PirryLedger.Core.AccessControl.Domain.Entities;
-using PirryLedger.Core.AccessControl.Domain.Enums;
-namespace PirryLedger.Core.AccessControl.Application;
+namespace PirryLedger.Core.Contracts.Auth;
 
 // RF-CA-05: "existe un punto del codigo donde se puede leer la Requirement de role
 // de cada operation".
@@ -20,8 +18,7 @@ namespace PirryLedger.Core.AccessControl.Application;
 // elijiera un清单 escrito a mano, que es justo lo que hay que evitar.
 //
 // Ojo con el Name: una entrada en este enum NO abre ni cierra nada por si
-// sola. Si se declara aqui y no en RoleRequirements, la route se rechaza (ver
-// EseAccesoFallo).
+// sola. Si se declara aqui y no en RoleRequirements, la route se rechaza.
 public enum Operation
 {
     // Registro y activacion. Abiertas a cualquiera: no hay Session todavia.
@@ -51,14 +48,31 @@ public enum Operation
     ResetPassword,
     ChangeOwnPassword,
     ForceReset,
+
+    // Gestion de permisos (RF-GP-*). Las rutas de la pieza PirryLedger.Core.Permissions
+    // usan estos identificadores para declararse en RoleRequirements y para que
+    // el filtro de AccessControl (que sigue siendo el mismo, por la decision de
+    // PR #37) decida que nivel exigen.
+    CreatePermissionRequest,
+    ListOwnPermissionRequests,
+    ListPendingPermissionRequests,
+    ApprovePermissionRequest,
+    RejectPermissionRequest,
+
+    // Demostracion del sistema de permisos (RF-GP-05): la ruta del resumen de
+    // ventas exige este permiso, no un role. Se declara con AccessLevel.Permission
+    // y el nombre del permiso vive en Requirement.Permission.
+    ViewSalesSummary,
 }
 
-// Los tres niveles de Requirement. El orden va de menos a mas: una route publica
-// no necesita Session, una de Session acepta a cualquiera con una Session valida, y
-// una de Administrator exige ese role concreto (RD-06).
+// Los niveles de Requirement. El orden va de menos a mas: una route publica
+// no necesita Session, una de Session acepta a cualquiera con una Session valida,
+// una de Administrator exige ese role concreto (RD-06), y una de Permission
+// exige tener concedida una entrada en per_permission_grants (RF-GP-05).
 public enum AccessLevel
 {
     Public,
     AnySession,
     Administrator,
+    Permission,
 }

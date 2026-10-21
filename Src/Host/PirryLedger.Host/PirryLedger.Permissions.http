@@ -1,0 +1,478 @@
+# PirryLedger — guion de regresión manual para la pieza de Gestión de
+# permisos (Asignación 2).
+#
+# Qué es este archivo: una colección ordenada de peticiones HTTP que recorre
+# las seis rutas del módulo PirryLedger.Core.Permissions junto con los rechazos
+# que exige cada requisito, encadenadas con variables de modo que una corrida de
+# arriba hacia abajo solo necesita pegar el valor de una pausa (el token de
+# activación) en @tokenActivacion y completar las entradas marcadas.
+#
+# Autocontenido: este archivo no comparte estado con PirryLedger.Host.http.
+# Incluye el registro, la activación y los dos logins que necesita. Quien lo
+# ejecuta no tiene que correr antes el guion de Práctica 1 ni tener usuarios
+# pre-creados en la base.
+#
+# Qué NO es este archivo:
+#   - No reemplaza las pruebas unitarias (Tests/PirryLedger.Core.Permissions.Tests):
+#     reglas que la API no alcanza (transición inválida con la maquina
+#     apagada, identificadores compartidos) se verifican allí.
+#   - No prueba el módulo de Business ni la pieza de Notifications: esas
+#     tienen sus propios archivos o quedan cubiertas por las suites
+#     automatizadas de sus módulos.
+#   - No prueba ninguna rotación de correo: el modulo de Permissions no usa
+#     la cola not_email_queue. La unica pausa es la activacion del usuario
+#     estandar al principio.
+#   - No prueba revocar permisos (futuro). El modulo preve la operacion
+#     (ADR 008) pero la pieza no entrega el endpoint esta semana.
+#
+# Cómo ejecutarlo
+#   1. Levantar la API (README, paso 7).
+#   2. Completar el bloque de Entradas una sola vez.
+#   3. Enviar las peticiones de arriba hacia abajo. La pausa 1 esta marcada
+#      con una linea PAUSA 1; las siguientes secciones no tienen pausas.
+#   4. Se puede re-ejecutar sobre una base que ya tiene concesiones: el
+#      repositorio reutiliza la fila de per_permission_grants en lugar de
+#      insertar otra (upsert por user_id + permission_name), asi que la segunda
+#      corrida NO da 500. Aun asi, el registro del usuario estandar responde 409
+#      y su rol queda en Administrator de la corrida anterior: la SQL de reset de
+#      la cabecera deja el escenario como estaba.
+#
+# Sintaxis: variables @file, separadores ###, nombres de peticion # @name y
+# referencias a respuestas {{name.response.body.$.field}} (REST Client de VS Code
+# y cliente HTTP de JetBrains).
+
+# Antes de re-ejecutar: reset de las concesiones y solicitudes del modulo
+# de Permissions para los dos usuarios de este guion. Sin este reset, la
+# segunda corrida falla con 500 en el INSERT de per_permission_grants porque
+# el indice unico (user_id, permission_name) impide duplicar la concesion.
+#
+#   DELETE FROM per_permission_requests WHERE requester_id IN (
+#     SELECT id FROM ac_users WHERE email IN ('<correoEstandar>', '<correoAdmin>')
+#   );
+#   DELETE FROM per_permission_grants WHERE user_id IN (
+#     SELECT id FROM ac_users WHERE email IN ('<correoEstandar>', '<correoAdmin>')
+#   );
+#
+# Si la base es nueva (sin concesiones todavia), estas dos consultas devuelven
+# cero filas y el guion corre igual.
+
+# Host de la API. Coincide con el valor por defecto de
+# PIRRY_LEDGER_PUBLIC_BASE_URL (README, paso 4): esa variable fija a la vez el
+# host:puerto donde escucha la API y la direccion de los enlaces de activacion,
+# asi que si la cambias, cambia tambien esta linea.
+@host = http://localhost:5243
+
+# --- Entradas (completar una sola vez) ----------------------------------------
+
+# Usuario estandar que usan los flujos publicos y de permisos. Coincide con
+# el fixture de Práctica 1 para que la base no se llene de cuentas distintas.
+# La contrasena cumple RF-CA-14 (8+ caracteres con letras y numeros).
+@nombre = Ana
+@correoEstandar = ana@ejemplo.com
+@contrasenaEstandar = abc12345
+
+# Administrador creado por la semilla (README, "El primer Administrador"). Sus
+# valores viven en tu `.env` (PIRRY_LEDGER_FIRST_ADMIN_EMAIL y
+# PIRRY_LEDGER_FIRST_ADMIN_PASSWORD, README paso 4): copialos aqui para la
+# corrida y no los subas al repositorio. No los escribas en ningun sitio
+# compartido, ni siquiera en un comentario de este archivo.
+# Cuidado: un valor equivocado aqui cuenta como intento fallido, y cinco de
+# ellos bloquean la cuenta durante quince minutos (RF-CA-19).
+@correoAdmin = administrador@ejemplo.com
+@contrasenaAdmin = <contrasena-del-administrador>
+
+# --- Valores de la pausa manual -----------------------------------------------
+
+# PAUSA 1: el token de activacion llega solo por el correo en cola del
+# registro (RF-NOT-08). Ninguna respuesta HTTP puede llevarlo.
+#
+#   SELECT body FROM not_email_queue
+#   WHERE recipient = '<correoEstandar>'
+#   ORDER BY created_at_utc DESC LIMIT 1;
+#
+# El correo contiene el enlace (token= + 64 caracteres hex). Pegar el token
+# solo (sin el enlace completo) en la variable de abajo.
+
+@tokenActivacion = <pega-aqui-el-token-de-64-hex-del-correo-de-activacion>
+
+# --- Contrato (artefacto de desarrollo, no un caso de negocio) ----------------
+
+### Documento OpenAPI -> 200. Describe el contrato; no ejercita ninguna regla de
+### negocio.
+
+GET {{host}}/openapi/v1.json
+
+# --- Bootstrap: registro, activacion y dos sesiones ---------------------------
+
+### Registrar el usuario estandar -> 202 (RF-CA-01). Si ya existe (corrida
+### anterior) responde 409; en ese caso saltar hasta "PAUSA 1" usando el token
+### de la corrida anterior, o bien ejecutar antes la SQL de reset del inicio.
+### Para una corrida limpia desde cero, una sola vez en la vida de la base.
+
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "{{nombre}}",
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### PAUSA 1: leer el token de activacion del correo mas reciente de
+### {{correoEstandar}} (RF-CA-15) y pegarlo en @tokenActivacion arriba.
+
+### Activar la cuenta -> 200 {"activated":true} (RF-CA-16). Si la cuenta ya estaba
+### activa (corrida anterior) o el token expiro, responde 400.
+
+GET {{host}}/activate?token={{tokenActivacion}}
+
+### Iniciar sesion como Estandar -> 200 {"token":"..."} (RF-CA-03).
+
+# @name loginEstandar
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### Iniciar sesion como Administrador -> 200 (RF-CA-03). Si la cuenta del
+### administrador no existe (seed no corrio), verificar las variables
+### PIRRY_LEDGER_FIRST_ADMIN_* del `.env` y reiniciar el Host.
+
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoAdmin}}",
+  "password": "{{contrasenaAdmin}}"
+}
+
+# --- RF-GP-01: crear una solicitud de permiso ------------------------------
+
+### Estandar crea una solicitud para "ViewSalesSummary" -> 202 con
+### {"id":"..."} (RF-GP-01). El id queda capturado en @idSolicitud.
+
+# @name crearSolicitud
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### Estandar pide un permiso que no esta en el catalogo -> 400
+### (RF-GP-01: "El permiso solicitado no existe."). Asi se valida el camino
+### de rechazo controlado sin tocar la base.
+
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "PermisoInventado"
+}
+
+### Estandar crea sin token -> 401 (RF-CA-07: el filtro corre antes).
+
+POST {{host}}/api/permissions/requests
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+# --- RF-GP-02: listar propias y listar pendientes -----------------------------
+
+### Estandar ve solo sus propias solicitudes -> 200 con 1 fila (RF-GP-02).
+
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Estandar intenta listar pendientes -> 403 (RF-GP-02 caso del rol: solo
+### Administrador). El filtro devuelve 403 antes de llegar al caso de uso.
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Administrador lista pendientes -> 200 con 1 fila (RF-GP-02 caso del rol).
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+# --- RF-GP-07 (camino directo): Administrador no aprueba su propia solicitud -
+
+### Administrador crea una solicitud para si mismo -> 202 (RF-GP-01: ambos
+### roles pueden crear; en el plan §3 la restriccion por rol no existe).
+### Esto nos prepara para el camino "directo" de RF-GP-07.
+
+# @name crearSolicitudAdmin
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### Administrador intenta aprobar su propia solicitud -> 400 (RF-GP-07).
+### La regla compara identidades (request.RequesterId == caller.Id), no
+### roles. El camino "directo" es valido aunque el solicitante sea
+### Administrador.
+
+POST {{host}}/api/permissions/requests/{{crearSolicitudAdmin.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### La solicitud sigue en Pending (la regla rechazo sin aplicar transicion):
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Administrador rechaza su propia solicitud sin motivo -> 400 (RF-GP-04).
+### El mensaje es el del motivo, NO el de auto-resolucion: RejectPermissionRequest
+### valida el motivo antes de comparar identidades. Comprobado en la corrida del
+### 2026-10-20:
+###   400 {"message":"El motivo del rechazo es obligatorio."}
+
+POST {{host}}/api/permissions/requests/{{crearSolicitudAdmin.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": ""
+}
+
+### Administrador rechaza su propia solicitud con motivo -> 400 (mismo motivo,
+### la identidad coincide). Si el solicitante fuera otro, esta peticion
+### funcionaria; con identidad coincidente, la regla de RF-GP-07 gana.
+
+POST {{host}}/api/permissions/requests/{{crearSolicitudAdmin.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "Cualquier motivo."
+}
+
+# --- RF-GP-03 + RF-GP-05 + RF-GP-06: aprobar, aplicar, doble aprobacion ------
+
+### Estandar intenta aprobar una solicitud -> 403, NO 400 de RF-GP-07. La ruta
+### esta declarada con AccessLevel.Administrator y el filtro de acceso actua
+### antes de llegar al caso de uso (RD-06). Comprobado el 2026-10-20:
+###   403 {"message":"No tiene permisos para esta operacion."}
+### RF-GP-07 no aparece aqui porque el caso de uso nunca se ejecuta. El caso de
+### auto-resolucion se comprueba mas abajo, con el Administrador.
+
+POST {{host}}/api/permissions/requests/{{crearSolicitud.response.body.$.id}}/approve
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Administrador aprueba la solicitud del Estandar -> 204 (RF-GP-03).
+### La misma operacion aplica el permiso (RF-GP-05: transicion
+### Approved -> Applied + INSERT en per_permission_grants, todo en la
+### misma transaccion EF Core).
+
+POST {{host}}/api/permissions/requests/{{crearSolicitud.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Aprobar otra vez -> 400 (RF-GP-06: transicion prohibida). La maquina de
+### estados rechaza la doble aprobacion; el estado queda en Applied, no
+### se inserta una segunda fila en per_permission_grants.
+
+POST {{host}}/api/permissions/requests/{{crearSolicitud.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### El Estandar ahora tiene el permiso: la ruta de demo responde 200 con los
+### datos fijos (RF-GP-05). Hasta aqui, /api/permissions/sales-summary
+### devolvia 403; la aprobacion la abrio.
+
+GET {{host}}/api/permissions/sales-summary
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Verificacion SQL opcional: una fila en per_permission_grants, ninguna en
+### per_permission_requests con estado distinto de Applied o Rejected.
+###
+###   SELECT user_id, permission_name, granted_by_user_id
+###   FROM per_permission_grants
+###   WHERE user_id = (SELECT id FROM ac_users WHERE email = '<correoEstandar>');
+###
+###   SELECT state, count(*) FROM per_permission_requests
+###   WHERE requester_id = (SELECT id FROM ac_users WHERE email = '<correoEstandar>')
+###   GROUP BY state;
+
+# --- RF-GP-04: rechazar --------------------------------------------------
+
+### Estandar crea otra solicitud para probar el rechazo.
+
+# @name crearSegunda
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### Administrador rechaza sin motivo -> 400 (RF-GP-04). El motivo vacio o
+### ausente se rechaza antes de tocar la solicitud.
+
+POST {{host}}/api/permissions/requests/{{crearSegunda.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+### Peticion SIN cuerpo: la ruta responde 500 y esta documentada como defecto
+### conocido, no como resultado esperado. El binding de Minimal API exige el
+### cuerpo antes de que corra el caso de uso y el filtro de acceso responde con
+### "La operacion no tiene una exigencia de acceso declarada.". No forma parte de
+### RF-GP-04 (que exige motivo escrito) y queda pendiente de arreglar despues del
+### tag. No la uses para comprobar el criterio: la peticion de arriba, con el
+### cuerpo presente y el motivo vacio, ya devuelve el 400 controlado.
+
+POST {{host}}/api/permissions/requests/{{crearSegunda.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Administrador rechaza con motivo -> 204 (RF-GP-04). El estado pasa a
+### Rejected con rejectionReason, approverId y rejectedAtUtc rellenos.
+
+POST {{host}}/api/permissions/requests/{{crearSegunda.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "Duplicado: ya tienes este permiso concedido."
+}
+
+### Aprobar una solicitud ya rechazada -> 400 (RF-GP-06). Rejected es estado
+### terminal (RF-GP-05: la maquina no tiene transicion saliente). La regla es
+### la misma que para Applied: ninguna transicion que no este en la tabla
+### de la maquina de estados.
+
+POST {{host}}/api/permissions/requests/{{crearSegunda.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+# --- RF-GP-07 (camino realista): Estandar ascendido a Administrador -------
+
+### Estandar crea una solicitud para el camino realista.
+
+# @name crearTercera
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### Para ascender al Estandar hay que resolver dos operaciones consecutivas:
+### la primera invalida su sesion (ADR 009), la segunda le da un token con
+### el rol nuevo. Por eso este bloque necesita el id del Estandar y termina
+### con un nuevo inicio de sesion, no con un token intermedio.
+
+### Listar usuarios para sacar el id del Estandar de la respuesta.
+
+# @name listarUsuarios
+GET {{host}}/api/admin/users
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Administrador asciende al Estandar a Administrador -> 204 (RF-CA-08).
+### La sesion del Estandar queda invalidada (CredentialVersion sube); sus
+### tokens anteriores sirven para Authenticate.ExecuteAsync pero NO para
+### ExecuteWithRoleAsync ni ExecuteWithPermissionAsync. Lo confirma el paso
+### siguiente.
+
+POST {{host}}/api/admin/users/{{listarUsuarios.response.body.$[1].id}}/role
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "role": "Administrator"
+}
+
+### El token anterior del Estandar ya no sirve como sesion valida -> 401
+### (RF-CA-12 / ADR 009). El ascenso invalida la credencial para quien use
+### el token viejo, sea cual sea el rol nuevo. Aqui se ve que el ascenso
+### aplica la invalidacion; el siguiente paso lo aprovecha.
+
+GET {{host}}/me
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Estandar (ahora Administrador) re-inicia sesion -> 200. Su token nuevo
+### tiene el rol Administrador (lo confirma el siguiente paso).
+
+# @name loginEstandarReAscendido
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### /me devuelve role = "Administrator" para el nuevo token.
+
+GET {{host}}/me
+Authorization: Bearer {{loginEstandarReAscendido.response.body.$.token}}
+
+### Estandar (ahora Administrador) intenta aprobar su propia solicitud -> 400
+### (RF-GP-07 camino realista). La regla compara identidades:
+### request.RequesterId == caller.Id, y ambos son el mismo User. Es el mismo
+### rechazo que en el camino "directo": la diferencia entre el camino directo
+### y el realista esta en la justificacion del escenario (un Estandar
+### ascendido que re-inicia sesion), no en el codigo que rechaza.
+
+POST {{host}}/api/permissions/requests/{{crearTercera.response.body.$.id}}/approve
+Authorization: Bearer {{loginEstandarReAscendido.response.body.$.token}}
+
+### La solicitud sigue en Pending: la regla rechazo sin aplicar la transicion.
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginEstandarReAscendido.response.body.$.token}}
+
+### Administrador original (no ascendio a nadie; sigue siendo Administrador)
+### aprueba la solicitud que el Estandar ascendidio no pudo aprobar -> 204.
+
+POST {{host}}/api/permissions/requests/{{crearTercera.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+# --- Verificacion final -----------------------------------------------------
+
+### El Estandar (ahora Administrador re-ascendido) tiene el permiso: la ruta de
+### demo responde 200. Como antes, las dos lineas siguientes confirman la
+### cobertura: del Estandar original queda una solicitud Applied (la del
+### primer bloque) y del Estandar re-ascendido otra Applied (la ultima). Las
+### dos filas en per_permission_grants son una por usuario.
+
+GET {{host}}/api/permissions/sales-summary
+Authorization: Bearer {{loginEstandarReAscendido.response.body.$.token}}
+
+### SQL final opcional:
+###
+###   SELECT email, granted_by_user_id, granted_at_utc
+###   FROM per_permission_grants pg
+###   JOIN ac_users u ON u.id = pg.user_id
+###   WHERE u.email = '<correoEstandar>'
+###   ORDER BY granted_at_utc;
+###
+###   SELECT state, count(*) FROM per_permission_requests
+###   WHERE requester_id = (SELECT id FROM ac_users WHERE email = '<correoEstandar>')
+###   GROUP BY state ORDER BY state;
+###
+### Esperado: una fila por cada usuario Estandar que pidio (la solicitud
+### original de la primera seccion + la solicitud del camino realista, ambas
+### aprobadas), una sola fila de Rejected, y todas las demas filas como
+### Applied (las que la maquina de estados transiciono).
+###
+### Para volver a correr este archivo desde cero: ejecutar la SQL de reset
+### del inicio, que limpia per_permission_requests y per_permission_grants de
+### ambos usuarios. Las cuentas en ac_users quedan; el estandar sigue
+### Administrador por el ascenso de la seccion realista, lo que es correcto:
+### refleja el estado real tras la corrida. Para volver a tener al Estandar
+### como Standard, ejecutar manualmente:
+###
+###   UPDATE ac_users SET role = 'Standard' WHERE email = '<correoEstandar>';
+###   UPDATE ac_users SET credential_version = credential_version + 1
+###     WHERE email = '<correoEstandar>';
+###
+### (El segundo UPDATE invalida de nuevo la sesion vigente del archivo,
+### obligando a re-login antes de la siguiente corrida.)

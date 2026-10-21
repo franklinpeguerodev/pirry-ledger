@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PirryLedger.Core.Permissions.Application\PirryLedger.Core.Permissions.Application.csproj" />
+    <!-- El filtro de acceso (WithAccess, TokenBearer) sigue en
+         PirryLedger.Core.AccessControl.Api por la decision documentada en
+         PR #37. Permissions.Api lo usa para declarar y proteger sus rutas
+         en la misma tabla que AccessControl. -->
+    <ProjectReference Include="..\..\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

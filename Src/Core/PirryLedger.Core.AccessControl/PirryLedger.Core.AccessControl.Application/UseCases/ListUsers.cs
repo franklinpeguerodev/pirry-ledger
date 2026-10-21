@@ -1,5 +1,6 @@
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.Contracts.Auth;
 
 namespace PirryLedger.Core.AccessControl.Application;
 

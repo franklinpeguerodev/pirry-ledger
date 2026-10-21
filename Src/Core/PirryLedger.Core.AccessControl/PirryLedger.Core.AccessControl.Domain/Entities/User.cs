@@ -187,11 +187,20 @@ public sealed class User
         Active = true;
     }
 
-    // RF-CA-08: cambiar el role lo hace un Administrator. El caso de uso decide
-    // quien puede; la entidad solo se encarga de que el valor sea uno valido.
+    // RF-CA-08 + ADR 009: cambiar el role invalida las sesiones abiertas.
+    // Mismo mecanismo que ChangePassword y Deactivate: incrementar
+    // CredentialVersion hace que cualquier session emitida antes de la
+    // mutacion deje de pasar IsValid, sin tocar la tabla de sesiones. El
+    // usuario promovido (o degradado) tiene que re-login para que su
+    // siguiente peticion refleje el nuevo role.
+    //
+    // El caso de uso (ChangeUserRole) decide quien puede cambiar el role; la
+    // entidad solo se encarga de que el valor sea uno valido y de la
+    // invalidacion.
     public void ChangeRole(Role newRole)
     {
         Role = newRole;
+        CredentialVersion++;
     }
 
     // RF-CA-11 y RF-CA-13: cambiar la contrasena invalida las sesiones abiertas

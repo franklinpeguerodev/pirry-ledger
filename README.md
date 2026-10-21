@@ -153,9 +153,13 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
 
-- Vale para cualquier terminal y para cualquier comando: las migraciones (paso
-  6), la API (paso 7), el DLL compilado y el enviador de email. No hay que
-  repetir nada en cada sesión ni guardar nada en Windows.
+- Vale para cualquier terminal y para cualquier comando: la API (paso 7), el DLL
+  compilado y el enviador de email. No hay que repetir nada en cada sesión ni
+  guardar nada en Windows.
+- **Excepción: las migraciones (paso 6) no leen el `.env`.** `dotnet ef` no
+  arranca la aplicación, sino la fábrica en tiempo de diseño de cada pieza, y esa
+  fábrica lee la variable del entorno del proceso. El paso 6 explica cómo
+  definirla en la terminal antes de migrar.
 - Si no existe el `.env`, no es un error: la aplicación sigue buscando las
   variables en el entorno del sistema, y si tampoco están, avisa por el nombre
   de la que falta y se detiene (RD-08).
@@ -181,44 +185,73 @@ dotnet build pirry-ledger.slnx --configuration Release
 dotnet test pirry-ledger.slnx --configuration Release
 ```
 
-Resultado esperado: `0 Advertencia(s)`, `0 Errores` y **90 pruebas superadas**
-(84 de AccessControl y 6 de Notifications), 0 con error.
+Resultado esperado: `0 Errores` y todas las pruebas pasan.
 
 ### Paso 6: aplicar las migraciones
 
 Ejecuta estos comandos **solo la primera vez que prepares esta base de datos**,
 o después de incorporar una migración nueva. EF Core registra las migraciones
 aplicadas, así que volver a ejecutar `database update` no duplica tablas, pero
-no es necesario repetirlo en cada arranque. Da igual en qué orden se ejecuten.
+no es necesario repetirlo en cada arranque.
+
+**Antes, define la cadena de conexión en esta misma terminal.** A diferencia de
+la aplicación, `dotnet ef` no carga el `.env`: usa la fábrica en tiempo de diseño
+de cada pieza, que lee la variable del entorno del proceso. Sustituye los
+valores de ejemplo por los tuyos, los mismos que están en tu `.env`:
+
+```powershell
+$env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contrasena>'
+```
+
+Esa línea solo vive en la terminal abierta. En otra terminal hay que repetirla.
+
+Las tres piezas, en este orden:
 
 ```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
+dotnet ef database update --project Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
-`ac_activation_tokens` y `ac_sessions`) y la cola de Notifications
-(`not_email_queue`) en la misma base, manteniendo la propiedad de cada
-módulo.
+`ac_activation_tokens` y `ac_sessions`), la cola de Notifications
+(`not_email_queue`) y las dos tablas de permisos (`per_permission_requests` y
+`per_permission_grants`, con su índice único
+`ux_per_permission_grants_user_permission`) en la misma base, manteniendo la
+propiedad de cada módulo.
 
-Da igual la terminal: el `.env` está en la raíz del repositorio y la aplicación
-lo carga al arrancar, en cualquier terminal y en cualquier comando.
+El orden de los tres comandos da igual: las tablas de permisos no declaran
+claves foráneas hacia `ac_users`, así que ninguna depende de que la otra exista.
+Está comprobado también ejecutándolos en orden inverso.
+
+Para comprobar que las tres se aplicaron:
+
+```sql
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+```
+
+Son ocho tablas: las cuatro de `ac_`, `not_email_queue` y las dos de `per_`.
 
 Resultado esperado:
 
 ```
-Acquiring an exclusive lock for migration application. ...
 Applying migration '20261018191406_InitialSchema'.
 Done.
 ```
 
 ```
-Acquiring an exclusive lock for migration application. ...
 Applying migration '20261018213308_InitialSchema'.
 Done.
 ```
 
-Dos mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
+```
+Applying migration '20261021024258_InitialSchema'.
+Done.
+```
+
+Tres mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
 las ejecuciones. Y en una base recién creada, EF Core va primero a preguntar por
 su tabla de migraciones, que todavía no existe, así que imprime un
 `Failed executing DbCommand` con el `SELECT ... FROM "__EFMigrationsHistory"`
@@ -228,6 +261,13 @@ justo antes de aplicar. Si la base ya está al día la respuesta es otra:
 No migrations were applied. The database is already up to date.
 Done.
 ```
+
+> Si ese último mensaje aparece en una base **nueva**, no significa que esté al
+> día: significa que esa pieza no tiene ninguna migración que EF pueda descubrir.
+> Se comprueba con `dotnet ef migrations list --project <la pieza>`, que tiene
+> que listar al menos una migración. Una migración sin su archivo
+> `.Designer.cs` (el que lleva los atributos `[Migration]` y `[DbContext]`)
+> existe en el repositorio pero EF la ignora en silencio.
 
 ### Paso 7: arrancar la API
 
@@ -545,21 +585,23 @@ pirry-ledger/
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
-│   ├── adr/                        Decisiones técnicas 001 a 006: nombre y título en inglés, contenido en español
+│   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
+│   ├── adr/                        Decisiones técnicas 001 a 007: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
 │   ├── Core/
-│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones
+│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
-│   │   └── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
+│   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
+│   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
 │   ├── Business/
 │   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application
 │   └── Host/
 │       └── PirryLedger.Host/                    Composición + comando --send-mail
 └── Tests/
-    ├── PirryLedger.Core.AccessControl.Tests/    xUnit, 84 pruebas
-    └── PirryLedger.Core.Notifications.Tests/    xUnit, 6 pruebas
+    ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
+    └── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
 ```
 
 Las pruebas usan dobles en memoria y un reloj falso: no necesitan base de datos
@@ -575,7 +617,15 @@ ni servidor SMTP.
 | rolees y administración de usuarios | RF-CA-04, 05, 06, 08, 20, 21 | [3.4](#34-administración-de-usuarios) |
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
 | Máquina de estados (estructura) | RF-NEG-03, 04, 05, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
+| **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
+
+> **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
+> `PirryLedger.Core.Permissions` (solicitudes de permiso, RF-GP-01 a RF-GP-07) con
+> su suite de pruebas, su migración propia y su sección
+> [3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07), donde está cómo provocar
+> cada criterio. La tabla de arriba y los enlaces a las secciones 3.x cubren
+> ambas.
 
 ### Decisiones documentadas
 
@@ -589,6 +639,9 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Columnas de AccessControl en snake_case, declaradas con `HasColumnName` | `docs/adr/004-snake-case-column-naming.md` |
 | Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-listen-address-from-public-base-url.md` |
 | Variables de entorno de desarrolelo local desde un archivo `.env` cargado con `DotNetEnv` | `docs/adr/006-local-env-configuration.md` |
+| Enviador de correo: comando CLI `--send-mail` en el Host, no servicio en segundo plano | `docs/adr/007-mail-sender-cli-command.md` |
+| Concesiones de permisos viven en su propia tabla `per_permission_grants`, independiente de `per_permission_requests` | `docs/adr/008-permission-grants-table.md` |
+| Cambiar el role invalida las sesiones abiertas vía `CredentialVersion`, igual que cambiar la contraseña o desactivar | `docs/adr/009-role-changes-invalidate-sessions.md` |
 
 ---
 
@@ -625,20 +678,22 @@ emails se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
 contadores y los estados de la cola se comprueban con las consultas SQL de cada
 sección.
 
-### Pruebas automatizadas
+### Pruebas
 
 ```powershell
 dotnet test pirry-ledger.slnx
 ```
 
-Termina con 90 pruebas superadas y ninguna con error. AccessControl y
-Notifications no necesitan base de datos ni servidor SMTP: usan dobles en
-memoria y un reloj falso. Notifications cubre la entidad de cola, los estados,
-el envío único, el retorno a `Pendiente` cuando falla el transporte, el contador
-de attempts y la validación del tamaño del lote. El envío SMTP real y la lectura
-de sus credenciales desde variables de entorno se verifican manualmente con
-`--send-mail`, más abajo. Las pruebas de la máquina de estados quedan para la
-semana 8.
+Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (85), Notifications (6) y
+Permissions (22), que cubren la máquina de estados de la solicitud, los casos de
+uso y el repositorio de concesiones. Todas usan dobles en memoria y un reloj
+falso (RD-12).
+
+Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
+y la lectura de sus credenciales desde variables de entorno se verifican
+manualmente con `--send-mail`, más abajo. Las pruebas de la máquina de estados
+de `Invoice` llegan en la semana 8.
 
 ### Preparación común
 
@@ -1021,6 +1076,12 @@ Un Administrador no puede cambiarse su propio role. Un role inexistente produce
 `400`. Un usuario Estándar recibe `403`, incluso si construye la petición
 manualmente.
 
+El cambio invalida la sesión del usuario afectado (`CredentialVersion` se
+incrementa): tras un cambio de role, el usuario debe volver a iniciar sesión
+para que su siguiente petición refleje el nuevo role. Lo mismo ocurre al
+cambiar la contraseña (RF-CA-12) o al desactivar la cuenta (RF-CA-20). Ver
+`docs/adr/009-role-changes-invalidate-sessions.md`.
+
 #### RF-CA-20 — desactivar y reactivar
 
 ```powershell
@@ -1171,6 +1232,202 @@ del módulo Business.
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
 | RD-12 | AccessControl y Notifications tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
 
+### 3.8 Gestión de permisos (RF-GP-01 a RF-GP-07)
+
+Todo lo de esta sección se ejecutó contra la API levantada siguiendo los pasos 1
+a 7, y las salidas son reales. La colección de peticiones está en
+`Src/Host/PirryLedger.Host/PirryLedger.Permissions.http`: son las mismas, en
+orden, para quien prefiera el cliente HTTP de VS Code o el de JetBrains.
+
+Antes de empezar necesitas un usuario **activado** (paso 8) y el token del
+Administrador (sección [El primer Administrador](#el-primer-administrador)).
+
+#### RF-GP-01 — un Estándar crea una solicitud y nace en Pendiente
+
+```powershell
+$solicitud = Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests' -Method Post `
+  -Headers $estHeaders -ContentType 'application/json' `
+  -Body (@{ requestedPermission = 'ViewSalesSummary' } | ConvertTo-Json)
+```
+
+```
+202  {"id":"4b08f67b-60f3-440b-8e15-ad789927bea2"}
+```
+
+La solicitud nace en `Pending`. Un permiso que no está en el catálogo se
+rechaza con `400` y un mensaje en español, sin crear nada:
+
+```
+400  {"message":"El permiso solicitado no existe."}
+```
+
+Sin cabecera `Authorization` responde `401` y `{"message":"Sesion no valida."}`.
+
+#### RF-GP-02 — el Administrador ve las pendientes; el Estándar, no las de otros
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/mine' -Headers $estHeaders
+Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/pending' -Headers $adminHeaders
+```
+
+El Estándar recibe `200` con **sus** solicitudes y solo las suyas (el filtro por
+solicitante vive en el caso de uso, no en la ruta). Con el mismo usuario
+Estándar, la lista global responde:
+
+```
+403  {"message":"No tiene permisos para esta operacion."}
+```
+
+y el Administrador recibe `200` con todas las que están en `Pending`.
+
+#### RF-GP-03 — aprobar registra quién y cuándo
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$($solicitud.id)/approve" `
+  -Method Post -Headers $adminHeaders
+```
+
+```
+204
+```
+
+```sql
+SELECT state, approver_id, approved_at_utc, applied_at_utc
+FROM per_permission_requests WHERE id = '<id>';
+```
+
+Vuelve `Applied`, con `approver_id` y las dos marcas de tiempo. El aprobador y
+el instante los escribe `PermissionRequest.Approve` desde el reloj inyectable
+(RD-11), nunca desde la petición.
+
+#### RF-GP-04 — rechazar exige motivo escrito
+
+Sin motivo, o con el motivo vacío, el rechazo **no** se completa:
+
+```
+400  {"message":"El motivo del rechazo es obligatorio."}
+```
+
+Con motivo, responde `204` y la solicitud queda en `Rejected` con el motivo
+guardado:
+
+```sql
+SELECT state, approver_id, rejection_reason FROM per_permission_requests WHERE id = '<id>';
+```
+
+#### RF-GP-05 — el permiso queda aplicado sin ninguna intervención extra
+
+Inmediatamente después de la aprobación, el solicitante ya puede ejecutar la
+acción que pidió:
+
+```powershell
+Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/sales-summary' -Headers $estHeaders
+```
+
+```
+200  {"date":"2026-10-20","totalInvoices":12,"totalAmount":3500,"branch":"Sucursal Principal"}
+```
+
+Antes de aprobar, esa misma ruta responde `403`. La fila que lo hace posible:
+
+```sql
+SELECT u.email, g.permission_name, g.granted_by_user_id, g.granted_at_utc
+FROM per_permission_grants g JOIN ac_users u ON u.id = g.user_id;
+```
+
+Una fila por par `(usuario, permiso)`: si el mismo usuario recibe otra
+aprobación del mismo permiso, la fila se actualiza en lugar de duplicarse (el
+índice único `ux_per_permission_grants_user_permission` lo impide).
+
+#### RF-GP-06 — solo las transiciones de la tabla
+
+Aprobar dos veces la misma solicitud se rechaza y **el estado no cambia**:
+
+```
+400  {"message":"Solo se pueden aprobar solicitudes en estado Pendiente."}
+```
+
+```sql
+SELECT state FROM per_permission_requests WHERE id = '<id>';   -- Applied
+```
+
+Lo mismo al aprobar una solicitud ya rechazada: `400` y sigue en `Rejected`. La
+tabla de transiciones vive entera en `PermissionRequestStateMachine` (RD-04).
+
+#### RF-GP-07 — nadie resuelve su propia solicitud
+
+**Camino realista (principal).** Un Estándar crea una solicitud, mientras está
+`Pending` se le asciende a Administrador, vuelve a iniciar sesión y aun así no
+puede resolverla. La regla compara identidades, no roles.
+
+```powershell
+# 1. El Estándar crea la solicitud y se queda con el id.
+# 2. El Administrador lo asciende (RF-CA-08). Esto invalida su sesión (ADR 009).
+Invoke-WebRequest -Uri "http://localhost:5243/api/admin/users/$idEstandar/role" `
+  -Method Post -Headers $adminHeaders -ContentType 'application/json' `
+  -Body (@{ role = 'Administrator' } | ConvertTo-Json)
+
+# 3. Con el token viejo ya no hay sesión válida.
+Invoke-WebRequest -Uri 'http://localhost:5243/me' -Headers $estHeaders
+# 401  {"message":"Sesion no valida."}
+
+# 4. Vuelve a iniciar sesión: el token nuevo ya trae el rol nuevo.
+Invoke-RestMethod -Uri 'http://localhost:5243/me' -Headers $estHeadersNuevo
+# 200  {"name":"Ana","email":"ana@ejemplo.com","role":"Administrator"}
+
+# 5. Intenta aprobar su propia solicitud.
+Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$id/approve" `
+  -Method Post -Headers $estHeadersNuevo
+# 400  {"message":"No puede resolver su propia solicitud de permiso."}
+```
+
+La solicitud sigue en `Pending` y el Administrador original sí puede
+resolverla (`204`).
+
+**Camino directo (comprobación corta).** Un Administrador crea una solicitud
+para sí mismo e intenta resolverla:
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$idPropia/approve" `
+  -Method Post -Headers $adminHeaders
+# 400  {"message":"No puede resolver su propia solicitud de permiso."}
+```
+
+Lo mismo al rechazar. Un detalle de orden: si el motivo va vacío, la respuesta
+es la del motivo (`"El motivo del rechazo es obligatorio."`), porque la
+validación del motivo corre antes que la de auto-resolución; con motivo
+presente, la respuesta es la de RF-GP-07.
+
+Un Estándar que intenta aprobar, sin haber sido ascendido, recibe `403` y no un
+`400`: el filtro de rol act��a antes de llegar al caso de uso (RD-06).
+
+#### RD-09 — las solicitudes sobreviven al reinicio
+
+Crea una solicitud, anota su estado y para la aplicación (Ctrl+C). Vuelve a
+levantarla (paso 7) y comprueba que la solicitud sigue ahí:
+
+```sql
+SELECT state, approver_id, rejection_reason, created_at_utc
+FROM per_permission_requests ORDER BY created_at_utc;
+```
+
+Lo mismo con `per_permission_grants`: las concesiones sobreviven porque las
+dos tablas están en PostgreSQL, no en memoria.
+
+#### Nombres de la pieza
+
+El enunciado llama a esta entidad `SolicitudPermiso` y a sus estados `Pendiente`,
+`Aprobada`, `Aplicada` y `Rechazada`. En el código, en inglés:
+
+| Enunciado | En el código | Dónde |
+|---|---|---|
+| `SolicitudPermiso` | `PermissionRequest` | `PirryLedger.Core.Permissions.Domain` |
+| `Pendiente` | `PermissionRequestState.Pending` | `PirryLedger.Core.Permissions.Domain.Enums` |
+| `Aprobada` | `PermissionRequestState.Approved` | ídem |
+| `Aplicada` | `PermissionRequestState.Applied` | ídem |
+| `Rechazada` | `PermissionRequestState.Rejected` | ídem |
+| Tabla de concesiones | `PermissionGrant` (`per_permission_grants`) | ADR 008 |
+
 ---
 
 ## 4. Referencia
@@ -1188,6 +1445,22 @@ del módulo Business.
 | `POST` | `/api/auth/reset-password` | Consume el código y establece una contraseña nueva. |
 | `POST` | `/api/auth/change-password` | Cambia la contraseña propia y exige la contraseña actual. |
 | `GET` | `/me` | Nombre, email y role del usuario autenticado. Exige `Authorization: Bearer <token>`. |
+
+### Endpoints de la Asignación 2 (gestión de permisos)
+
+Estos endpoints llegan con el PR #39 (`feature/permissions-pipeline`). El módulo
+`PirryLedger.Core.Permissions` está activo pero la lista siguiente es la
+**API vigente para esta pieza**; el resto del README sigue describiendo Práctica
+1. Los tokens son los mismos que en la sección anterior.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/permissions/requests` | Crea una solicitud de permiso. Cuerpo `{"requestedPermission":"ViewSalesSummary"}`. Responde `202` con el id. |
+| `GET` | `/api/permissions/requests/mine` | Lista las solicitudes del solicitante actual. Responde `200`. |
+| `GET` | `/api/permissions/requests/pending` | Lista solicitudes en `Pending`. Exige `Administrator`. |
+| `POST` | `/api/permissions/requests/{id}/approve` | Aprueba una solicitud pendiente. Aplica el permiso en la misma operación. Responde `204`. |
+| `POST` | `/api/permissions/requests/{id}/reject` | Rechaza con motivo escrito. Cuerpo `{"reason":"..."}`. Responde `204`. |
+| `GET` | `/api/permissions/sales-summary` | Ruta de demostración del sistema de permisos. Responde `200` con datos fijos (`date`, `totalInvoices`, `totalAmount`, `branch`). Exige el permiso `ViewSalesSummary` concedido. |
 
 ### Endpoints de administración
 

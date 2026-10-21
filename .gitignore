@@ -262,5 +262,14 @@ user.env
 machine.env
 
 # ------------------------------------------------------------
+# 8) RASTROS LOCALES DE VERIFICACIÓN
+# ------------------------------------------------------------
+
+# Scripts, logs y parches que se usan para verificar la pieza contra la
+# base de datos local. No se versionan nunca: suelen contener la
+# contraseña de la base y datos del escenario de prueba.
+.tmp/
+
+# ------------------------------------------------------------
 # FIN DEL ARCHIVO
 # ------------------------------------------------------------
