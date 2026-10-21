@@ -45,6 +45,29 @@ Deliver three things at the tag `asignacion-2`: the Permissions management piece
 
 None for this iteration.
 
+## Deferred
+
+Work and decisions consciously left out of this iteration. Nothing here is
+waiting for a decision: each item states what it blocks and why it is not being
+resolved now.
+
+- **Do not run `dotnet ef migrations add` in the permissions module.** Its model
+  declares no foreign keys to `ac_users`, and its migration snapshot was only
+  generated on 2026-10-20. Until it is settled whether those keys belong in the
+  model (declared by table name) or stay out of the database for good, any new
+  migration would be generated from a model that contradicts how the tables were
+  designed. The alternatives and their consequences are in the logbook, Entry 8.
+- **The four foreign keys to `ac_users` are not in the database.**
+  `requester_id`, `approver_id`, `user_id` and `granted_by_user_id` carry no
+  referential constraint. Integrity comes from the application, which takes both
+  identities from the authenticated session rather than from the request body.
+  It stays that way until the decision above is taken.
+- **Missing migration metadata is caught by hand, not by a test.** A migration
+  committed without its `.Designer.cs` sits in the repository while EF Core
+  ignores it silently, and `dotnet ef database update` reports the database as
+  up to date. That is how the permissions migration went unnoticed until the run
+  of 2026-10-20 (logbook, Entry 8). No automated check guards it yet.
+
 ## Constraints
 
 - The transitions of a request are resolved in one single component (RD-04), following the pattern of `InvoiceStateMachine`. The permissions state machine shares no code and no enum with the business one (RF-NEG-09).

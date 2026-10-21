@@ -153,9 +153,13 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
 
-- Vale para cualquier terminal y para cualquier comando: las migraciones (paso
-  6), la API (paso 7), el DLL compilado y el enviador de email. No hay que
-  repetir nada en cada sesión ni guardar nada en Windows.
+- Vale para cualquier terminal y para cualquier comando: la API (paso 7), el DLL
+  compilado y el enviador de email. No hay que repetir nada en cada sesión ni
+  guardar nada en Windows.
+- **Excepción: las migraciones (paso 6) no leen el `.env`.** `dotnet ef` no
+  arranca la aplicación, sino la fábrica en tiempo de diseño de cada pieza, y esa
+  fábrica lee la variable del entorno del proceso. El paso 6 explica cómo
+  definirla en la terminal antes de migrar.
 - Si no existe el `.env`, no es un error: la aplicación sigue buscando las
   variables en el entorno del sistema, y si tampoco están, avisa por el nombre
   de la que falta y se detiene (RD-08).
@@ -188,36 +192,66 @@ Resultado esperado: `0 Errores` y todas las pruebas pasan.
 Ejecuta estos comandos **solo la primera vez que prepares esta base de datos**,
 o después de incorporar una migración nueva. EF Core registra las migraciones
 aplicadas, así que volver a ejecutar `database update` no duplica tablas, pero
-no es necesario repetirlo en cada arranque. Da igual en qué orden se ejecuten.
+no es necesario repetirlo en cada arranque.
+
+**Antes, define la cadena de conexión en esta misma terminal.** A diferencia de
+la aplicación, `dotnet ef` no carga el `.env`: usa la fábrica en tiempo de diseño
+de cada pieza, que lee la variable del entorno del proceso. Sustituye los
+valores de ejemplo por los tuyos, los mismos que están en tu `.env`:
+
+```powershell
+$env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contrasena>'
+```
+
+Esa línea solo vive en la terminal abierta. En otra terminal hay que repetirla.
+
+Las tres piezas, en este orden:
 
 ```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
+dotnet ef database update --project Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
-`ac_activation_tokens` y `ac_sessions`) y la cola de Notifications
-(`not_email_queue`) en la misma base, manteniendo la propiedad de cada
-módulo.
+`ac_activation_tokens` y `ac_sessions`), la cola de Notifications
+(`not_email_queue`) y las dos tablas de permisos (`per_permission_requests` y
+`per_permission_grants`, con su índice único
+`ux_per_permission_grants_user_permission`) en la misma base, manteniendo la
+propiedad de cada módulo.
 
-Da igual la terminal: el `.env` está en la raíz del repositorio y la aplicación
-lo carga al arrancar, en cualquier terminal y en cualquier comando.
+El orden de los tres comandos da igual: las tablas de permisos no declaran
+claves foráneas hacia `ac_users`, así que ninguna depende de que la otra exista.
+Está comprobado también ejecutándolos en orden inverso.
+
+Para comprobar que las tres se aplicaron:
+
+```sql
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+```
+
+Son ocho tablas: las cuatro de `ac_`, `not_email_queue` y las dos de `per_`.
 
 Resultado esperado:
 
 ```
-Acquiring an exclusive lock for migration application. ...
 Applying migration '20261018191406_InitialSchema'.
 Done.
 ```
 
 ```
-Acquiring an exclusive lock for migration application. ...
 Applying migration '20261018213308_InitialSchema'.
 Done.
 ```
 
-Dos mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
+```
+Applying migration '20261021024258_InitialSchema'.
+Done.
+```
+
+Tres mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
 las ejecuciones. Y en una base recién creada, EF Core va primero a preguntar por
 su tabla de migraciones, que todavía no existe, así que imprime un
 `Failed executing DbCommand` con el `SELECT ... FROM "__EFMigrationsHistory"`
@@ -227,6 +261,13 @@ justo antes de aplicar. Si la base ya está al día la respuesta es otra:
 No migrations were applied. The database is already up to date.
 Done.
 ```
+
+> Si ese último mensaje aparece en una base **nueva**, no significa que esté al
+> día: significa que esa pieza no tiene ninguna migración que EF pueda descubrir.
+> Se comprueba con `dotnet ef migrations list --project <la pieza>`, que tiene
+> que listar al menos una migración. Una migración sin su archivo
+> `.Designer.cs` (el que lleva los atributos `[Migration]` y `[DbContext]`)
+> existe en el repositorio pero EF la ignora en silencio.
 
 ### Paso 7: arrancar la API
 
