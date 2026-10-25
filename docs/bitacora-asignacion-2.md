@@ -1060,3 +1060,53 @@ del texto en inglés que arrastran los comentarios de `Operation` ("Requirement
 de role de cada operation", "Una route publica"), porque no estaba en los siete
 sitios auditados; queda anotado por si Franklin quiere un PR de limpieza de ese
 archivo.
+
+### Entrada 16 — La prosa en inglés de los comentarios de `Operation` (2026-10-25)
+
+**Qué se pidió.** Limpiar el resto de prosa en inglés que quedaba en los
+comentarios de `Operation.cs`, con una condición de estilo: respetar el español
+sin tildes del archivo y no mezclar en el mismo commit el idioma con la
+ortografía (opción A).
+
+**Qué devolví.** Un commit sobre un solo archivo:
+
+- `route` pasa a `ruta` en los tres sitios donde aparecía ("Una ruta publica",
+  "la ruta se rechaza", "una ruta publica no necesita Session").
+- `role` pasa a `rol` en dos sitios ("no un rol", "ese rol concreto").
+- **La cita de RF-CA-05 era falsa y se corrigió.** El comentario decía
+  `RF-CA-05: "existe un punto del codigo donde se puede leer la Requirement de
+  role de cada operation"`, entre comillas. El requisito, en
+  `docs/requirements/access-control.md`, dice: *"Existe un punto del código donde
+  se puede leer la exigencia de rol de cada operación."* No era una cita: era una
+  paráfrasis con palabras en inglés presentada como cita. Ahora reproduce el texto
+  del profesor, con sus tildes, porque una cita va exacta.
+- La segunda mención, `El enunciado pide "la Requirement de role de cada
+  operation"`, también entre comillas, pasa a prosa sin comillas: el enunciado no
+  dice esa frase literal, así que no se cita.
+
+**Qué verifiqué.**
+
+- Búsqueda de `\broute\b`, `\brole\b` y `\boperation\b` en el archivo: solo
+  quedan las apariciones que son identificadores (`public enum Operation`,
+  `Requirement.Permission`, `Los niveles de Requirement`). `Requirement` es un
+  tipo real (`RoleRequirements.cs`), así que se queda en inglés por la regla.
+- La cita se contrastó carácter por carácter contra
+  `docs/requirements/access-control.md`, línea 30.
+- `dotnet build pirry-ledger.slnx --configuration Release`: **0 errores, 0
+  advertencias**.
+- `dotnet test pirry-ledger.slnx --configuration Release`: **96 + 24 + 6 = 126
+  pruebas superadas, 0 con error**.
+
+**Qué NO se hizo.** No se añadieron tildes fuera de la cita: el archivo mantiene
+su estilo sin tildes, y el commit hace una sola cosa. No se tocaron otros
+archivos con la misma mezcla, como `ChangeUserRole` (*"Un Administrator no puede
+cambiar su propio role."*): van en PRs separados para que se revisen de uno en
+uno.
+
+**Corrección de forma, no de contenido.** Las descripciones de los PR #46, #47 y
+#48 se enviaron con mojibake: el texto español se escribió dentro de scripts
+`.ps1` y PowerShell 5.1 lee esos archivos sin BOM como ANSI, así que cada tilde y
+cada guion largo llegó mal a GitHub. Se reescribieron las tres descripciones
+leyendo el texto como UTF-8 explícito y verificando después, con la API, que el
+`é` y el `—` están donde deben. Los archivos del repositorio nunca estuvieron
+afectados: se escribieron con la herramienta de edición, no por PowerShell.
