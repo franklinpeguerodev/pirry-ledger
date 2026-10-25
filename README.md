@@ -654,6 +654,7 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Enviador de correo: comando CLI `--send-mail` en el Host, no servicio en segundo plano | `docs/adr/007-mail-sender-cli-command.md` |
 | Concesiones de permisos viven en su propia tabla `per_permission_grants`, independiente de `per_permission_requests` | `docs/adr/008-permission-grants-table.md` |
 | Cambiar el role invalida las sesiones abiertas vía `CredentialVersion`, igual que cambiar la contraseña o desactivar | `docs/adr/009-role-changes-invalidate-sessions.md` |
+| El `role` de las respuestas viaja como texto, no como número | `docs/adr/010-role-as-text-in-responses.md` |
 
 ---
 
@@ -1039,8 +1040,9 @@ Invoke-RestMethod -Uri 'http://localhost:5243/api/admin/users' `
   -Headers $adminHeaders
 ```
 
-El resultado contiene únicamente `id`, `nombre`, `email`, `role`, `active` y
-`fechaDeCreacionUtc`. Nunca contiene hashes, tokens ni `credencialVersion`.
+El resultado contiene únicamente `id`, `name`, `email`, `role`, `active` y
+`createdAtUtc`. El `role` viaja como texto (`"Administrator"` o `"Standard"`),
+no como número (ADR 010). Nunca contiene hashes, tokens ni `credentialVersion`.
 
 Sin `Authorization`, las rutas administrativas responden `401`. La exigencia de
 acceso se declara en un único punto en `RoleRequirements.cs`; cada ruta usa

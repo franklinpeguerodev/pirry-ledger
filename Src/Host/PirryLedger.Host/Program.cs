@@ -8,6 +8,7 @@ using PirryLedger.Core.Permissions.Infrastructure;
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
 // cada pieza expone los suyos (RD-01).
 using DotNetEnv;
+using System.Text.Json.Serialization;
 using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Notifications.Infrastructure;
@@ -26,6 +27,21 @@ LoadEnvFile();
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+// RF-CA-21: el listado de usuarios dice el role de cada uno, y un role
+// serializado como numero (0 = Administrator, 1 = Standard) no lo dice:
+// depende de que el cliente sepa el orden del enum. Con este converter el
+// role viaja como texto ("Administrator" / "Standard"), que es lo que dice el
+// README y lo que el enunciado pide.
+//
+// Afecta a todos los enums que se serialicen. Hoy solo se serializa Role:
+// PermissionRequestState se convierte a texto a mano en el mapeo de la pieza
+// de permisos, y Operation, AccessLevel y RoleRequirements no viajan nunca
+// en una respuesta.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // Un solo reloj en todo el sistema (RD-11): las dos piezas reciben IClock y
 // ninguna llama a DateTime.UtcNow por su cuenta.
