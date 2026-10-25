@@ -15,7 +15,7 @@ namespace PirryLedger.Core.Contracts.Auth;
 // clara: la de no exigir nada. Declararla aqui es lo que permite que la prueba
 // que recorre las rutas del Host pueda afirmar que ninguna se queda sin
 // declarar. Si estas quedaran fuera, esa prueba solo podria comprobar las que
-// elijiera un清单 escrito a mano, que es justo lo que hay que evitar.
+// eligiera una lista escrita a mano, que es justo lo que hay que evitar.
 //
 // Ojo con el Name: una entrada en este enum NO abre ni cierra nada por si
 // sola. Si se declara aqui y no en RoleRequirements, la route se rechaza.

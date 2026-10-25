@@ -38,10 +38,11 @@ public sealed class ForcePasswordReset
     {
         await _auth.ExecuteWithRoleAsync(token, RoleRequirements.RequiredRole(Operation.ForceReset), cancellationToken);
         var user = await _users.FindByIdAsync(userId, cancellationToken)
-            ?? throw new AdministrationOperationRejectedException("No existe ese user.");
+            ?? throw new AdministrationOperationRejectedException("No existe ese usuario.");
 
-        // Invalidate the old password immediately. The recovery code is the only
-        // path that can establish the next usable password.
+        // Se invalida la contraseña anterior de inmediato. El código de
+        // recuperación es la única vía que puede establecer la siguiente
+        // contraseña utilizable.
         user.ChangePassword(_hasher.Hash(OneTimeCodeGenerator.Generate()), _clock.UtcNow);
         await _users.SaveAsync(user, cancellationToken);
         await _codes.InvalidatePendingAsync(user.Id, cancellationToken);

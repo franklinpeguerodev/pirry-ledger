@@ -2,8 +2,8 @@ using PirryLedger.Business.Domain.Enums;
 
 namespace PirryLedger.Business.Domain.StateMachines;
 
-// RF-NEG-04, RF-NEG-05 and RD-04: every invoice transition is resolved here.
-// Paid and Cancelled deliberately have no outgoing transitions.
+// RF-NEG-04, RF-NEG-05 y RD-04: aquí se resuelve toda transición de factura.
+// Paid y Cancelled no tienen transiciones de salida a propósito.
 public static class InvoiceStateMachine
 {
     private static readonly IReadOnlySet<(InvoiceState From, InvoiceState To)> AllowedTransitions =
@@ -32,7 +32,7 @@ public static class InvoiceStateMachine
 public sealed class InvalidInvoiceTransitionException : Exception
 {
     public InvalidInvoiceTransitionException(InvoiceState from, InvoiceState to)
-        : base($"The invoice cannot transition from {from} to {to}.")
+        : base($"La factura no puede pasar de {from} a {to}.")
     {
     }
 }
