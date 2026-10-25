@@ -111,28 +111,20 @@ if (app.Environment.IsDevelopment())
 // que redirigir, asi que el middleware no redirige nada y solo imprime un aviso.
 // Si se decide HTTPS, va en un ADR (docs/adr/005-listen-address-from-public-base-url.md).
 
+// RD-07 y RD-08: la frontera de error del API. Este middleware envuelve la
+// ejecucion de la ruta y convierte cualquier excepcion en un rechazo
+// controlado con el formato {"message": "..."}, sin trazas, sin rutas de
+// fichero y sin cabeceras de la peticion. Va fuera del filtro de acceso
+// porque el cuerpo de la peticion lo lee el framework antes de los filtros:
+// un JSON mal formado lo lanza por encima de ellos.
+//
+// El Host solo lo registra: la regla vive en la pieza que define el formato
+// de error (PirryLedger.Core.AccessControl.Api). El Host es composicion.
+app.UseRouting();
+app.Use(ApiErrorHandling.HandleErrorsAsync);
+
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
-app.UseRouting();
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next(context);
-    }
-    catch (OperationNotDeclaredException)
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(
-            new ErrorResponse("La operacion no tiene una exigencia de acceso declarada."));
-    }
-    catch (OperationWithoutRoleRequirementException)
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(
-            new ErrorResponse("La operacion no tiene una exigencia de acceso valida."));
-    }
-});
 app.Use(PirryLedger.Core.AccessControl.Api.AccessFilter.RequireDeclaredOperationAsync);
 
 app.MapAccessControl();
