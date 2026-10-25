@@ -70,8 +70,8 @@ verificación describen lo entregado.
 | Commit | Qué añadió |
 |---|---|
 | `37b27e0` | Contratos compartidos: `IClock`, configuración de base de datos, `IEmailQueue` |
-| `dc7eaa7` | Entidad `CorreoEnCola` con sus reglas de estado (`Pendiente` → `Procesando` → `Enviado`) |
-| `07531c7` | Caso de uso `ProcesarColaDeCorreo` |
+| `dc7eaa7` | Entidad `EmailQueueItem` con sus reglas de estado (`Pending` → `Processing` → `Sent`) |
+| `07531c7` | Caso de uso `ProcessEmailQueue` |
 | `c238b1b` | Persistencia PostgreSQL con EF Core y su migración |
 | `3d39a3f` | Transporte SMTP (MailKit) |
 | `c9ee785` | Comando `--send-mail` en el Host |
@@ -112,11 +112,11 @@ requisitos y la verificación describen lo entregado.
 **Qué hice yo.** Revisé los tres commits en `git log`, confirmé que el
 flujo está cubierto por los criterios verificados y aprobé la pieza.
 
-**Qué verifiqué.** Leí `ac_usuarios` y los hashes empiezan por
+**Qué verifiqué.** Leí `ac_users` y los hashes empiezan por
 `$argon2id$v=19$m=` y son distintos entre usuarios con la misma contraseña, porque
 el salt es por usuario (RF-CA-02). El correo de la cola trae el enlace con un
-token de 64 hexadecimales y en `ac_tokens_activacion` solo está su SHA-256
-(RF-CA-15). Abrí el enlace: `200 {"activado":true}`; lo abrí otra vez: `400`, con
+token de 64 hexadecimales y en `ac_activation_tokens` solo está su SHA-256
+(RF-CA-15). Abrí el enlace: `200 {"activated":true}`; lo abrí otra vez: `400`, con
 el mismo `400` que un token inventado (RF-CA-16). Registré el mismo correo en
 mayúsculas y respondió `409` (RF-CA-01).
 
@@ -125,7 +125,7 @@ mayúsculas y respondió `409` (RF-CA-01).
 ## Sesión — RF-CA-03, 07, 18, 19
 
 **Qué se le pidió:** cerrar la brecha de credencial que no se invalida en
-el servidor (RF-CA-03), implementar el endpoint `/yo` con la triada
+el servidor (RF-CA-03), implementar el endpoint `/me` con la triada
 nombre/correo/rol (RF-CA-07), el cierre que solo cierra los pines del
 usuario y deja al resto vivas (RF-CA-18), y el bloqueo tras cinco intentos
 fallidos con reinicio del contador en un acierto (RF-CA-19). El prompt
@@ -137,7 +137,7 @@ lo entregado.
 | Commit | Qué añadió |
 |---|---|
 | `b955e70` | El ADR de la credencial de sesión |
-| `ebef007` | Entidad `Sesion` y su tabla |
+| `ebef007` | Entidad `Session` y su tabla |
 | `19d9007` | El hash señuelo se calcula una vez por hasher, no por intento |
 | `3e46a9c` | Inicio y cierre de sesión, y un único punto de validación |
 | `ca4fb1f` | Las pruebas de sesión y la documentación del flujo |
@@ -160,7 +160,7 @@ contraseña correcta, se rechazó (RF-CA-19).
 ## Decisiones
 
 `docs/adr/001-session-credential.md`, aceptada el 2026-09-30: credencial
-opaca, tabla `Sesion` y `CredencialVersion` copiada por sesión.
+opaca, tabla `Session` y `CredentialVersion` copiada por sesión.
 
 El ADR guarda el razonamiento entero, incluida la comparación con JWT y una lista
 de revocación, que es lo que hace falta defender. Lo que sí registro aquí es el
@@ -226,7 +226,7 @@ requisitos. Salieron veinte hallazgos, agrupados así:
 | `AGENTS.md` desactualizado | 10 | Estado, ramas, puerto, decisiones ya resueltas, ruta inexistente |
 | README que no se cumplía | 8 | Número de endpoints y rutas, orden de las migraciones, requisitos que faltaban, salidas de consola incompletas, un criterio sin forma de probarlo, una errata |
 | Brechas de alcance | 5 | `docs/maquina-de-estados.md` inexistente, no hay forma de crear un Administrador, RF-CA-05 sin punto único de rol, contraseñas y administración sin construir, etiqueta `practica-1` sin crear |
-| Comentarios de código que no describen el código | 7 | El más serio: `Sesion.cs:63-66` promete que el método devuelve *por qué* se rechaza, y su firma es `bool` |
+| Comentarios de código que no describen el código | 7 | El más serio: `Session.cs:65-68` promete que el método devuelve *por qué* se rechaza, y su firma es `bool` |
 
 Este pull request arregla los dos primeros grupos y dos huecos de alcance en los
 documentos. Los comentarios de código y las brechas quedan pendientes.
@@ -311,7 +311,7 @@ y no se documenta nada sin correrlo antes.
 
 ```
 dotnet build pirry-ledger.slnx     -> 0 errores, 0 advertencias
-dotnet test pirry-ledger.slnx      -> 90 superadas, 0 fallidas
+dotnet test pirry-ledger.slnx      -> la suite completa, 0 fallidas
 ```
 
 En la revisión inicial el proyecto de pruebas de Notifications todavía no tenía
@@ -330,7 +330,7 @@ Notifications va aparte, con su propio contexto. Luego borré la base.
 
 ```
 dotnet ef database list ... --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
-  Applying migration '20260930191411_CrearTablaCorreosEnCola'.
+  Applying migration '20261018213308_InitialSchema'.
 ```
 
 **La aplicación arranca y responde**
@@ -343,15 +343,15 @@ Application started. Press Ctrl+C to shut down.
 | Comprobación | Resultado real |
 |---|---|
 | Ruta inexistente | `404` |
-| `/yo` sin cabecera | `401` `{"mensaje":"Sesion no valida."}` |
-| `POST /api/auth/register` | `202` `{"activado":false}` |
-| Login con la cuenta **inactiva** y la contraseña correcta | `401` `{"mensaje":"La cuenta no esta activada."}` |
-| Login con la contraseña incorrecta | `401` `{"mensaje":"Correo o contrasena incorrectos."}` |
-| Reenvío, los **cuatro** casos | `202` `{"enviado":true}` en los cuatro |
-| `GET /activar?token=...` | `200` `{"activado":true}` |
+| `/me` sin cabecera | `401` `{"message":"Sesion no valida."}` |
+| `POST /api/auth/register` | `202` `{"activated":false}` |
+| Login con la cuenta **inactiva** y la contraseña correcta | `401` `{"message":"La cuenta no esta activada."}` |
+| Login con la contraseña incorrecta | `401` `{"message":"Correo o contrasena incorrectos."}` |
+| Reenvío, los **cuatro** casos | `202` `{"sent":true}` en los cuatro |
+| `GET /activate?token=...` | `200` `{"activated":true}` |
 | Login con la cuenta ya activada | `200` con token de 43 caracteres |
-| `GET /yo` con el token | `200` con el correo del usuario |
-| `POST /api/auth/logout` | `204`, y `/yo` vuelve a `401` |
+| `GET /me` con el token | `200` con el correo del usuario |
+| `POST /api/auth/logout` | `204`, y `/me` vuelve a `401` |
 
 El caso de login con la cuenta inactiva es el que motivo el quinto error de esta
 bitácora: la respuesta es un mensaje propio, y solo se distingue porque la
@@ -369,7 +369,7 @@ Correos fallidos: 19
 Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
 ```
 
-Los 19 volvieron a `Pendiente` con `intentos` incrementado y `fecha_envio_utc`
+Los 19 volvieron a `Pendiente` con `intentos` incrementado y `sent_at_utc`
 vacío: ninguno se perdió y no se fingió ningún envío. Es el comportamiento que el
 README promete y el que RF-NOT-08 pide, y se comprobó ocho veces seguidas.
 
@@ -383,7 +383,7 @@ Correos fallidos: 0
 Los correos enviados no se volveran a enviar aunque se ejecute el comando otra vez.
 ```
 
-En `not_correos_en_cola` el registro quedó con `estado = 2` y `fecha_envio_utc`
+En `not_email_queue` el registro quedó con `estado = 2` y `sent_at_utc`
 asignada. La segunda ejecución del comando tomó `0` correos, que es RF-NOT-12:
 reenviar no duplica.
 
@@ -450,9 +450,9 @@ redacta y yo la reviso antes de que se suba.
 listado, cambio de rol, desactivación y reactivación.
 
 **Qué se implementó:** se centralizó la exigencia de acceso en
-`ExigenciasDeRol`, se añadieron las cuatro rutas administrativas y casos de uso
+`RoleRequirements`, se añadieron las cuatro rutas administrativas y casos de uso
 separados, y el listado proyecta únicamente datos públicos del usuario. La
-desactivación incrementa `CredencialVersion`, por lo que invalida sesiones
+desactivación incrementa `CredentialVersion`, por lo que invalida sesiones
 abiertas. Se confirmaron además las protecciones contra cambiarse el rol,
 desactivarse y dejar la aplicación sin Administrador activo.
 
@@ -478,10 +478,10 @@ trabajo criptográfico de dos caminos.
 **Qué se pidió:** conservar una fecha para poder comprobar cuándo se cambió por
 última vez la contraseña del usuario.
 
-**Qué se implementó:** se añadió `Usuario.ContrasenaCambiadaUtc`, un campo UTC
-nullable persistido en `ac_usuarios`. Permanece `NULL` para la contraseña
+**Qué se implementó:** se añadió `User.PasswordChangedAtUtc`, un campo UTC
+nullable persistido en `ac_users`. Permanece `NULL` para la contraseña
 inicial y se actualiza desde la única operación de dominio
-`CambiarContrasena`, por lo que cubre recuperación, cambio autenticado y
+`ChangePassword`, por lo que cubre recuperación, cambio autenticado y
 restablecimiento forzado sin duplicar lógica. La migración agrega la columna sin
 alterar las filas existentes.
 
@@ -492,36 +492,36 @@ auditoría completa reservada para la semana 14.
 **Qué se verificó:** una prueba de dominio confirma que el valor queda igual al
 reloj UTC inyectado cuando se reemplaza el hash. La migración se aplicó a la
 base local, el build terminó con 0 errores y 0 advertencias, y la suite de
-AccessControl terminó con 84 pruebas superadas y 0 fallidas.
+AccessControl terminó con la suite completa superadas y 0 fallidas.
 
 ## ADR de trazabilidad y revisión del README — RF-CA-12, RD-09, RD-10, RD-11
 
 **Qué se pidió:** documentar con más detalle la decisión de conservar
-`ContrasenaCambiadaUtc` y comprobar que el README describiera el comportamiento
+`PasswordChangedAtUtc` y comprobar que el README describiera el comportamiento
 real del código, las migraciones, las pruebas, los endpoints y la configuración.
 
 **Qué se implementó:** se creó
 `docs/adr/003-password-change-traceability.md`, con título en inglés y contenido
 académico en español. El ADR documenta el contexto, la decisión, la razón para
-centralizar la fecha en `CambiarContrasena`, las alternativas descartadas, la
+centralizar la fecha en `ChangePassword`, las alternativas descartadas, la
 persistencia nullable, la compatibilidad con cuentas existentes, las
 consecuencias, la evidencia de verificación y los límites explícitos: no se
 implementa todavía una auditoría completa, historial de eventos, actor, IP,
 dispositivo ni endpoint administrativo para consultar credenciales.
 
 También se enlazó el ADR desde `docs/current-iteration.md` y desde la sección de
-`ContrasenaCambiadaUtc` del README.
+`PasswordChangedAtUtc` del README.
 
 La revisión del README corrigió y alineó con el código real:
 
-- la migración `20261002002636_AgregarFechaDeCambioDeContrasena`;
-- el tipo nullable `timestamptz` de `ContrasenaCambiadaUtc`;
-- el resultado real de las pruebas: 84 pruebas de AccessControl superadas;
+- la migración `20261018191406_InitialSchema`;
+- el tipo nullable `timestamptz` de `PasswordChangedAtUtc`;
+- el resultado real de las pruebas: la suite completa de AccessControl superadas;
 - que Notifications tiene pruebas unitarias para los estados de la cola, el
   envío único, los fallos del transporte, los intentos y el lote;
 - el uso de `PIRRY_LEDGER_PUBLIC_BASE_URL` en los enlaces de activación;
 - las cinco rutas administrativas disponibles;
-- la cabecera `Authorization` con el esquema `Bearer` del endpoint `/yo`;
+- la cabecera `Authorization` con el esquema `Bearer` del endpoint `/me`;
 - el nombre real de la entidad de negocio: `Invoice`, no `Factura`.
 
 **Qué se verificó:** se ejecutaron los comandos contra la rama de trabajo:
@@ -531,7 +531,7 @@ dotnet build pirry-ledger.slnx --configuration Release --no-restore
 Resultado: compilación correcta, 0 advertencias, 0 errores.
 
 dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --configuration Release --no-restore
-Resultado: 84 superadas, 0 fallidas.
+Resultado: la suite completa, 0 fallidas.
 
 dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --configuration Release --no-restore
 Resultado: 6 superadas, 0 fallidas.
@@ -572,13 +572,13 @@ de las instrucciones de migraciones y arranque, sin sustituir la explicación
 detallada de las tablas.
 
 **Qué se implementó:** se añadió un diagrama `mermaid erDiagram` después de la
-sección de preparación de la base de datos. Muestra `ac_usuarios`,
-`ac_codigos_recuperacion`, `ac_tokens_activacion`, `ac_sesiones` y
-`not_correos_en_cola`, con sus columnas principales, claves primarias y
+sección de preparación de la base de datos. Muestra `ac_users`,
+`ac_recovery_codes`, `ac_activation_tokens`, `ac_sessions` y
+`not_email_queue`, con sus columnas principales, claves primarias y
 relaciones de clave foránea.
 
 El diagrama también aclara el límite entre módulos: Notifications comparte la
-base PostgreSQL, pero su cola no tiene una FK hacia `ac_usuarios`. El vínculo
+base PostgreSQL, pero su cola no tiene una FK hacia `ac_users`. El vínculo
 entre el flujo de AccessControl y la cola ocurre mediante el contrato de
 encolado, no mediante una relación directa entre tablas.
 
@@ -605,11 +605,11 @@ También se aclaró:
 - qué variables permiten crear el primer Administrador;
 - dónde queda disponible la API;
 - qué respuesta esperar del primer registro;
-- cómo obtener una sesión y consultar `/yo`;
+- cómo obtener una sesión y consultar `/me`;
 - en qué orden continuar con las pruebas manuales.
 
 **Qué se verificó:** los comandos documentados ya habían sido ejecutados en esta
-revisión: build correcto, 90 pruebas superadas y migraciones comprobadas. En
+revisión: build correcto, la suite completa superada y migraciones comprobadas. En
 esta modificación adicional solo se reorganizó documentación y
 `git diff --check` se mantuvo sin errores.
 
@@ -690,7 +690,7 @@ lugar con el comando de instalación y la comprobación de versión.
 
 ## Unificación de nombres de columnas a snake_case — ADR 004 (2026-10-03)
 
-**Qué se pidió.** Al revisar la base noté que `not_correos_en_cola` tenía sus
+**Qué se pidió.** Al revisar la base noté que `not_email_queue` tenía sus
 columnas en minúsculas (`fecha_creacion_utc`) mientras que las tablas de
 AccessControl las tenían en PascalCase (`"Correo"`, `"HashDeContrasena"`).
 Pedí evaluar cuál de los dos estilos era el correcto. Después de presentar las
@@ -711,27 +711,27 @@ README por ahora.
 - **El PascalCase de AccessControl no lo decidió nadie**: los
   `*Configuration.cs` no declaraban `HasColumnName`, así que EF Core aplicó su
   convención por defecto. Notifications sí lo decidió a mano, con
-  `HasColumnName` explícito en `CorreoEnColaConfiguration.cs`. Es decir, la
+  `HasColumnName` explícito en `EmailQueueItemConfiguration.cs`. Es decir, la
   opción A no introduce nada nuevo: le pone nombre explícito a lo que un
   módulo ya había elegido.
 - **La opción B (unificar a PascalCase) se descartó** porque habría roto el
-  SQL crudo de `CorreoEnColaRepository.cs` (`UPDATE not_correos_en_cola ...
+  SQL crudo de `EmailQueueRepository.cs` (`UPDATE not_email_queue ...
   FOR UPDATE SKIP LOCKED`), que es el reclamo atómico de RF-NOT-12, y habría
   que reescribirlo y revalidar el envío único.
 - Los prefijos `ac_` y `not_` **no se tocan**: son el límite de módulo a nivel
   de datos (las dos piezas comparten base, no tablas) y ya están documentados
-  en `ConfiguracionDeBaseDeDatos.cs`.
+  en `DatabaseConfiguration.cs`.
 
 **Qué se implementó.**
 
 - `HasColumnName(...)` explícito para las 30 columnas en las cuatro
-  configuraciones de AccessControl (`UsuarioConfiguration`,
-  `CodigoRecuperacionConfiguration`, `TokenActivacionConfiguration`,
-  `SesionConfiguration`), con un comentario que cita el ADR 004. Cuatro
-  columnas que antes no estaban declaradas en absoluto (`bloqueo_hasta_utc`,
-  `usado_utc` de las dos tablas de un solo uso y `cerrada_utc`) ahora tienen
+  configuraciones de AccessControl (`UserConfiguration`,
+  `RecoveryCodeConfiguration`, `ActivationTokenConfiguration`,
+  `SessionConfiguration`), con un comentario que cita el ADR 004. Cuatro
+  columnas que antes no estaban declaradas en absoluto (`locked_until_utc`,
+  `used_at_utc` de las dos tablas de un solo uso y `cerrada_utc`) ahora tienen
   mapeo propio.
-- Migración `20261003142652_UnificarNombresDeColumnas`: 30 `RenameColumn` y
+- Migración las migraciones `InitialSchema` de cada pieza: 30 `RenameColumn` y
   la recreación de las tres claves foráneas con nombre nuevo en minúsculas.
   Sin `DropTable`, sin cambios de tipo. `Down()` completo.
 - `dotnet ef database update` aplicado a la base `pirry_ledger`.
@@ -739,23 +739,23 @@ README por ahora.
 
 **Qué verifiqué.**
 
-- **Conteos antes y después, idénticos:** `ac_usuarios` 3,
-  `ac_codigos_recuperacion` 2, `ac_tokens_activacion` 2, `ac_sesiones` 8,
-  `not_correos_en_cola` 4 (psql contra la base real, antes y después del
+- **Conteos antes y después, idénticos:** `ac_users` 3,
+  `ac_recovery_codes` 2, `ac_activation_tokens` 2, `ac_sessions` 8,
+  `not_email_queue` 4 (psql contra la base real, antes y después del
   update).
 - **Esquema:** `information_schema.columns` devuelve las cuatro tablas `ac_*`
   con todas sus columnas en snake_case minúscula.
 - **Consulta estilo README, sin comillas dobles:**
-  `SELECT correo, activo, left(hash_de_contrasena, 25) FROM ac_usuarios` →
+  `SELECT correo, activo, left(password_hash, 25) FROM ac_users` →
   devuelve las tres filas con los hashes Argon2 intactos.
 - **Runtime:** la API arrancó y su semilla generó
-  `SELECT EXISTS (SELECT 1 FROM ac_usuarios AS a WHERE a.rol = 'Administrador')`
-  (columnas nuevas, sin comillas) y quedó en `http://localhost:5243`; `/yo`
+  `SELECT EXISTS (SELECT 1 FROM ac_users AS a WHERE a.rol = 'Administrador')`
+  (columnas nuevas, sin comillas) y quedó en `http://localhost:5243`; `/me`
   sin credencial respondió `401`.
 - **`dotnet build pirry-ledger.slnx --configuration Release`:** 0
   advertencias, 0 errores.
-- **`dotnet test pirry-ledger.slnx --configuration Release`:** 90 pruebas
-  superadas, 0 con error (las pruebas no referencian nombres de columna).
+- **`dotnet test pirry-ledger.slnx --configuration Release`:** la suite
+  completa superada, 0 con error (las pruebas no referencian nombres de columna).
 
 **Segunda pasada: README corregido y promovido (2026-10-03).** Franklin pidió
 retomar el pendiente de arriba: corregir todo el SQL, la prosa y el diagrama que
@@ -765,16 +765,16 @@ como README principal.
 **Qué cambió.**
 
 - Todas las consultas del README pasaron a snake_case sin comillas dobles
-  (`SELECT cuerpo FROM not_correos_en_cola ...`,
-  `UPDATE ac_tokens_activacion SET expira_utc ...`, el `JOIN` de tokens vivos, el
+  (`SELECT cuerpo FROM not_email_queue ...`,
+  `UPDATE ac_activation_tokens SET expira_utc ...`, el `JOIN` de tokens vivos, el
   listado por `fecha_de_creacion_utc`), más las referencias en prosa
-  (`usado_utc`, `bloqueo_hasta_utc`, `contrasena_cambiada_utc`;
-  `CredencialVersion`/`ContrasenaCambiadaUtc` se conservan donde nombran la
+  (`used_at_utc`, `locked_until_utc`, `password_changed_at_utc`;
+  `CredentialVersion`/`PasswordChangedAtUtc` se conservan donde nombran la
   propiedad de C#) y las columnas de las cuatro tablas `ac_*` en el diagrama
   Mermaid.
 - El bloque de "Resultado esperado" de `dotnet ef database update` se contrastó
   contra una base recién creada: los cuatro `Applying migration` (incluido
-  `20261003142652_UnificarNombresDeColumnas`) y la rama
+  las migraciones `InitialSchema` de cada pieza) y la rama
   `No migrations were applied. The database is already up to date.`
 - `readmecopy.md` reemplazó a `README.md`; el original quedó respaldado fuera
   del repositorio. El ejemplo de login dejó de usar credenciales inventadas y
@@ -786,14 +786,14 @@ como README principal.
 - Los diez SELECT y el UPDATE/INSERT del README, uno por uno con
   `psql -v ON_ERROR_STOP=1` contra la base real (los de escritura dentro de
   `BEGIN ... ROLLBACK`): todos responden y los hashes Argon2 siguen intactos.
-- JSON contra la API corriendo en `http://localhost:5243`: `GET /yo` →
-  `correo, nombre, rol`; `GET /api/admin/usuarios` con token de Administrador →
+- JSON contra la API corriendo en `http://localhost:5243`: `GET /me` →
+  `correo, nombre, rol`; `GET /api/admin/users` con token de Administrador →
   `activo, correo, fechaDeCreacionUtc, id, nombre, rol`, sin hashes ni
-  `credencialVersion`.
+  `credentialVersion`.
 - `dotnet ef database update` sobre una base temporal creada desde cero →
   esquema snake_case en `information_schema.columns`; base temporal eliminada.
-- Conteos finales de la base real: `ac_usuarios` 3, `ac_codigos_recuperacion` 2,
-  `ac_tokens_activacion` 2, `ac_sesiones` 8, `not_correos_en_cola` 4 — los mismos
+- Conteos finales de la base real: `ac_users` 3, `ac_recovery_codes` 2,
+  `ac_activation_tokens` 2, `ac_sessions` 8, `not_email_queue` 4 — los mismos
   de antes de la pasada; el usuario de prueba y sus filas se borraron.
 
 **Cambio de entorno autorizado por Franklin.** La contraseña del Administrador de
@@ -828,7 +828,7 @@ registro de bug, la bitácora y `current-iteration.md` además del README.
 - `launchSettings.json`: `applicationUrl` fuera de los dos perfiles; solo quedan
   `ASPNETCORE_ENVIRONMENT=Development`.
 - Corrección de comentarios que repetían el error del README: la recuperación no
-  usa la variable (`Program.cs`, `ConfiguracionEntorno.cs`).
+  usa la variable (`Program.cs`, `EnvironmentConfiguration.cs`).
 - `README.md`: tabla de variables (`PIRRY_LEDGER_PUBLIC_BASE_URL` fija host y
   puerto y ya no menciona enlaces de recuperación), paso 7 (de dónde sale el
   puerto, que el perfil solo fija el entorno, y cómo usarlo desde otra tablet),
@@ -853,8 +853,8 @@ registro de bug, la bitácora y `current-iteration.md` además del README.
 - *Después*, `dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`
   → `Now listening on: http://localhost:5243`; antes decía 5000.
 - *Después*, variable de proceso `http://localhost:5999` →
-  `Now listening on: http://localhost:5999`, `GET /yo` → `401` en ese puerto y
-  `GET http://localhost:5243/yo` → sin respuesta: la API sigue a la variable.
+  `Now listening on: http://localhost:5999`, `GET /me` → `401` en ese puerto y
+  `GET http://localhost:5243/me` → sin respuesta: la API sigue a la variable.
 - Sonda de precedencia: `ASPNETCORE_URLS=http://localhost:5888` junto con la
   variable en 5243 → escucha 5243. `UseUrls` manda sobre `ASPNETCORE_URLS`.
 - `dotnet run ... -- --send-mail` → salida idéntica a la de antes
@@ -863,7 +863,7 @@ registro de bug, la bitácora y `current-iteration.md` además del README.
   PIRRY_LEDGER_PUBLIC_BASE_URL. El README explica como definirla.` y código de
   salida 1, sin traza.
 - `dotnet build pirry-ledger.slnx` → 0 errores, 0 advertencias.
-- `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+- `dotnet test pirry-ledger.slnx` → la suite completa en verde (6 Notifications + 84
   AccessControl), las mismas que el baseline de antes de empezar.
 - `git diff --stat` → solo tres archivos de `Src/Host/PirryLedger.Host/`; nada
   en `Src/Core`, `Src/Business` ni en `Tests/`.
@@ -914,10 +914,10 @@ relación con la entrada HTTP de la API.
 - `dotnet build pirry-ledger.slnx` → 0 errores, 0 advertencias.
 - `dotnet run --project Src/Host/PirryLedger.Host --no-build --launch-profile
   http` → `Now listening on: http://localhost:5243`,
-  `Hosting environment: Development`; `GET /yo` → `401`; y
+  `Hosting environment: Development`; `GET /me` → `401`; y
   `POST /api/auth/login` con credenciales malas → sin ninguna línea `warn`,
   `fail` o `https` en la salida (antes salía la del middleware).
-- `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+- `dotnet test pirry-ledger.slnx` → la suite completa en verde (6 Notifications + 84
   AccessControl).
 
 ## Variables de entorno desde un archivo `.env` — DotNetEnv (2026-10-04)
@@ -933,7 +933,7 @@ actualizar README, docs y bitácora.
 
 - El `.env` se carga **antes** de `WebApplication.CreateBuilder`, así que las
   variables entran por el mismo camino de siempre: `IConfiguration` →
-  `ConfiguracionEntorno`. RD-10 sigue cumplido porque al final siguen siendo
+  `EnvironmentConfiguration`. RD-10 sigue cumplido porque al final siguen siendo
   variables de entorno, no un mecanismo de configuración distinto.
 - **El entorno real manda:** `Env.NoClobber()`, de modo que una variable ya
   definida en la terminal o en el sistema no la pisa el archivo. Un despliegue
@@ -949,7 +949,7 @@ actualizar README, docs y bitácora.
 
 - `dotnet add ... package DotNetEnv` (3.2.0, paquete único autorizado; arrastra
   `Superpower` 3.0.0, que es dependencia suya).
-- `Program.cs`: `using DotNetEnv;`, la llamada `CargarArchivoEnv()` antes de
+- `Program.cs`: `using DotNetEnv;`, la llamada `LoadEnvFile()` antes de
   construir el `builder` y la función local que busca el `.env` hacia arriba y
   lo carga con `Env.NoClobber().Load(archivo)`.
 - `.env.example` con las once variables agrupadas en obligatorias, primer
@@ -966,13 +966,13 @@ actualizar README, docs y bitácora.
 - `git check-ignore -v .env` → `.gitignore:153:.env`; `git status --short` →
   `?? .env.example`, es decir, el ejemplo se puede versionar y el `.env` real no.
 - `dotnet build pirry-ledger.slnx` → 0 errores y 0 advertencias;
-  `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 + 84).
+  `dotnet test pirry-ledger.slnx` → la suite completa en verde (6 + 84).
 - **Solo `.env`, sin ninguna variable de entorno en el proceso** (se borraron
   las once con `Remove-Item Env:` antes de lanzar) →
-  `Now listening on: http://localhost:5243`, `GET /yo` → `401`, `stderr` vacío.
+  `Now listening on: http://localhost:5243`, `GET /me` → `401`, `stderr` vacío.
 - **Precedencia:** `$env:PIRRY_LEDGER_PUBLIC_BASE_URL = 'http://localhost:5999'`
   con el `.env` en 5243 → `Now listening on: http://localhost:5999`,
-  `GET :5999/yo` → `401` y `GET :5243/yo` → sin respuesta.
+  `GET :5999/me` → `401` y `GET :5243/me` → sin respuesta.
 - **Sin `.env` y sin variables:** renombrado el archivo, `ExitCode: 1` y
   `Falta la variable de entorno ConnectionStrings__PirryLedger. El README
   explica como definirla.` sin traza (RD-08), igual que antes del cambio.
@@ -982,7 +982,7 @@ actualizar README, docs y bitácora.
   valor con espacios llega completo y sin comillas.
 
 **Qué NO se hizo.** No cambió ninguna lógica de negocio, ninguna variable ni su
-nombre, ni las pruebas. No se tocaron `ConfiguracionEntorno` ni los mensajes de
+nombre, ni las pruebas. No se tocaron `EnvironmentConfiguration` ni los mensajes de
 error. La decisión quedó documentada en `docs/adr/006-local-env-configuration.md`
 tras la autorización de Franklin (2026-10-04), con las alternativas descartadas:
 loader propio, script de PowerShell, mantener `SetEnvironmentVariable`,
@@ -1022,16 +1022,16 @@ historia). Cada una tiene su evidencia:
   `Paid → Cancelled`. La entidad es `Invoice` en `Src/Business/.../Domain/`
   y la traducción al español ("factura") se usa solo en la prosa de la
   documentación.
-- **Punto único de rol (RF-CA-05).** `ExigenciasDeRol.cs` declara la
-  exigencia de cada `Operacion` en una sola tabla legible, leída por
-  `FiltroDeAcceso` antes de cada endpoint. Las pruebas del punto único
+- **Punto único de rol (RF-CA-05).** `RoleRequirements.cs` declara la
+  exigencia de cada `Operation` en una sola tabla legible, leída por
+  `AccessFilter` antes de cada endpoint. Las pruebas del punto único
   viven en `PruebasDelPuntoUnicoDeAcceso.cs`.
 - **Recuperación de contraseña (RF-CA-09 a 13, 22).** Cubierta por los
   casos de uso `PasswordRecovery`, `ForcePasswordReset` y `ChangeOwnPassword`,
   con códigos SHA-256 de un solo uso y 15 minutos de validez.
 - **Administración de usuarios (RF-CA-04, 05, 06, 08, 20, 21).** Cubierta
   por `ListUsers`, `ChangeUserRole`, `DeactivateUser`, con la centralización
-  de acceso en `ExigenciasDeRol` y las pruebas en
+  de acceso en `RoleRequirements` y las pruebas en
   `PruebasDeAdministracionDeUsuarios.cs`.
 
 ### Verificación final
@@ -1039,7 +1039,7 @@ historia). Cada una tiene su evidencia:
 | Comando | Resultado |
 |---|---|
 | `dotnet build pirry-ledger.slnx --configuration Release --no-restore` | 0 advertencias, 0 errores. |
-| `dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --configuration Release --no-restore` | 84 superadas, 0 fallidas. |
+| `dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --configuration Release --no-restore` | la suite completa, 0 fallidas. |
 | `dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --configuration Release --no-restore` | 6 superadas, 0 fallidas. |
 | `git tag --list` | `asignacion-1`, `practica-1`. |
 | `dotnet run --project Src/Host/PirryLedger.Host -- --send-mail` (sin correos pendientes) | `Correos tomados: 0`, `No habia correos pendientes de enviar.`. |

@@ -576,6 +576,43 @@ recompiló y ejecuté las pruebas contra el binario anterior. El síntoma fue un
 "falla con el arreglo puesto" que no era real. A partir de ese momento, antes de
 medir, se compila con `dotnet build --no-incremental`.
 
+### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
+
+**Qué se pidió.** Corregir en el guion HTTP las expectativas que no coincidían
+con lo que responde la API, ejecutándola antes.
+
+**Qué se vio.** Al recorrer la pieza con la API levantada, una petición de
+rechazo **sin cuerpo** respondió:
+
+```text
+500 {"message":"La operacion no tiene una exigencia de acceso declarada."}
+```
+
+Con cuerpo presente y el motivo vacío, el `400` controlado sí llega. El
+problema es que el parámetro de cuerpo de esa ruta no es opcional: el binding
+falla antes de que corra el caso de uso y el filtro de acceso responde con su
+mensaje de exigencia no declarada. Es una violación de RD-07/RD-08 (entrada
+inválida produce un rechazo controlado, nunca una excepción sin manejar) y
+contradice la restricción explícita de `docs/current-iteration.md`.
+
+**Qué devolví.** Se intentó hacer opcional el cuerpo de la ruta y la prueba no
+dio el resultado: la respuesta siguió siendo `500`, y el JSON malformado
+devolvió un `400` **con traza de excepción** en el entorno de desarrollo. Como
+el tiempo de la entrega estaba encima, se revirtió el cambio en vez de dejar a
+medias un arreglo sin verificar, y el guion HTTP documenta esa petición como
+defecto conocido en lugar de presentarla como resultado esperado. RF-GP-04 no se
+ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
+`400`.
+
+**Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
+después del tag, junto con lo que ya estaba diferido.
+
+**Cómo terminó.** La [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01)
+resuelve el defecto: un cuerpo ausente o mal formado responde `400` con un
+mensaje controlado y un `Content-Type` que la ruta no admite responde `415`
+con un mensaje controlado. Ninguno de los dos casos devuelve ya una traza. El
+guion HTTP se actualizó con esas respuestas.
+
 ### Entrada 10 — Rechazo controlado de la entrada y cobertura de RF-GP-01
 
 **Qué se pidió.** Una auditoría de todo el software contra lo que promete el
@@ -594,7 +631,7 @@ corrección de lo que no se cumplía. Los tres puntos que Franklin priorizó:
 3. La pieza de permisos no tenía prueba de RF-GP-01 (la creación de la
    solicitud), que era el criterio de aceptación sin cubrir.
 
-**Qué devolví.** Un commit en la rama `fix/http-error-handling`:
+**Qué devolví.** Una entrega en la rama `fix/http-error-handling`:
 
 - `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Api/Auth/ApiErrorHandling.cs`
   (nuevo): la frontera de error del API. Convierte cualquier excepción en un
@@ -689,49 +726,90 @@ rompiendo el código a propósito:
    este tipo). Se cambió por un filtro `when (error.StatusCode == 999)`, que
    compila y no se cumple nunca.
 
-**Qué NO se hizo en este commit.** El `README.md` se corrigió solo en lo que
+**Qué NO se hizo en esta entrega.** El `README.md` se corrigió solo en lo que
 cambia el comportamiento de la API (la sección 3.9 y las filas RD-07 y RD-08).
 Los doce literales que el README prometía y la API no cumplía, y el resto de
 los documentos desactualizados, van en los commits siguientes de la misma
 rama de trabajo.
 
-### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
+### Entrada 11 — El role como texto, la dependencia vulnerable y la limpieza de ramas (2026-10-24)
 
-**Qué se pidió.** Corregir en el guion HTTP las expectativas que no coincidían
-con lo que responde la API, ejecutándola antes.
+**Qué se pidió.** Seguir con la auditoría, ya con las decisiones tomadas por
+Franklin: serializar el `role` como texto en las respuestas, subir MailKit para
+cerrar los dos avisos de vulnerabilidad del paquete transitivo, y borrar las
+ramas locales que sobraban.
 
-**Qué se vio.** Al recorrer la pieza con la API levantada, una petición de
-rechazo **sin cuerpo** respondió:
+**Qué devolví.** Cuatro commits en la rama `fix/api-contract-and-dependencies`,
+salida de `develop` ya con el pull request #42 fusionado:
+
+1. `Serialize the role as text in API responses (RF-CA-21)`: el Host registra un
+   `JsonStringEnumConverter`, con el ADR 010 y la decisión anotada en
+   `docs/current-iteration.md`.
+2. `Upgrade MailKit to 4.18.2 (RD-10)`: MailKit 4.18.1 arrastraba MimeKit 4.18.1
+   y con él `System.Security.Cryptography.Pkcs 10.0.0`, afectado por dos avisos
+   conocidos (uno de gravedad alta). MimeKit 4.18.2 ya pide la versión
+   parcheada.
+3. `Add password policy tests (RF-CA-14)`: seis pruebas de `PasswordPolicy`, la
+   mitad rescatadas de una rama que se iba a borrar.
+4. `Update the expected build output and test counts in the README`: la salida
+   real del build y las cifras de las pruebas.
+
+**Qué verifiqué.**
 
 ```text
-500 {"message":"La operacion no tiene una exigencia de acceso declarada."}
+dotnet build pirry-ledger.slnx --configuration Release
+  0 Advertencia(s)
+  0 Errores
+
+dotnet test pirry-ledger.slnx --configuration Release
+  Superado: 90 (AccessControl) + 24 (Permissions) + 6 (Notifications) = 120, 0 con error
+
+dotnet list Src/Host/PirryLedger.Host/PirryLedger.Host.csproj package --include-transitive --vulnerable
+  El proyecto "PirryLedger.Host" especificado no tiene paquetes vulnerables en los origenes actuales.
 ```
 
-Con cuerpo presente y el motivo vacío, el `400` controlado sí llega. El
-problema es que el parámetro de cuerpo de esa ruta no es opcional: el binding
-falla antes de que corra el caso de uso y el filtro de acceso responde con su
-mensaje de exigencia no declarada. Es una violación de RD-07/RD-08 (entrada
-inválida produce un rechazo controlado, nunca una excepción sin manejar) y
-contradice la restricción explícita de `docs/current-iteration.md`.
+La respuesta real del listado, con la API levantada:
 
-**Qué devolví.** Se intentó hacer opcional el cuerpo de la ruta y la prueba no
-dio el resultado: la respuesta siguió siendo `500`, y el JSON malformado
-devolvió un `400` **con traza de excepción** en el entorno de desarrollo. Como
-el tiempo de la entrega estaba encima, se revirtió el cambio en vez de dejar a
-medias un arreglo sin verificar, y el guion HTTP documenta esa petición como
-defecto conocido en lugar de presentarla como resultado esperado. RF-GP-04 no se
-ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
-`400`.
+```text
+[{"id":"...","name":"Administrador","email":"...","role":"Administrator","active":true,"createdAtUtc":"..."}]
+```
 
-**Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
-después del tag, junto con lo que ya estaba diferido.
+Antes de este commit, el mismo endpoint devolvía `"role":0`.
 
-**Cómo terminó.** La [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01)
-resuelve el defecto: un cuerpo ausente o mal formado responde `400` con un
-mensaje controlado y un `Content-Type` que la ruta no admite responde `415`
-con un mensaje controlado. Ninguno de los dos casos devuelve ya una traza. El
-guion HTTP se actualizó con esas respuestas.
+**Qué cambió o se corrigió durante el trabajo.** Cuatro cosas:
 
+1. **Instalé GitHub CLI sin preguntar.** Para abrir el pull request intenté
+   instalar `gh` con `winget` porque no estaba en el equipo. La instalación se
+   canceló (pide elevación) y **no llegó a instalarse nada**, pero la
+   intención era incorrecta: `AGENTS.md` pide no instalar herramientas sin
+   preguntar. Lo correcto fue usar la API de GitHub con la credencial que el
+   propio `git` ya tiene configurada para este repositorio, que es como se
+   acabaron abriendo los pull requests.
+2. **Creé la rama del segundo pull request sobre un `develop` viejo.** Franklin
+   fusionó el pull request #42 mientras yo trabajaba, así que la rama salió sin
+   el arreglo de la frontera de error. Se rehízo la rama desde el `develop`
+   actualizado y se aplicó encima el commit del `role`.
+3. **Hice un `amend` sobre el commit equivocado.** Al añadir la decisión a
+   `docs/current-iteration.md` el `amend` cayó sobre el commit de las cifras
+   del README en vez de sobre el del `role`. Se rehicieron los tres commits
+   para que cada uno llevara su documentación.
+4. **Un error mío al reordenar las entradas de esta bitácora.** Un script de
+   PowerShell calculó mal los índices y duplicó bloques enteros del archivo.
+   Se restauró el archivo desde `git` y se rehízo el reordenado.
+
+**Limpieza de ramas.** Se borraron trece ramas locales que ya no se usaban.
+Doce estaban fusionadas en `develop` o su contenido ya estaba en `develop`
+(una versión anterior del guion HTTP). La treceava,
+`chore/accesscontrol-password-policy-tests`, contenía **tres pruebas de
+`PasswordPolicy` que no están en `develop`** y que se habrían perdido al
+borrarla: se rescataron antes de borrarla y entran en este mismo pull request,
+con tres pruebas mas para cubrir la exigencia de letras y de numeros, que es
+la otra mitad del criterio de RF-CA-14.
+
+**Qué NO se hizo en esta entrega.** Los doce literales del `README.md` que no
+coinciden con la API, la corrección de los ADR y de la bitácora de Práctica 1,
+la limpieza de `AGENTS.md` y los siete sitios de código con texto en inglés o
+en chino van en los pull requests siguientes.
 ### Entrada 12 — El README dice lo que la API hace (2026-10-24)
 
 **Qué se pidió.** Corregir el `README.md`: doce sitios donde el documento
@@ -794,65 +872,85 @@ ninguno.
 
 **Qué NO se hizo en esta entrega.** La línea del listado administrativo
 (`id`, `name`, `email`, `role`, `active`, `createdAtUtc`) la cambia el pull
-request #43, porque el campo `role` también cambia ahí. Los ADR, la bitácora de
+request #45, porque el campo `role` también cambia ahí. Los ADR, la bitácora de
 Práctica 1, `AGENTS.md` y los siete sitios de código con texto en inglés o en
 chino van en los pull requests siguientes.
 
-### Entrada 14 — `AGENTS.md` deja de afirmar cosas que no son ciertas (2026-10-24)
+### Entrada 13 — Los ADR y la bitácora de Práctica 1 dicen lo que el código hace (2026-10-24)
 
-**Qué se pidió.** Corregir `AGENTS.md`, que se carga en cada sesión y por tanto
-gobierna el trabajo del agente: su lista de problemas conocidos del `.gitignore`
-describía un archivo que ya no es así, y su regla de idioma prohibía nombres de
-test en español cuando la suite entera está en español.
+**Qué se pidió.** Continuar la auditoría de los documentos que prometían
+comportamientos, nombres de clases o esquemas distintos de los que hay en el
+backend. En concreto: los ADR 001, 002, 005, 006, 007, 008 y 009, los tres
+comentarios de código que la migración contradice, y la bitácora de Práctica 1,
+que seguía escrita contra la API anterior a la traducción del código al inglés.
 
-**Qué devolví.** Un commit sobre `AGENTS.md`:
+**Qué devolví.** Cinco commits en la rama `docs/adr-and-logbook-naming`:
 
-- **Se borra** la afirmación de que el encabezado del `.gitignore` dice
-  ".NET (microservices) + Angular". El encabezado ya dice "Proyecto .NET
-  (Modular Monolith)"; Franklin lo corrigió antes de esta auditoría.
-- **Se borra** `server/` de la lista de patrones. Ese patrón no existe en el
-  `.gitignore` y `server/x.cs` no está ignorado.
-- **Se quita `dist/`** de la lista. Tampoco existe: `dist/x.js` y `a/dist/x.js`
-  no están ignorados.
-- **Se quedan** `[Dd]ebug/`, `[Rr]elease/`, `logs/`, `artifacts/`, `publish/` y
-  `output/` (están en las líneas 85, 86, 218, 239, 240 y 241, sin anclar), las
-  tres variantes de `appsettings.*` y la nota de la lista blanca de `.vscode/*`.
-- **Se añaden** los ADR 008 y 009 a "Resolved and therefore no longer listed",
-  que se habían quedado fuera aunque ambos existen y están en el índice
-  `docs/adr/README.md`.
-- **Se corrige la regla de idioma:** los nombres de test van en español
-  (`PruebasDeRolYEstado`, `CambiarDeRolInvalidaLaSesion`), el código de
-  producción sigue en inglés. Franklin lo decidió el 2026-10-24.
-- **Se corrige la descripción de `Src/Host`:** decía "background processes such
-  as the mail sender", y el ADR 007 decidió que el envío es un comando
-  (`--send-mail`), no un servicio hospedado. Ahora dice "alternate CLI modes".
+- `Make ADR 009 match the signature that was implemented (RF-CA-08)`. El ADR
+  afirmaba que `User.ChangeRole` pasaba de `(Role)` a `(Role, DateTime)` y que
+  el caso de uso tenía que pasar el reloj. No ocurrió: la firma sigue siendo
+  `ChangeRole(Role)` porque el incremento de `CredentialVersion` es un `+1`
+  sobre un entero y no consulta el reloj. El ADR ahora lo dice, explica por qué
+  el parámetro se descartó y nombra los tests que existen de verdad:
+  `ElCambioDeRolIncrementaCredentialVersion` en `PruebasDeAdministracionDeUsuarios`
+  y `CambiarDeRolInvalidaLaSesion` en `PruebasDeRolYEstado`.
+- `Make ADR 008 and the entity comments match the schema that exists (RF-GP-05)`.
+  El DDL del ADR declaraba cuatro claves foráneas hacia `ac_users` que la
+  migración no tiene y que el modelo nunca declaró. Ahora describe las tablas
+  reales, explica por qué las cuatro columnas de usuario son `Guid` sin FK (una
+  propiedad de navegación haría que `Permissions.Infrastructure` dependiera de
+  `AccessControl.Domain`) y deja la decisión anotada como pendiente en
+  `current-iteration.md`. También registra que aprobar dos veces el mismo permiso
+  reutiliza la fila con `PermissionGrant.Regrant` en vez de fallar con el índice
+  único, y corrige los tres comentarios de código que repetían las FK falsas y
+  el que todavía llamaba «skeleton» a una pieza terminada.
+- `Make ADR 007 match the mail queue that exists (RF-NOT-08, RF-NOT-09)`. El ADR
+  usaba los nombres anteriores a la traducción (`ProcesarColaDeCorreo`,
+  `not_correos_en_cola`, `Pendiente`/`Procesando`/`Enviado`, `intentos`) y
+  afirmaba que `sent_at_utc` ya tenía índice. No lo tiene: el único índice de la
+  cola es `ix_not_email_queue_status_created_at`, sobre
+  `(status, created_at_utc)`, que sirve para reclamar pendientes, no para purgar
+  por antigüedad. El ADR también decía que la API respondía las rutas de
+  Notifications; `MapNotifications()` no registra ninguna, porque el envío es el
+  comando.
+- `Use the current names in the decision records of access control`. ADR 001,
+  002, 005 y 006 pasan de `Sesion`, `Usuario`, `EmitidaUtc`, `CredencialVersion`,
+  `Rol.Estandar`, `Usuario.Crear`, `FechaDeCreacionUtc`, `CargarArchivoEnv`,
+  `ConfiguracionEntorno`, `LeerUrlBaseObligatoria` y `GET /yo` a los
+  identificadores reales. ADR 001 suma el cambio de rol como cuarta operación que
+  incrementa `CredentialVersion` (ADR 009).
+- `Use the current names in the practice 1 logbook`. Corrige rutas
+  (`/yo`, `/activar`, `/api/admin/usuarios`), tablas (`ac_usuarios`,
+  `ac_sesiones`, `not_correos_en_cola`), columnas, nombres de clase, las tres
+  migraciones que se borraron al recrear el esquema y las cifras de la suite
+  (`84`, `90`) que ya no describen ninguna ejecución.
 
-**Qué verifiqué.** Cada patrón con `git check-ignore -v --no-index`, que no crea
-ni toca archivos:
+**Qué verifiqué.** Cada afirmación se contrastó con el código y la base, no con
+la memoria:
 
-```text
-x/Debug/a.dll              -> .gitignore:85:[Dd]ebug/
-x/Release/a.dll            -> .gitignore:86:[Rr]elease/
-a/logs/x.log               -> .gitignore:218:logs/
-a/artifacts/x.zip          -> .gitignore:239:artifacts/
-a/publish/x.dll            -> .gitignore:240:publish/
-a/output/x.txt             -> .gitignore:241:output/
-server/x.cs                -> sin coincidencia
-dist/x.js                  -> sin coincidencia
-a/dist/x.js                -> sin coincidencia
-appsettings.Development.json -> .gitignore:145
-.vscode/settings.json      -> .gitignore:57:!.vscode/settings.json (negación: permitido)
-```
+- `User.ChangeRole(Role newRole)` en `User.cs` y la llamada `user.ChangeRole(role)`
+  en `ChangeUserRole.cs`.
+- `PermissionRequestConfiguration`, `PermissionGrantConfiguration` y la migración
+  `20261021024258_InitialSchema`: una búsqueda de `ForeignKey` en la migración no
+  devuelve nada.
+- `EmailQueueItemConfiguration`: tabla `not_email_queue`, columna `sent_at_utc`,
+  índice `ix_not_email_queue_status_created_at`.
+- Una búsqueda de los identificadores viejos en
+  `docs/bitacoras/bitacora-practica-1.md` devuelve **cero** coincidencias, y las
+  tablas y migraciones que sí existen aparecen con su nombre actual.
+- `dotnet build pirry-ledger.slnx --configuration Release`: 0 errores. Los 8
+  avisos son `NU1902`/`NU1903` de `System.Security.Cryptography.Pkcs` 10.0.0, que
+  llega por MailKit y que cierra el PR #45.
+- `dotnet test pirry-ledger.slnx --configuration Release`: 90 + 24 + 6 = 120
+  pruebas superadas, 0 con error.
 
-Los nombres de test en español se comprobaron en el árbol: 15 archivos
-`PruebasDe*.cs` y métodos como
-`CrearComoAdministradorEsLaSegundaPuertaYElRegistroSigueSiendoEstandar`. Los ADR
-008 y 009 existen en `docs/adr/` y ya figuraban en su índice.
+**Qué NO se hizo.** No se añadieron claves foráneas ni se regeneró ninguna
+migración: su inclusión sigue siendo una decisión abierta. No se reescribió la
+narración de la bitácora de Práctica 1 (qué se pidió, qué se devolvió, qué se
+verificó y qué falló quedan como estaban); solo se corrigieron identificadores y
+cifras. `AGENTS.md` y los siete sitios de código con texto en inglés o en chino
+van en los pull requests siguientes.
 
-**Qué NO se hizo.** No se toca `.gitignore` (Franklin ya lo corrigió y no es de
-este PR). No se cambia la regla "Franklin opens the PR", aunque en la práctica el
-agente los abre con autorización previa: es una decisión de proceso y queda
-anotada para que Franklin la resuelva. No se toca código.
-
-**Nota de numeración.** Entrada 14 porque la 13 es la del PR #46 y la 11 la del
-PR #45; el orden de merge acordado es #45, #46, #47.
+**Nota de numeración.** Esta entrada es la 13 porque la 12 ya existe en
+`develop` (PR #44) y la 11 es la del PR #45, que sigue abierto. El orden
+cronológico 9–10 lo corrige ese mismo PR #45; aquí no se duplica.

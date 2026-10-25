@@ -9,9 +9,9 @@ namespace PirryLedger.Core.Permissions.Infrastructure.Security;
 //
 // IsKnown consulta el catalogo (unico punto donde se declaran los nombres
 // validos) y UserHasPermissionAsync hace un EXISTS sobre per_permission_grants.
-// Sin un INSERT en esa tabla (lo hace ApprovePermissionRequest en el siguiente
-// PR), la consulta devuelve false siempre: nadie tiene permisos concedidos.
-// Esto es lo correcto en el skeleton.
+// La fila la inserta ApprovePermissionRequest, en la misma transaccion que
+// aprueba la solicitud, asi que el permiso concedido se ve en la siguiente
+// peticion del solicitante.
 public sealed class EfPermissionAuthority : IPermissionAuthority
 {
     private readonly PermissionsDbContext _context;
