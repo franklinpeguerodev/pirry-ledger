@@ -53,7 +53,7 @@ public sealed class DeactivateUser
 
         if (user is null)
         {
-            throw new AdministrationOperationRejectedException("No existe ese user.");
+            throw new AdministrationOperationRejectedException("No existe ese usuario.");
         }
 
         // Si la cuenta ya esta inactiva, se dice eso y no otra cosa.
@@ -132,7 +132,7 @@ public sealed class DeactivateUser
 
         if (user is null)
         {
-            throw new AdministrationOperationRejectedException("No existe ese user.");
+            throw new AdministrationOperationRejectedException("No existe ese usuario.");
         }
 
         // La entidad lanza si la cuenta ya esta activa. Se captura aqui y se

@@ -257,6 +257,6 @@ static async Task SeedFirstAdministrator(WebApplication app)
         // Email ni la contrasena (RD-08). No se aborta el arranque, porque la
         // aplicacion sirve igual para registrarse; lo que no habra es
         // Administrator.
-        Console.Error.WriteLine($"No se pudo Create el primer Administrator: {error.Message}");
+        Console.Error.WriteLine($"No se pudo crear el primer Administrator: {error.Message}");
     }
 }
