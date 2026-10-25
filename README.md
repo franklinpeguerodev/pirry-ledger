@@ -185,7 +185,7 @@ dotnet build pirry-ledger.slnx --configuration Release
 dotnet test pirry-ledger.slnx --configuration Release
 ```
 
-Resultado esperado: `0 Errores` y todas las pruebas pasan.
+Resultado esperado: `0 Errores`, `0 Advertencias` y todas las pruebas pasan.
 
 ### Paso 6: aplicar las migraciones
 
