@@ -10,7 +10,7 @@ The assignment briefs (what each practice or assignment asks, its rubric and how
 | `access-control.md` | Registration, activation, session, roles, user administration, passwords | RF-CA-01 to RF-CA-22 | Delivered (Practice 1). Kept as the baseline that must not break |
 | `notifications.md` | Minimal outgoing mail queue | RF-NOT-08, 09, 12, 13 | Delivered (Practice 1). Kept as the baseline that must not break |
 | `business-module.md` | Structure of the business state machine | RF-NEG-03, 04, 05 | Delivered (Practice 1). Tests arrive in week 8 |
-| `permissions.md` | Permission requests and their state machine | RF-GP-01 to RF-GP-07 | Current (Asignación 2) |
+| `permissions.md` | Permission requests and their state machine | RF-GP-01 to RF-GP-07 | Delivered (Asignación 2). Its suite is extended in Práctica 2 |
 | `entities.md` | Minimum attributes of the entities in use | Usuario, Rol, CodigoRecuperacion, CorreoEnCola, SolicitudPermiso | Always applies |
 
 A file marked Delivered is not read for new work unless `docs/current-iteration.md` lists it. It stays because later graded reviews re-verify it.

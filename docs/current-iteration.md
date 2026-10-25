@@ -4,43 +4,47 @@ Franklin replaces this file at the start of each assignment. The agent reads it 
 
 ## Active assignment
 
-**Asignación 2 — Gestión de permisos y su primera suite de pruebas** (Programación III, Week 6, 5 points, individual). Opens Wednesday 14 October 2026; closes Tuesday 20 October 2026, 11:59 p. m. (late delivery up to 24 hours later at 50 % penalty).
-Brief and rubric: `docs/assignments/asignacion-2.md`.
+**Práctica 2 — Una suite que detecta defectos: Gestión de permisos** (Programación III, Bloque 3, Week 7, 8 points, individual). Deadline as published on the virtual platform; late delivery up to 24 hours later at 50 % penalty.
+
+Brief and rubric: `docs/assignments/practica-2.md`. Defect annex: `docs/assignments/practica-2-defectos.md` (variant A; the enrolment number ends in 0).
 
 ## Requirement files to read
 
-`docs/requirements/README.md` (index) first, then `design-rules.md`, `permissions.md` and `entities.md`. Read `access-control.md` only to protect what is already delivered (see "Constraints").
+`docs/requirements/README.md` (index) first, then `permissions.md` and `design-rules.md`. Read `access-control.md` and `notifications.md` only to protect what is already delivered: section 1.3 of the brief re-verifies access control.
 
 ## Goal
 
-Deliver three things at the tag `asignacion-2`: the Permissions management piece working, a first unit test suite on it, and the logbook with the agent.
+Deliver at the tag `practica-2`: the Permissions suite covering RF-GP-01 to RF-GP-07 with every test identified by its ID, six tagged defect commits that the suite detects, and the README sections `Pruebas` and `Defectos`.
 
 ## In scope
 
-| Area | Requirement IDs |
-|---|---|
-| Permission requests: create, list pending, approve, reject, apply, forbidden transitions, nobody resolves their own | RF-GP-01 to RF-GP-07 |
-| Cross-cutting design | RD-04, RD-06, RD-07, RD-09, RD-12 |
-| Unit test suite on the piece (valid transition, forbidden transition) | assignment section 1.2 |
-| README: how to trigger each RF-GP criterion, and a section titled exactly `Pruebas` | assignment sections 1.1 and 1.2 |
-| Logbook `docs/bitacora-asignacion-2.md` | assignment section 1.3 |
+| Area | Requirement IDs | Brief |
+|---|---|---|
+| Suite over the Permissions piece, at least one test per rule, each citing its ID | RF-GP-01 to RF-GP-07 | 1.1 |
+| Six planted defects, one tag each, parent `practica-2` | variant A, defects 1 to 6 | 1.2 |
+| README section `Defectos`, one line per defect naming the test that detects it | — | 1.2 |
+| README section `Pruebas`, one command that runs everything | — | 1.1 |
+| Cumulative review of Access control, following the README | RF-CA-01 to RF-CA-22 (verify only) | 1.3 |
+| `docs/maquina-de-estados.md` documents the permission request machine | RF-GP-01 to RF-GP-07, RF-NEG-09 | Franklin's decision |
+| Logbook `docs/bitacora-practica-2.md` | — | AGENTS.md |
 
 ## Out of scope (do not build)
 
-- Audit records for the resolution of a request (RF-AUD-02, week 14). Design so they can be added later, but do not implement them.
-- Notifications to Administrators and requester (RF-NOT-01, RF-NOT-02, weeks 11 and 12).
-- Documents, reports.
+- New functionality of the Permissions piece. It is delivered; this iteration writes tests, not features.
 - Tests of the business state machine (`Invoice`, week 8).
+- Audit records (RF-AUD-02, week 14), notifications to Administrators and requester (RF-NOT-01, RF-NOT-02, weeks 11 and 12), documents, reports.
 - Any change to the mail queue.
+- Any change to the schema or a new migration.
 
 ## Decisions taken by Franklin
 
-1. **What a permission is.** A fixed catalog of named permissions defined in one place in the code, plus one demonstration operation that is only allowed to users who hold the granted permission. Franklin's choice for the demonstration: a single permission `ViewSalesSummary` and a route that returns a fixed sales summary sample, living in the permissions module (not in the business module). The permission requirement of that route must be readable in the same single place where the other routes declare their access, not hidden inside the handler. The agent confirms the route name and the exact shape in the plan and waits for approval.
-2. **Who creates and who resolves.** A Standard user creates requests (RF-GP-01); an Administrator approves or rejects them. An Administrator holds access to every operation by role, so the permission check passes for an Administrator without any request, and no rule forbids an Administrator from creating a request. Nobody resolves their own request (RF-GP-07), and the rule compares identities, not roles: it rejects whoever resolves a request when they are the same user who created it, whatever role they had then or have now. The README shows two ways to trigger it, the direct one (an Administrator creates a request and tries to resolve it) and the one the rule exists for (a Standard user creates a request, is promoted to Administrator while it is Pending, and then tries to resolve it). The README leads with the realistic path as the main demonstration of RF-GP-07; the direct path stays as a second, shorter check.
-3. **Where it lives.** A new module `PirryLedger.Core.Permissions`, layered like the existing ones (Domain, Application, Infrastructure, Api), owner of its data. Other pieces consult granted permissions through an interface declared in `PirryLedger.Core.Contracts`. A new test project `Tests/PirryLedger.Core.Permissions.Tests`.
-4. **Role changes invalidate sessions.** `User.ChangeRole` increments `CredentialVersion`, the same mechanism that already invalidates sessions on password change (RF-CA-12) and deactivation (RF-CA-20). After a role change (typically a promotion to Administrator), the affected user must re-login for their next request to reflect the new role. This is what makes the realistic path of RF-GP-07 testable: an Administrator cannot act on a request they created with their previous role until they log in again and the new role is in the request. Detailed in `docs/adr/009-role-changes-invalidate-sessions.md`.
-5. **Where the access machinery lives.** The pure data types of the access machinery (`Operation` enum and `AccessLevel` enum) live in `PirryLedger.Core.Contracts.Auth`, available to any module that declares routes. The table that pairs operations with their required level (`RoleRequirements`) and the runtime filter (`WithAccess`, `AccessFilter`, `OperationMetadata`) stay in `PirryLedger.Core.AccessControl.Application` and `PirryLedger.Core.AccessControl.Api` respectively. The reason for the partial move is a layering constraint: `AccessFilter.ApplyAsync` depends on `PirryLedger.Core.AccessControl.Application.Authenticate`, and `RoleRequirements.RequiredRole` returns `PirryLedger.Core.AccessControl.Domain.Enums.Role`. Moving these to `Contracts` would force `Contracts` to reference `AccessControl`, inverting the dependency direction. As a consequence, when `PirryLedger.Core.Permissions.Api` declares its own routes in the next iteration, it references `PirryLedger.Core.AccessControl.Api` for `WithAccess`. The full move (including the filter) is recorded as a future option: it requires an `IAuthenticator` interface in `Contracts` and an implementation in `AccessControl.Application`.
-6. **The role travels as text in the responses.** The administrative listing returned the role as the number of the enum, so the client had to know the order of the enum to know whether a user is an Administrator or a Standard. RF-CA-21 asks the listing to say the role, so the Host registers a `JsonStringEnumConverter` for HTTP responses and the role travels as `"Administrator"` or `"Standard"`, the same words the column `ac_users.role` already stores. Decided by Franklin on 2026-10-24; recorded in `docs/adr/010-role-as-text-in-responses.md`.
+1. **Two new tests before tagging.** The current suite detects four of the six defects. It cannot detect defect 4 (the `requester_id` filter lives in `PermissionRequestRepository`, and no test instantiates it) nor defect 5 (nothing asserts that `Approved -> Pending` is forbidden). The suite gains a test of the real repository against EF InMemory, and the state machine tests become an exhaustive 4x4 matrix. Then the six defects are planted and each one is shown to fail at least one test.
+2. **Defects live outside the normal flow.** Each defect is a commit on a branch created from the tag, tagged `practica-2-defecto-N`, and never merged into `develop` or `main`. The branch is deleted; the tag keeps the commit alive.
+3. **The tag goes on `main`.** Like `asignacion-2`: work in `develop`, merge into `main`, tag there. The six defect tags point to commits whose parent is `practica-2`.
+4. **The brief wins over the requirements files** when they disagree, as `docs/requirements/README.md` states.
+5. **The logbook is a new file**, `docs/bitacora-practica-2.md`. The brief does not grade it; `AGENTS.md` requires it, and mixing two graded deliveries in one file would blur both.
+6. **The permission request machine is documented.** `docs/maquina-de-estados.md` documents `Invoice` only, and its title says so. Practice 2 adds the second machine to the same file, with its transition table and the note that the two machines share no code (RF-NEG-09). It earns no points; it closes a documentation gap and gives the README `Defectos` section something to point to. Its own commit, separate from the replacement of this file.
+7. **Table headers in Spanish, entity names in English.** The `Invoice` table of `docs/maquina-de-estados.md` uses English headers inside a Spanish document, while `docs/requirements/permissions.md` uses Spanish ones. The headers become Spanish; the state names stay as the code declares them (`Draft`, `Pending`, `Approved`, `Applied`, `Rejected`), because they are identifiers and the tests use them.
 
 ## Open decisions (ask, do not assume)
 
@@ -48,9 +52,7 @@ None for this iteration.
 
 ## Deferred
 
-Work and decisions consciously left out of this iteration. Nothing here is
-waiting for a decision: each item states what it blocks and why it is not being
-resolved now.
+Work and decisions consciously left out of this iteration. Nothing here is waiting for a decision: each item states what it blocks and why it is not being resolved now.
 
 - **Do not run `dotnet ef migrations add` in the permissions module.** Its model
   declares no foreign keys to `ac_users`, and its migration snapshot was only
@@ -71,42 +73,38 @@ resolved now.
 
 ## Constraints
 
-- The transitions of a request are resolved in one single component (RD-04), following the pattern of `InvoiceStateMachine`. The permissions state machine shares no code and no enum with the business one (RF-NEG-09).
-- Every new route is declared in the single role-requirements table (`ExigenciasDeRol`). The test that enumerates the real routes of the Host must keep passing and will fail if a route is not declared (RF-CA-05, RD-06).
-- Applying an approved request happens automatically in the same operation that approves it: the request ends in `Applied`, and the requester can then execute the action with no further step (RF-GP-05).
-- Requests are persisted with their own migration and survive an application restart (RD-09). Follow the table and column naming of `docs/adr/004-snake-case-column-naming.md` and the module prefix pattern already used by the other modules; the plan proposes the prefix.
-- All external input is validated and a body that is missing or malformed gives a controlled `400`, never an unhandled exception (RD-07, RD-08).
-- All times come from the injectable clock (RD-11).
-- Do not break what is delivered: the existing tests keep passing and Access control keeps working (it is re-verified in later graded reviews).
-- Code is in English; code comments and user-visible messages are in Spanish. Propose English names for `SolicitudPermiso` and its states (`Pendiente`, `Aprobada`, `Aplicada`, `Rechazada`) and record the mapping in the README.
+- The Asignación 2 test conditions still apply: no full application, no database and no SMTP server (RD-12); independent tests; arrange, act and assert; one single command.
+- Every test of RF-GP-01 to RF-GP-07 identifies its ID in its name or in a comment.
+- No existing test is deleted or weakened. If one must change, the pull request says why.
+- A defect commit modifies only production code of the Permissions piece. It never touches `Tests/`.
+- A defect commit's message says which file and which line changed.
+- Do not break what is delivered: Access control keeps working, and its 96 tests keep passing.
+- Code is in English; code comments and user-visible messages are in Spanish.
 
-## Tests (assignment section 1.2)
+## Tests
 
-- xUnit, in `Tests/PirryLedger.Core.Permissions.Tests`, no application, database or SMTP server needed.
-- At least one test of a valid transition, verifying the resulting state and the data the transition records (who and when for approval, or the reason for rejection).
-- At least one test of a forbidden transition, verifying the rejection and that the state did not change.
-- Each test has three identifiable phases (arrange, act, assert), verifies one behavior and its name says which one.
-- Tests are independent: they pass in any order and one by one.
-- One single command, documented under the README heading `Pruebas`, runs the whole suite from a clean clone.
+- `dotnet test pirry-ledger.slnx` from a clean clone is the single command of the README `Pruebas` section.
+- The suite must fail for every planted defect. A defect that leaves the suite green means the suite is incomplete: extend it, re-tag `practica-2` and plant the defect again.
+- EF InMemory is allowed to exercise a real repository; PostgreSQL is not needed.
 
 ## Logbook
 
-File: `docs/bitacora-asignacion-2.md`, the path the assignment brief fixes.
-It documents at least one real task of this assignment delegated to the agent: what was asked, what it returned, and at least one case where the agent was wrong, how it was detected and how it was corrected, with evidence of the real session. Nothing is invented and nothing is reused from Asignación 1. The agent drafts each entry; Franklin reviews it before it is pushed.
+File: `docs/bitacora-practica-2.md`. It documents at least one real task of this practice delegated to the agent: what was asked, what it returned, and at least one case where the agent was wrong, how it was detected and how it was corrected, with evidence of the real session. Nothing is invented and nothing is reused from the previous logbooks. The agent drafts each entry; Franklin reviews it before it is pushed.
 
 ## Definition of done
 
-- Seven RF-GP rules meet their acceptance criterion and requests survive a restart.
-- README explains how to trigger each RF-GP criterion and has a `Pruebas` section with one command.
-- Suite passes from a clean clone, together with the previously delivered tests.
-- Logbook complete with at least one real agent error.
-- Documentation updated in the same pull requests (README, this file, ADRs authorized by Franklin).
-- Tag `asignacion-2` pushed, and the repository URL and tag name submitted in Moodle.
+- RF-GP-01 to RF-GP-07 each have at least one test that cites the ID, and the suite passes at the tag.
+- Six defect tags exist, each parent is `practica-2`, each commit touches only Permissions production code, and each one makes at least one test fail.
+- README has `Pruebas` (one command) and `Defectos` (one line per defect, naming the test).
+- Access control works in the four fronts of section 1.3, following the README.
+- Both state machines are documented in `docs/maquina-de-estados.md`.
+- Documentation updated in the same pull requests.
+- Tags pushed and the repository URL and tag name submitted in Moodle, after Franklin's authorization.
 
 ## How it will be checked
 
-The repo is cloned and `asignacion-2` checked out; the README is followed to the letter. Then: create, approve, reject with a reason and approve twice a request; run the command of the `Pruebas` section as written; read the valid-transition and forbidden-transition tests (what they prepare, execute and verify); read `docs/bitacora-asignacion-2.md`.
+`git clone` and `git checkout practica-2`; the command of the README `Pruebas` section; for each defect, `git diff practica-2 practica-2-defecto-N --stat`, the commit message, and the same command over the tag, which must report at least one failure; the README `Defectos` section against the tests that fail; the names of the tests against the RF-GP IDs; and Access control, started from the README, in its four fronts.
 
 ## Delivered earlier
 
-Practice 1 (Access control, mail queue and the structure of the business state machine) is delivered. Its decisions live in `docs/adr/`; its commands in `README.md`; its brief in `docs/assignments/practice-1.md`.
+Practice 1 (Access control, mail queue and the structure of the business state machine) and Asignación 2 (Permissions management and its first suite) are delivered. Their decisions live in `docs/adr/`; their commands in `README.md`; their briefs in `docs/assignments/`.
