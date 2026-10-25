@@ -58,12 +58,15 @@ internal sealed class PermissionRequestConfiguration : IEntityTypeConfiguration<
         builder.Property(request => request.RejectedAtUtc)
             .HasColumnName("rejected_at_utc");
 
-        // Las dos claves foraneas (requester_id, approver_id) hacia ac_users
-        // se declaran en la migracion, no aqui: este modulo no depende de
-        // PirryLedger.Core.AccessControl.Domain.Entities.User (la FK llega por
-        // nombre de tabla y tipo Guid, sin propiedad de navegacion). Sin la
-        // declaracion aqui, EF genera la tabla con las columnas pero sin
-        // restricciones, y la migracion anade el AddForeignKey.
+        // Las columnas que apuntan a un usuario (requester_id, approver_id) NO
+        // declaran clave foranea hacia ac_users, ni aqui ni en la migracion.
+        // Declararla con propiedad de navegacion haria que este modulo
+        // dependiera de PirryLedger.Core.AccessControl.Domain.Entities.User, que
+        // es justo la dependencia entre piezas que se quiere evitar. La
+        // integridad la aporta la aplicacion, que toma las dos identidades de
+        // la sesion autenticada y nunca del cuerpo de la peticion.
+        // Declarar o no las claves foraneas es una decision que sigue abierta:
+        // docs/current-iteration.md, seccion "Deferred".
 
         // Indices para las dos consultas del caso de uso:
         //   ListByStateAsync(state) -> WHERE state = ...
