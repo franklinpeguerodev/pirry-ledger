@@ -70,3 +70,28 @@ La regla es la misma de las bitácoras anteriores: **lo que devuelve el agente e
 3. Esta entrada de la bitácora.
 
 **Qué NO incluye.** Ni una línea de código, ni la máquina de estados (fase 2), ni las pruebas nuevas (fase 3), ni la sección `Defectos` del README (fase 4), ni etiquetas (fase 6).
+
+### Entrada 2 — La máquina de estados de la solicitud en `maquina-de-estados.md` (2026-10-25)
+
+**Qué se pidió.** Documentar la máquina de estados de la solicitud de permiso en `docs/maquina-de-estados.md`, que hasta ahora solo describía la de la factura. En su propio commit, sin tocar código, con los encabezados de tabla en español y los nombres de estado en inglés porque son identificadores del código (decisión 7 de `docs/current-iteration.md`).
+
+**Qué devolví.** Rama `docs/permission-state-machine` desde `develop` (`3b77928`), commit `254aa0d Document the permission request state machine`. El documento pasó de 24 a 75 líneas:
+
+- El título pasa de "Máquina de estados de la factura" a "Máquinas de estados", con una introducción que dice que hay dos y que cada una resuelve sus transiciones en un único componente (RD-04).
+- La máquina de la factura queda como `## Máquina de estados de la factura`: mismo texto y misma tabla, con los encabezados traducidos (`from | to | who executes | condition` → `desde | hacia | quién la ejecuta | condición`) y su sección de prohibidas bajando de `##` a `###`.
+- Se añade `## Máquina de estados de la solicitud de permiso` con la tabla de tres transiciones, las prohibidas, la nota de que RF-GP-07 no es una transición y una sección de independencia de la otra máquina (RF-NEG-09).
+- Un cambio más, pequeño y deliberado: la frase "En esta iteración solo se entrega su estructura" pasó a "Su estructura se entregó con la Práctica 1". "Esta iteración" ya es la Práctica 2, donde no se entrega nada de la factura, así que la frase había quedado falsa. Es la única línea de la sección de la factura que no es un encabezado.
+
+**Dónde se equivocó el agente.** Commiteó directamente sobre `develop`, saltándose la regla de `AGENTS.md` de que nunca se commitea ahí y la de una rama por fase. Lo detectó él mismo al comprobar `git diff --stat develop..HEAD`, que salió vacío: ese diff solo puede estar vacío si `HEAD` **es** `develop`. Corrección, sin reescribir nada: `git branch docs/permission-state-machine 254aa0d`, checkout de la rama y `git branch -f develop origin/develop`. Quedó verificado con `git rev-parse`: `develop` y `origin/develop` otra vez en `3b77928`, y `git branch --contains 254aa0d` listando solo la rama. Lo anoto porque el commit existía y estaba bien; lo que estaba mal era dónde vivía.
+
+**Qué verifiqué.**
+
+- `PermissionRequestStateMachine.AllowedTransitions` declara exactamente tres pares, y son las tres filas de la tabla nueva. Contado con `Select-String`: 3 coincidencias.
+- Los cuatro estados dan dieciséis pares; tres permitidos y trece prohibidos. El documento dice eso y lo ejemplifica.
+- `InvoiceStateMachine` declara exactamente cuatro pares, que son las cuatro filas de la tabla de la factura. Contado igual: 4 coincidencias.
+- La tabla nueva coincide fila por fila con `docs/requirements/permissions.md` en condición y en quién ejecuta cada transición.
+- RF-GP-07 no está en la tabla porque no la comprueba la máquina: `ApprovePermissionRequest.cs:71` y `RejectPermissionRequest.cs:62` comparan `request.RequesterId == caller.Id`. El documento lo dice así.
+- Estructura de encabezados: un `#`, dos `##` y tres `###`, sin saltos de nivel.
+- `git diff --stat develop..HEAD` tras el arreglo de la rama: solo `docs/maquina-de-estados.md`. Cero cambios en `Src/` y `Tests/`.
+
+**Qué NO incluye.** No toca código, ni pruebas, ni el `README.md`, ni las etiquetas. La máquina de la factura no cambia de contenido salvo encabezados y la frase corregida.
