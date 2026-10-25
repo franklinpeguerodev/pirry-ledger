@@ -119,3 +119,35 @@ Los tres defectos se plantaron uno por uno y nunca se commitearon: el diff que l
 **Dónde se equivocó el agente.** En esta fase no hubo un error que corregir. El caso registrado hasta ahora sigue siendo el de la Entrada 2 (el commit que nació en `develop` en vez de en la rama). Lo anoto tal cual: no voy a inventar un fallo para llenar el espacio.
 
 **Qué NO incluye.** La sección `Defectos` del `README.md` y el encabezado de su línea 3 (fase 4), la promoción a `main` (fase 5) y las etiquetas (fase 6). Tampoco se tocó ningún test existente: las 24 pruebas anteriores siguen intactas y verdes.
+
+### Entrada 4 — El mapeo real de los seis defectos y la sección `Defectos` del README (2026-10-25)
+
+**Qué se pidió.** Antes de escribir la sección `Defectos`, comprobar el mapeo de verdad y no sobre el papel: plantar los seis defectos de la variante A uno por uno sobre `develop` (ya con la suite ampliada), correr la suite, anotar qué prueba exacta falla con cada uno y revertir. Sin commits. Después, escribir en el `README.md` una sección `Defectos` con una línea por defecto que diga el nombre de la prueba que lo detecta y el comportamiento que esa prueba comprueba, y corregir el encabezado, que seguía diciendo "Práctica 1".
+
+**Qué devolví.** Rama `docs/readme-defectos` desde `develop` (`b0ad5d4`), commit `5babc86 Document the six planted defects in the README`. Además del encabezado y la sección nueva, una frase en la presentación del repositorio: decía que existían la cola de email y el módulo Business, pero no mencionaba Permissions, que se entregó en la Asignación 2.
+
+El mapeo que salió de plantar los seis defectos:
+
+| Defecto | Cambio plantado | Pruebas que fallan |
+|---|---|---|
+| 1 | `ApprovePermissionRequest.cs:62`: la guarda lanza solo si el estado es `Rejected` | `AprobarUnaSolicitudYaAprobadaNoCambiaElEstado` |
+| 2 | `PermissionRequestStateMachine.cs:28`: añade `Rejected -> Applied` | `RejectedNoTieneSalidas` y `SoloLasTresTransicionesDeLaTablaSonValidas` |
+| 3 | `ApprovePermissionRequest.cs:71` y `RejectPermissionRequest.cs:62`: sin comparación de identidades | `UnAdministradorNoPuedeAprobarSuPropiaSolicitud`, `UnEstandarAscendidoNoPuedeAprobarSuPropiaSolicitud` y `UnAdministradorNoPuedeRechazarSuPropiaSolicitud` |
+| 4 | `PermissionRequestRepository.cs:43`: `==` pasa a `!=` | `ListarPorSolicitanteDevuelveSoloLasSolicitudesDeEseSolicitante` |
+| 5 | `PermissionRequestStateMachine.cs:28`: añade `Approved -> Pending` | `SoloLasTresTransicionesDeLaTablaSonValidas` |
+| 6 | `PermissionRequest.cs:99`: elimina `RejectionReason = reason;` | `RechazarUnaSolicitudPendienteLaPasaARechazadaConMotivo` |
+
+**Dónde se equivocó el agente.** Dos veces, y las dos se detectaron antes de commitear:
+
+- **El defecto 1 lo planteó mal la primera vez.** Escribió `!= Rejected`, que es la sustitución literal de la condición, pero la guarda del código está escrita en negativo (`si el estado no es Pending, lanza`). Sustituir así la invierte dos veces: la aprobación deja de funcionar para una solicitud pendiente y solo funciona para una rechazada. Fallaban cinco pruebas, incluida `AprobarUnaSolicitudPendienteLaPasaAAplicadaYRegistraConcesion`, que no tiene nada que ver con el defecto. Lo delató el mensaje de la excepción: "Solo se pueden aprobar solicitudes en estado Pendiente" lanzado sobre una solicitud que estaba pendiente. El anexo pide "el cambio equivalente", y el equivalente es `== Rejected`: así falla exactamente una prueba, la que el defecto debe romper.
+- **Citó la línea equivocada en el README.** Escribió `PermissionRequestStateMachine.cs:29` para los defectos 2 y 5, pero la línea 29 es el `};` que cierra el conjunto; la transición nueva se inserta después de la 28. Lo detectó leyendo la línea citada antes de commitear, y se corrigió a 28.
+
+**Qué verifiqué.**
+
+- Los seis defectos se plantaron y se revirtieron con `git checkout --`; después de cada uno, `git status` quedó limpio.
+- Cada defecto hizo fallar al menos una prueba, con el mensaje esperado. Por ejemplo, el 2: `La transicion Rejected -> Applied deberia ser prohibida.` Y el 5: `La transicion Approved -> Pending deberia ser prohibida.`
+- Con los seis revertidos, `dotnet test pirry-ledger.slnx` da **128 superadas, 0 con error** (96 AccessControl + 26 Permissions + 6 Notifications).
+- Cada nombre de prueba citado en la sección `Defectos` existe de verdad: se buscó cada uno en el README y en `Tests/`, y las ocho coincidencias dan una definición por nombre.
+- Cada línea citada contiene el código que se planta: la 62 de `ApprovePermissionRequest.cs` es la guarda de estado, la 71 es la comparación de identidades, la 62 de `RejectPermissionRequest.cs` es la misma comparación, la 43 del repositorio es el filtro por solicitante, la 99 de la entidad es `RejectionReason = reason;` y la 28 de la máquina es la última transición de la tabla.
+
+**Qué NO incluye.** No hay etiquetas todavía (fase 6), ni promoción a `main` (fase 5), ni commits de defecto: el mapeo se obtuvo plantando y revirtiendo, sin dejar rastro en la historia. Ningún archivo de código ni de pruebas se modificó en este pull request.
