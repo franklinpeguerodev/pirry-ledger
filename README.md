@@ -1225,8 +1225,8 @@ del módulo Business.
 | RD-04 | Toda transición de `Invoice` pasa por `InvoiceStateMachine`; la lista única `AllowedTransitions` es la única que decide (sección 3.6). |
 | RD-05 | Las contraseñas se almacenan con hash y sal; las consultas SQL de RF-CA-02 muestran hashes, nunca contraseñas. |
 | RD-06 | Las rutas administrativas rechazan con `403` a un usuario Estándar aunque invoque la API manualmente (RF-CA-06). |
-| RD-07 | emails mal formados, contraseñas débiles y estados inválidos producen respuestas Controladas (RF-CA-14, RF-CA-20). |
-| RD-08 | Las respuestas de error no exponen trazas, rutas locales ni consultas SQL. |
+| RD-07 | Toda entrada externa se valida antes de usarse: emails mal formados, contraseñas débiles y estados inválidos producen respuestas Controladas (RF-CA-14, RF-CA-20); un cuerpo JSON ilegible responde `400` y un `Content-Type` no admitido responde `415`, ambos con mensaje controlado (sección 3.9). |
+| RD-08 | Las respuestas de error no exponen trazas, rutas locales, consultas SQL ni la cabecera `Authorization` de la petición, ni en desarrollo ni en producción (sección 3.9). |
 | RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. |
 | RD-10 | La conexión, el primer Administrador y SMTP se configuran mediante variables de entorno (sección 1, paso 4). |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
@@ -1427,6 +1427,38 @@ El enunciado llama a esta entidad `SolicitudPermiso` y a sus estados `Pendiente`
 | `Aplicada` | `PermissionRequestState.Applied` | ídem |
 | `Rechazada` | `PermissionRequestState.Rejected` | ídem |
 | Tabla de concesiones | `PermissionGrant` (`per_permission_grants`) | ADR 008 |
+
+### 3.9 Rechazo controlado de la entrada (RD-07, RD-08)
+
+Toda petición con un cuerpo JSON que no se puede leer, o con un `Content-Type`
+que la ruta no admite, se rechaza con un mensaje controlado. La respuesta **nunca**
+lleva una traza de pila, una ruta de fichero, una consulta SQL ni la cabecera
+`Authorization` de la petición, y es idéntica en desarrollo y en producción.
+
+| Entrada | Respuesta | Cuerpo |
+|---|---|---|
+| Cuerpo ausente, `null`, JSON mal formado o un array donde se espera un objeto | `400` | `{"message":"El cuerpo de la peticion no es valido."}` |
+| `Content-Type` distinto de `application/json` (o ausente) en una ruta con cuerpo | `415` | `{"message":"El tipo de contenido debe ser application/json."}` |
+| Ruta que no existe | `404` | sin cuerpo |
+| Falta la credencial | `401` | `{"message":"Sesion no valida."}` |
+| Rol insuficiente | `403` | `{"message":"No tiene permisos para esta operacion."}` |
+
+Para comprobarlo con la API levantada (paso 7):
+
+```powershell
+# Cuerpo JSON que no se puede leer -> 400 controlado
+Invoke-WebRequest -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+  -ContentType 'application/json' -Body '{esto no es json'
+
+# Content-Type que la ruta no admite -> 415 controlado
+Invoke-WebRequest -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+  -ContentType 'application/x-www-form-urlencoded' -Body 'x=1'
+```
+
+Las dos peticiones anteriores **no** devuelven una traza: el cuerpo de la
+respuesta es el JSON de la tabla. El mismo comportamiento está cubierto por las
+pruebas de `Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeManejoDeErroresHttp.cs`,
+que corren sin levantar la API.
 
 ---
 

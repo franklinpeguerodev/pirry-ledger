@@ -211,6 +211,21 @@ public static class AccessFilter
             return;
         }
 
+        // Un endpoint sin OperationMetadata puede ser una respuesta del propio
+        // framework y no una ruta nuestra: cuando el Content-Type de la
+        // peticion no es el que la ruta admite, el enrutador selecciona un
+        // endpoint propio del framework (un Microsoft.AspNetCore.Http.Endpoint
+        // sin RoutePattern) que responde 415 Unsupported Media Type, y otro
+        // para 405 Method Not Allowed. Esos endpoints no son rutas de negocio
+        // y no declaran operacion porque no la tienen: se dejan pasar para que
+        // el framework conteste con su status. Antes esto devolvia un 500 con
+        // un mensaje que culpaba al cliente de algo que no habia hecho.
+        if (endpoint is not RouteEndpoint)
+        {
+            await next(context);
+            return;
+        }
+
         if (endpoint.Metadata.GetMetadata<OperationMetadata>() is null)
         {
             throw new OperationNotDeclaredException(

@@ -41,10 +41,12 @@
 # referencias a respuestas {{name.response.body.$.field}} (REST Client de VS Code
 # y cliente HTTP de JetBrains).
 
-# Antes de re-ejecutar: reset de las concesiones y solicitudes del modulo
-# de Permissions para los dos usuarios de este guion. Sin este reset, la
-# segunda corrida falla con 500 en el INSERT de per_permission_grants porque
-# el indice unico (user_id, permission_name) impide duplicar la concesion.
+# Antes de re-ejecutar: reset de las solicitudes del modulo de Permissions para
+# los dos usuarios de este guion. El reset de las concesiones ya no hace falta
+# para que la corrida no falle: desde la correccion del repositorio, una
+# segunda aprobacion del mismo permiso reutiliza la fila existente en vez de
+# insertar otra, asi que el indice unico (user_id, permission_name) no
+# llega a violarse. El reset de abajo solo deja el escenario limpio.
 #
 #   DELETE FROM per_permission_requests WHERE requester_id IN (
 #     SELECT id FROM ac_users WHERE email IN ('<correoEstandar>', '<correoAdmin>')
@@ -321,13 +323,13 @@ POST {{host}}/api/permissions/requests/{{crearSegunda.response.body.$.id}}/rejec
 Authorization: Bearer {{loginAdmin.response.body.$.token}}
 Content-Type: application/json
 
-### Peticion SIN cuerpo: la ruta responde 500 y esta documentada como defecto
-### conocido, no como resultado esperado. El binding de Minimal API exige el
-### cuerpo antes de que corra el caso de uso y el filtro de acceso responde con
-### "La operacion no tiene una exigencia de acceso declarada.". No forma parte de
-### RF-GP-04 (que exige motivo escrito) y queda pendiente de arreglar despues del
-### tag. No la uses para comprobar el criterio: la peticion de arriba, con el
-### cuerpo presente y el motivo vacio, ya devuelve el 400 controlado.
+### Peticion SIN cuerpo: la ruta responde 400 con un mensaje controlado
+### (RD-07, RD-08). El cuerpo no se puede leer, asi que el API lo rechaza antes
+### de que corra el caso de uso:
+###   400 {"message":"El cuerpo de la peticion no es valido."}
+### La respuesta no lleva traza de excepcion ni ruta local. No forma parte de
+### RF-GP-04 (que exige motivo escrito), pero sirve para comprobar que la
+### entrada invalida produce un rechazo controlado.
 
 POST {{host}}/api/permissions/requests/{{crearSegunda.response.body.$.id}}/reject
 Authorization: Bearer {{loginAdmin.response.body.$.token}}

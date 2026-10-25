@@ -453,7 +453,7 @@ La base del plan de la pieza (`develop` en `7ce15f3`) sigue siendo la de antes d
 
 - `6a1ecb7 Add Permission access level to auth machinery (RF-GP-05, RF-GP-07)` — `AccessLevel.Permission` con un nuevo campo `Permission: string?` en `Requirement`; `Operation` recibe `CreatePermissionRequest`, `ListOwnPermissionRequests`, `ListPendingPermissionRequests`, `ApprovePermissionRequest`, `RejectPermissionRequest` y `ViewSalesSummary`; `RoleRequirements` declara cada uno; `RequiredPermission` se añade al lado de `RequiredRole`; nueva excepción `InsufficientPermissionException` (403); `Authenticate.ExecuteWithPermissionAsync(token, permissionName)` consulta `IPermissionAuthority.UserHasPermissionAsync` y lanza 403 si false; `AccessFilter.ApplyAsync` maneja el nuevo nivel (mismo orden de 401→403 que role); `TokenBearer` se hace `public` (la alternativa era moverlo a `Contracts`, apuntado como trabajo futuro); DI de AccessControl inyecta `IPermissionAuthority`; tests de AccessControl añaden `FakePermissionAuthority` y enumeran `MapPermissions()`.
 - `2483524 Add permissions use cases and endpoints (RF-GP-01..07)` — `PermissionRequestDtos` con `ListedPermissionRequest` y `PermissionRequestMapping`; excepciones `PermissionRequestRejectedException`, `InvalidPermissionRequestTransitionApplicationException` y `SelfResolutionRejectedException`; los cinco casos de uso (`Create`, `ListOwn`, `ListPending`, `Approve`, `Reject`); la ruta de demostración `/api/permissions/sales-summary` que devuelve datos fijos; `EndpointRegistration.MapPermissions()` con las seis rutas declaradas con `.WithAccess(Operation.X)`; DI de Permissions registra los cinco casos de uso; `Program.cs` llama a `AddPermissions(connection)` y `MapPermissions()`.
-- `532d38f Add full permissions test suite (RF-GP-01..07)` — diez pruebas de casos de uso que cubren: crear válida, crear con permiso inexistente (RF-GP-01), aprobar pendiente con `Applied + INSERT en grants` (RF-GP-03 + RF-GP-05), aprobar dos veces (RF-GP-06), aprobar inexistente (RF-CA-12), auto-resolución directa (Admin) y realista (Estándar ascendido — RF-GP-07), rechazar con motivo (RF-GP-04), rechazar sin motivo, rechazar auto-resolución, listar propias (RF-GP-02 caso propio), listar pendientes (RF-GP-02 caso Administrador). Cada prueba con tres fases, independientes, con `FakeClock`, `FakePermissionRequestRepository`, `FakePermissionGrantRepository` y `FakePermissionAuthority`.
+- `532d38f Add full permissions test suite (RF-GP-01..07)` — diez pruebas de casos de uso que cubren: aprobar pendiente con `Applied + INSERT en grants` (RF-GP-03 + RF-GP-05), aprobar dos veces (RF-GP-06), aprobar inexistente (RF-CA-12), auto-resolución directa (Admin) y realista (Estándar ascendido — RF-GP-07), rechazar con motivo (RF-GP-04), rechazar sin motivo, rechazar auto-resolución, listar propias (RF-GP-02 caso propio), listar pendientes (RF-GP-02 caso Administrador). Cada prueba con tres fases, independientes, con `FakeClock`, `FakePermissionRequestRepository`, `FakePermissionGrantRepository` y `FakePermissionAuthority`. La creación de la solicitud (RF-GP-01) se cubrió después, en la [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01).
 
 **Lo que NO se hizo en este PR.** Revocación de permisos (futura). Notificaciones al solicitante y al resolverdor (semana 11). Auditoría completa (semana 14). Lotes pendientes en la ruta `sales-summary` (la ruta devuelve datos fijos; no consulta base de datos). Pruebas a nivel de endpoint HTTP (las pruebas son a nivel de caso de uso; el endpoint HTTP queda cubierto por la prueba `TodaOperacionDeLaTablaTieneUnaRuta` de AccessControl, que ahora también recorre `MapPermissions()`).
 
@@ -576,26 +576,124 @@ recompiló y ejecuté las pruebas contra el binario anterior. El síntoma fue un
 "falla con el arreglo puesto" que no era real. A partir de ese momento, antes de
 medir, se compila con `dotnet build --no-incremental`.
 
-### Corrección de la Entrada 6 — 2026-10-20
+### Entrada 10 — Rechazo controlado de la entrada y cobertura de RF-GP-01
 
-La Entrada 6 afirma que la suite de la pieza cubre "crear válida, crear con
-permiso inexistente (RF-GP-01)". **Es inexacto: esas dos pruebas no existían.**
-La suite que se entregó con el PR #39 tenía diez pruebas de casos de uso
-(aprobar, aprobar dos veces, aprobar inexistente, auto-resolución directa,
-auto-resolución realista, rechazar, rechazar sin motivo, rechazar
-auto-resolución, listar propias, listar pendientes) y ninguna verificaba el
-criterio de aceptación de RF-GP-01.
+**Qué se pidió.** Una auditoría de todo el software contra lo que promete el
+`README.md`, lo que promete `docs/` y lo que promete el `AGENTS.md`, y la
+corrección de lo que no se cumplía. Los tres puntos que Franklin priorizó:
 
-Cómo se detectó: en una auditoría de la entrega, al contar las pruebas del
-proyecto y contrastarlas con los siete criterios de aceptación del enunciado. No
-salió de ninguna ejecución fallida: la cuenta estaba bien, la afirmación que la
-rodeaba no.
+1. Un cuerpo JSON que no se puede leer devolvía la excepción cruda del
+   framework: traza de pila, ruta absoluta del proyecto y la cabecera
+   `Authorization` con el token del cliente. Y un `Content-Type` que la ruta no
+   admitía devolvía un `500` con un mensaje que culpaba al cliente de algo que
+   no había hecho.
+2. El `README.md` prometía un contrato HTTP que no era el real: el nombre de la
+   clave de error (`mensaje` en vez de `message`), los nombres de los campos de
+   las respuestas, el texto de los mensajes de la consola del `--send-mail` y
+   el nombre del role.
+3. La pieza de permisos no tenía prueba de RF-GP-01 (la creación de la
+   solicitud), que era el criterio de aceptación sin cubrir.
 
-Es un error mío de redacción: describí la cobertura *pretendida* en lugar de la
-*entregada*, y lo escribí sin abrir el proyecto de pruebas para contarla. La
-prueba que falta (que la solicitud nace en `Pending` con solicitante y fecha) se
-escribe después del tag; el criterio queda verificado a mano en la sección 3.8
-del `README.md` mientras tanto.
+**Qué devolví.** Un commit en la rama `fix/http-error-handling`:
+
+- `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Api/Auth/ApiErrorHandling.cs`
+  (nuevo): la frontera de error del API. Convierte cualquier excepción en un
+  rechazo controlado con el formato `{"message": "..."}` y escribe el cuerpo
+  cuando el framework responde con un status de error y sin cuerpo.
+- `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Api/Auth/AccessFilter.cs`:
+  el middleware `RequireDeclaredOperationAsync` deja pasar los endpoints del
+  framework (el `415 HTTP Unsupported Media Type` que selecciona el enrutador
+  cuando el `Content-Type` no es el que la ruta admite) en vez de confundirlos
+  con "una ruta nuestra sin operación declarada".
+- `Src/Host/PirryLedger.Host/Program.cs`: registra el middleware nuevo y quita
+  el `try/catch` inline. El Host sigue siendo composición.
+- `Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeManejoDeErroresHttp.cs`
+  (nuevo): cinco pruebas de la frontera de error.
+- `Tests/PirryLedger.Core.Permissions.Tests/CasosDeUso/PruebasDeCreatePermissionRequest.cs`
+  (nuevo): dos pruebas de RF-GP-01, la del camino bueno y la del rechazo, que
+  además comprueba que no queda nada guardado.
+- `README.md`: una sección 3.9 con el contrato de rechazo controlado y las
+  filas RD-07 y RD-08 de la tabla de trazabilidad, corregidas.
+
+**Qué verifiqué.** Con la API levantada contra PostgreSQL, en desarrollo y en
+producción, y con la suite completa:
+
+```text
+dotnet build pirry-ledger.slnx --configuration Release
+  0 Errores
+
+dotnet test pirry-ledger.slnx --configuration Release
+  Superado: 90 (AccessControl) + 24 (Permissions) + 6 (Notifications) = 120, 0 con error
+```
+
+Las diez peticiones de la tabla de la sección 3.9 del README, en los dos
+entornos:
+
+```text
+########## PRODUCTION ##########
+JSON malformado                    STATUS=400 BODY={"message":"El cuerpo de la peticion no es valido."}
+cuerpo vacio                       STATUS=400 BODY={"message":"El cuerpo de la peticion no es valido."}
+Content-Type form                  STATUS=415 BODY={"message":"El tipo de contenido debe ser application/json."}
+SIN Content-Type                   STATUS=415 BODY={"message":"El tipo de contenido debe ser application/json."}
+ruta inexistente                    STATUS=404 BODY=
+id no-guid                         STATUS=404 BODY=
+login mal password                 STATUS=401 BODY={"message":"Email o contrasena incorrectos."}
+permiso inventado                  STATUS=400 BODY={"message":"El permiso solicitado no existe."}
+
+########## DEVELOPMENT ##########
+JSON malformado                    STATUS=400 BODY={"message":"El cuerpo de la peticion no es valido."}
+cuerpo vacio                       STATUS=400 BODY={"message":"El cuerpo de la peticion no es valido."}
+Content-Type form                  STATUS=415 BODY={"message":"El tipo de contenido debe ser application/json."}
+ruta inexistente                    STATUS=404 BODY=
+id no-guid                         STATUS=404 BODY=
+permiso inventado                  STATUS=400 BODY={"message":"El permiso solicitado no existe."}
+```
+
+Las pruebas se vieron fallar por la razón correcta antes de darse por buenas,
+rompiendo el código a propósito:
+
+- Sin el `catch` de `BadHttpRequestException`, la prueba del cuerpo ilegible
+  falla con `Expected: 400, Actual: 500`: la excepción cae en el `catch`
+  genérico y el cliente recibe un 500 en vez de un 400.
+- Con `PermissionRequest.Create` naciendo en `Approved` en vez de `Pending`, la
+  prueba de RF-GP-01 falla con `Expected: Pending, Actual: Approved`.
+
+**Qué cambió o se corrigió durante el trabajo.** Cuatro cosas:
+
+1. **El diagnóstico del `500` por `Content-Type` llegó a la conclusión
+   equivocada dos veces.** Primero asumí que era un fallo de binding y probé
+   un filtro de endpoint; el filtro no lo atrapaba, porque la excepción se
+   lanza por encima de la cadena de filtros. Segundo, supuse que el mensaje
+   "La operacion no tiene una exigencia de acceso declarada" lo producía la
+   resolución de rutas. La instrumentación temporal que se puso en
+   `RequireDeclaredOperationAsync` y en `Program.cs` dio la respuesta: el
+   enrutador selecciona un endpoint **del framework** (`Microsoft.AspNetCore.Http.Endpoint`,
+   sin `RoutePattern` y sin metadata) con el nombre "415 HTTP Unsupported Media
+   Type", y nuestro middleware lo confundía con una ruta nuestra sin operación
+   declarada. Sin esa instrumentación, el arreglo habría sido una suposición.
+2. **El primer arreglo no cambiaba nada en producción.** En desarrollo el
+   `DeveloperExceptionPageMiddleware` activa `ThrowOnBadRequest`, así que la
+   excepción se lanza y el middleware la captura; en producción no hay página de
+   excepciones, el framework responde 400 **sin lanzar** y sin cuerpo, y la
+   respuesta se quedaba vacía. El arreglo definitivo cubre los dos caminos:
+   capturar la excepción cuando se lanza y escribir el cuerpo cuando el
+   framework responde con un status de error sin cuerpo.
+3. **Un fallo mío en la primera versión de las pruebas.** Leía el cuerpo de la
+   respuesta con `MemoryStream.ToString()`, que devuelve el nombre del tipo y
+   no lo escrito: las tres pruebas fallaban con "Sub-string not found" aunque el
+   middleware funcionase. Ahora se lee con `Encoding.UTF8.GetString(cuerpo.ToArray())`.
+4. **Un corte deliberado que no compiló.** Para probar que la prueba del 400
+   fallaba por la razón correcta, se cambió el `catch (BadHttpRequestException)`
+   por `catch (InvalidOperationException)`, y el compilador lo rechazó
+   (`CS0160`: una cláusula `catch` previa ya detecta todas las excepciones de
+   este tipo). Se cambió por un filtro `when (error.StatusCode == 999)`, que
+   compila y no se cumple nunca.
+
+**Qué NO se hizo en este commit.** El `README.md` se corrigió solo en lo que
+cambia el comportamiento de la API (la sección 3.9 y las filas RD-07 y RD-08).
+Los doce literales que el README prometía y la API no cumplía, y el resto de
+los documentos desactualizados, van en los commits siguientes de la misma
+rama de trabajo.
 
 ### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
 
@@ -627,3 +725,9 @@ ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
 
 **Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
 después del tag, junto con lo que ya estaba diferido.
+
+**Cómo terminó.** La [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01)
+resuelve el defecto: un cuerpo ausente o mal formado responde `400` con un
+mensaje controlado y un `Content-Type` que la ruta no admite responde `415`
+con un mensaje controlado. Ninguno de los dos casos devuelve ya una traza. El
+guion HTTP se actualizó con esas respuestas.
