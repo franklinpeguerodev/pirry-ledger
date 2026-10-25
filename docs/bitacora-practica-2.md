@@ -151,3 +151,41 @@ El mapeo que salió de plantar los seis defectos:
 - Cada línea citada contiene el código que se planta: la 62 de `ApprovePermissionRequest.cs` es la guarda de estado, la 71 es la comparación de identidades, la 62 de `RejectPermissionRequest.cs` es la misma comparación, la 43 del repositorio es el filtro por solicitante, la 99 de la entidad es `RejectionReason = reason;` y la 28 de la máquina es la última transición de la tabla.
 
 **Qué NO incluye.** No hay etiquetas todavía (fase 6), ni promoción a `main` (fase 5), ni commits de defecto: el mapeo se obtuvo plantando y revirtiendo, sin dejar rastro en la historia. Ningún archivo de código ni de pruebas se modificó en este pull request.
+
+### Entrada 5 — La guía HTTP completa de la Práctica 2 (2026-10-25)
+
+**Qué se pidió.** Un solo archivo `.http` con el que se pueda comprobar por HTTP todo lo que la Práctica 2 exige: las siete reglas de Gestión de permisos con su camino feliz y sus rechazos, los cuatro frentes de la revisión acumulada de Control de acceso y, como comandos, la suite y los seis defectos plantados. Tenía que poder ejecutarse de arriba hacia abajo sin pegar ids a mano y sin depender del estado que dejan las otras dos guías del repositorio.
+
+**Qué devolví.** Rama `docs/practica-2-http` desde `develop` (`ecc0468`), commit `15630b6 Add the Practice 2 HTTP verification guide`:
+
+- `Src/Host/PirryLedger.Host/PirryLedger.Practica2.http`, archivo nuevo de 952 líneas y 72 peticiones, en seis secciones: §1 registro con activación (frente 1), §2 RF-GP-01 a 07, §3 los otros tres frentes, §4 la suite con su conteo y los nombres de las pruebas por requisito, §5 los seis defectos con los comandos de git y el síntoma por HTTP de cada uno, §6 el checklist de la rúbrica.
+- `README.md`: sección nueva `### Guía HTTP de la Práctica 2` (27 líneas), entre la guía de la Práctica 1 y `### Pruebas`, con los cinco pasos de uso.
+
+Decisiones que tomé y por qué:
+
+- **Usuario propio, `practica2@ejemplo.com`.** Las otras dos guías usan `ana@ejemplo.com`; reutilizarlo habría hecho que esta corrida dependiera de lo que dejaran las anteriores (rol, solicitudes, contraseña).
+- **SQL de reinicio en el encabezado.** Borra la cola del usuario de prueba y del administrador, el usuario de prueba (sus sesiones, tokens, códigos y solicitudes caen por las claves foráneas en cascada) y las solicitudes y concesiones del administrador. No toca la cuenta del administrador ni ninguna otra. Así la corrida es determinista y repetible.
+- **La corrida termina como empieza.** La recuperación de contraseña deja `abc123456`; el `change-password` final devuelve `abc12345`. El rol del usuario de prueba se asciende para el camino realista de RF-GP-07 y se devuelve a `Standard`.
+- **Un solo `###` por petición, inmediatamente antes.** El título de cada bloque lleva el código HTTP esperado en la misma línea y las líneas de continuación son `#`. Los clientes tratan cada `###` como separador de bloque: un título de dos líneas crea un bloque vacío.
+- **Los síntomas HTTP de los defectos van en condicional.** No planté los seis con la API levantada para esta fase; lo que está probado es que cada uno hace fallar la suite (Entrada 4). El archivo dice "con el defecto plantado y la API reiniciada, el síntoma por HTTP sería", no "es".
+
+**Dónde se equivocó el agente.** Cuatro veces, todas detectadas antes de commitear:
+
+- **Dos erratas en las URLs.** Escribí `{{host}%/api/...` y `{{host}/api/admin/users`. Las vi en la revisión previa a la primera corrida y las corregí.
+- **Títulos `###` de dos líneas.** La primera versión repartía los títulos en dos líneas con `###` en la segunda, que el cliente interpreta como un bloque nuevo y vacío. Convertí 72 líneas `###` de continuación en `#`; los dos títulos que eran pausas pasaron a comentario, y a los cinco restantes les añadí el código esperado (uno en dos intentos, porque la primera vez lo puse en la línea de continuación).
+- **El verificador corrompía las pausas.** Mi script sustituía `{{tokenActivacion}}` dentro de un `MatchEvaluator` con `Write-Output`; ese texto se concatenaba al token sustituido y la API recibía el token seguido del mensaje. Los dos primeros intentos dieron 400 en la activación. Se corrigió usando `Write-Host`.
+- **El verificador mandaba los comentarios como cuerpo.** La recolección del cuerpo no se detenía en la primera línea que empieza por `#`, así que las peticiones con comentarios detrás llevaban texto extra. Se corrigió cortando en el primer `#`.
+
+Además, el primer intento no arrancó porque PowerShell 5.1 necesita `Add-Type -AssemblyName System.Net.Http` antes de usar `HttpClient`. Es un detalle del verificador desechable, no del archivo entregado.
+
+**Qué verifiqué.**
+
+- La corrida completa con un verificador desechable en `%TEMP%`, que parsea el `.http`, resuelve las dos pausas desde `not_email_queue` y comprueba el estado de cada respuesta: **72 de 72 peticiones con el código esperado** y **9 de 9 comprobaciones de contenido** en verde.
+- La SQL de reinicio, ejecutada antes de la corrida: `DELETE 0`, `DELETE 0`, `DELETE 1`, `DELETE 0`. Dejó el escenario limpio.
+- El estado final en la base: usuario activo, rol `Standard`, 0 intentos fallidos; tres solicitudes (dos `Applied` y una `Rejected` con motivo `"Ya tienes este permiso concedido."`); una concesión, `ViewSalesSummary`.
+- Las dos afirmaciones de orden de las listas: `/mine` ordena por `CreatedAtUtc` descendente (`PermissionRequestRepository.cs:44`) y `/pending` por `CreatedAtUtc` ascendente (`:34`).
+- Los campos que el archivo promete: `/me` devuelve `name`, `email` y `role` (`MeResponse`), y `/api/admin/users` devuelve `id`, `name`, `email`, `role`, `active` y `createdAtUtc` (`ListedUser`).
+- La suite con el Host **apagado**, que es lo que el archivo afirma en §4: `dotnet test pirry-ledger.slnx` da **128 superadas, 0 con error** (96 AccessControl + 26 Permissions + 6 Notifications). Antes la había corrido con el Host encendido; repetirla apagado es lo que convierte la afirmación en un hecho.
+- `git check-ignore -v` sobre el archivo nuevo: no está ignorado.
+
+**Qué NO incluye.** No hay etiquetas (fase 6) ni promoción a `main` (fase 5). No se plantó ningún defecto con la API levantada: el síntoma HTTP de §5 queda como comprobación opcional y condicional, y la prueba que vale es `dotnet test`. No se tocó código ni pruebas. No se probó el envío SMTP real ni el comando `--send-mail`, que quedan fuera del alcance de la práctica.
