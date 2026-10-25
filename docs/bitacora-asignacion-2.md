@@ -1013,3 +1013,50 @@ anotada para que Franklin la resuelva. No se toca código.
 
 **Nota de numeración.** Entrada 14 porque la 13 es la del PR #46 y la 11 la del
 PR #45; el orden de merge acordado es #45, #46, #47.
+
+### Entrada 15 — Los siete textos que no estaban en español (2026-10-25)
+
+**Qué se pidió.** Cerrar la auditoría corrigiendo los siete sitios donde el
+código no respetaba la regla de idioma: comentarios y textos visibles en
+español, identificadores en inglés.
+
+**Qué devolví.** Tres commits en la rama `fix/spanish-text-in-code`:
+
+- `Restore the logbook entry that the merge dropped`. Al mergear `develop` en
+  `docs/agents-md-corrections`, el conflicto de esta bitácora se resolvió
+  quedándose con el lado de `develop`, que terminaba en la Entrada 13, y la
+  Entrada 14 desapareció del árbol aunque su commit (`80754fe`) sigue en el
+  historial. Se restaura con los bytes exactos del commit que la escribió.
+- `Write the remaining comments and messages in Spanish`:
+  - `InvoiceStateMachine`: los dos comentarios y el mensaje de
+    `InvalidInvoiceTransitionException`, que decía *"The invoice cannot
+    transition from … to …"*.
+  - `ForcePasswordReset`: el comentario sobre invalidar la contraseña anterior.
+  - `Operation`: la frase tenía dos caracteres chinos (清单) en medio de una
+    oración en español; ahora dice "una lista escrita a mano", y se corrigió el
+    "elijiera" que arrastraba la misma línea.
+  - `Program`: `"No se pudo Create el primer Administrator"`.
+  - `ChangeUserRole`, `DeactivateUser` (dos sitios) y `ForcePasswordReset`:
+    `"No existe ese user."` pasa a `"No existe ese usuario."`.
+- `Record the language fixes in the logbook`: esta entrada.
+
+**Qué verifiqué.** Con comandos, no a ojo:
+
+- Búsqueda de caracteres CJK (`[\u4e00-\u9fff]`) en `Src` y `Tests`: **0
+  coincidencias**.
+- Búsqueda de `ese user`, `No se pudo Create`, `cannot transition from`,
+  `every invoice transition` e `Invalidate the old password` en `Src`: **0
+  coincidencias**.
+- Ningún test afirma esos textos y ningún documento (`.md`, `.http`, `.json`)
+  los citaba, así que el cambio de redacción no rompe ni desactualiza nada.
+- `dotnet build pirry-ledger.slnx --configuration Release`: **0 errores, 0
+  advertencias** (los `NU1902`/`NU1903` de MailKit desaparecieron con el PR #45).
+- `dotnet test pirry-ledger.slnx --configuration Release`: **96 + 24 + 6 = 126
+  pruebas superadas, 0 con error**.
+
+**Qué NO se hizo.** No se cambiaron identificadores ni comportamiento: solo
+comentarios, tres mensajes de rechazo y una línea de consola. No se tocó el resto
+del texto en inglés que arrastran los comentarios de `Operation` ("Requirement
+de role de cada operation", "Una route publica"), porque no estaba en los siete
+sitios auditados; queda anotado por si Franklin quiere un PR de limpieza de ese
+archivo.
