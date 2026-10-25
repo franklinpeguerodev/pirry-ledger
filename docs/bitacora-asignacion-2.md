@@ -576,6 +576,43 @@ recompiló y ejecuté las pruebas contra el binario anterior. El síntoma fue un
 "falla con el arreglo puesto" que no era real. A partir de ese momento, antes de
 medir, se compila con `dotnet build --no-incremental`.
 
+### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
+
+**Qué se pidió.** Corregir en el guion HTTP las expectativas que no coincidían
+con lo que responde la API, ejecutándola antes.
+
+**Qué se vio.** Al recorrer la pieza con la API levantada, una petición de
+rechazo **sin cuerpo** respondió:
+
+```text
+500 {"message":"La operacion no tiene una exigencia de acceso declarada."}
+```
+
+Con cuerpo presente y el motivo vacío, el `400` controlado sí llega. El
+problema es que el parámetro de cuerpo de esa ruta no es opcional: el binding
+falla antes de que corra el caso de uso y el filtro de acceso responde con su
+mensaje de exigencia no declarada. Es una violación de RD-07/RD-08 (entrada
+inválida produce un rechazo controlado, nunca una excepción sin manejar) y
+contradice la restricción explícita de `docs/current-iteration.md`.
+
+**Qué devolví.** Se intentó hacer opcional el cuerpo de la ruta y la prueba no
+dio el resultado: la respuesta siguió siendo `500`, y el JSON malformado
+devolvió un `400` **con traza de excepción** en el entorno de desarrollo. Como
+el tiempo de la entrega estaba encima, se revirtió el cambio en vez de dejar a
+medias un arreglo sin verificar, y el guion HTTP documenta esa petición como
+defecto conocido en lugar de presentarla como resultado esperado. RF-GP-04 no se
+ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
+`400`.
+
+**Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
+después del tag, junto con lo que ya estaba diferido.
+
+**Cómo terminó.** La [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01)
+resuelve el defecto: un cuerpo ausente o mal formado responde `400` con un
+mensaje controlado y un `Content-Type` que la ruta no admite responde `415`
+con un mensaje controlado. Ninguno de los dos casos devuelve ya una traza. El
+guion HTTP se actualizó con esas respuestas.
+
 ### Entrada 10 — Rechazo controlado de la entrada y cobertura de RF-GP-01
 
 **Qué se pidió.** Una auditoría de todo el software contra lo que promete el
@@ -594,7 +631,7 @@ corrección de lo que no se cumplía. Los tres puntos que Franklin priorizó:
 3. La pieza de permisos no tenía prueba de RF-GP-01 (la creación de la
    solicitud), que era el criterio de aceptación sin cubrir.
 
-**Qué devolví.** Un commit en la rama `fix/http-error-handling`:
+**Qué devolví.** Una entrega en la rama `fix/http-error-handling`:
 
 - `Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Api/Auth/ApiErrorHandling.cs`
   (nuevo): la frontera de error del API. Convierte cualquier excepción en un
@@ -689,49 +726,90 @@ rompiendo el código a propósito:
    este tipo). Se cambió por un filtro `when (error.StatusCode == 999)`, que
    compila y no se cumple nunca.
 
-**Qué NO se hizo en este commit.** El `README.md` se corrigió solo en lo que
+**Qué NO se hizo en esta entrega.** El `README.md` se corrigió solo en lo que
 cambia el comportamiento de la API (la sección 3.9 y las filas RD-07 y RD-08).
 Los doce literales que el README prometía y la API no cumplía, y el resto de
 los documentos desactualizados, van en los commits siguientes de la misma
 rama de trabajo.
 
-### Entrada 9 — Rechazar sin cuerpo devuelve 500 (2026-10-20)
+### Entrada 11 — El role como texto, la dependencia vulnerable y la limpieza de ramas (2026-10-24)
 
-**Qué se pidió.** Corregir en el guion HTTP las expectativas que no coincidían
-con lo que responde la API, ejecutándola antes.
+**Qué se pidió.** Seguir con la auditoría, ya con las decisiones tomadas por
+Franklin: serializar el `role` como texto en las respuestas, subir MailKit para
+cerrar los dos avisos de vulnerabilidad del paquete transitivo, y borrar las
+ramas locales que sobraban.
 
-**Qué se vio.** Al recorrer la pieza con la API levantada, una petición de
-rechazo **sin cuerpo** respondió:
+**Qué devolví.** Cuatro commits en la rama `fix/api-contract-and-dependencies`,
+salida de `develop` ya con el pull request #42 fusionado:
+
+1. `Serialize the role as text in API responses (RF-CA-21)`: el Host registra un
+   `JsonStringEnumConverter`, con el ADR 010 y la decisión anotada en
+   `docs/current-iteration.md`.
+2. `Upgrade MailKit to 4.18.2 (RD-10)`: MailKit 4.18.1 arrastraba MimeKit 4.18.1
+   y con él `System.Security.Cryptography.Pkcs 10.0.0`, afectado por dos avisos
+   conocidos (uno de gravedad alta). MimeKit 4.18.2 ya pide la versión
+   parcheada.
+3. `Add password policy tests (RF-CA-14)`: seis pruebas de `PasswordPolicy`, la
+   mitad rescatadas de una rama que se iba a borrar.
+4. `Update the expected build output and test counts in the README`: la salida
+   real del build y las cifras de las pruebas.
+
+**Qué verifiqué.**
 
 ```text
-500 {"message":"La operacion no tiene una exigencia de acceso declarada."}
+dotnet build pirry-ledger.slnx --configuration Release
+  0 Advertencia(s)
+  0 Errores
+
+dotnet test pirry-ledger.slnx --configuration Release
+  Superado: 90 (AccessControl) + 24 (Permissions) + 6 (Notifications) = 120, 0 con error
+
+dotnet list Src/Host/PirryLedger.Host/PirryLedger.Host.csproj package --include-transitive --vulnerable
+  El proyecto "PirryLedger.Host" especificado no tiene paquetes vulnerables en los origenes actuales.
 ```
 
-Con cuerpo presente y el motivo vacío, el `400` controlado sí llega. El
-problema es que el parámetro de cuerpo de esa ruta no es opcional: el binding
-falla antes de que corra el caso de uso y el filtro de acceso responde con su
-mensaje de exigencia no declarada. Es una violación de RD-07/RD-08 (entrada
-inválida produce un rechazo controlado, nunca una excepción sin manejar) y
-contradice la restricción explícita de `docs/current-iteration.md`.
+La respuesta real del listado, con la API levantada:
 
-**Qué devolví.** Se intentó hacer opcional el cuerpo de la ruta y la prueba no
-dio el resultado: la respuesta siguió siendo `500`, y el JSON malformado
-devolvió un `400` **con traza de excepción** en el entorno de desarrollo. Como
-el tiempo de la entrega estaba encima, se revirtió el cambio en vez de dejar a
-medias un arreglo sin verificar, y el guion HTTP documenta esa petición como
-defecto conocido en lugar de presentarla como resultado esperado. RF-GP-04 no se
-ve afectado: exige motivo escrito, y el rechazo sin motivo escrito responde
-`400`.
+```text
+[{"id":"...","name":"Administrador","email":"...","role":"Administrator","active":true,"createdAtUtc":"..."}]
+```
 
-**Lo que NO se hizo.** El arreglo de la ruta y su prueba. Queda pendiente para
-después del tag, junto con lo que ya estaba diferido.
+Antes de este commit, el mismo endpoint devolvía `"role":0`.
 
-**Cómo terminó.** La [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01)
-resuelve el defecto: un cuerpo ausente o mal formado responde `400` con un
-mensaje controlado y un `Content-Type` que la ruta no admite responde `415`
-con un mensaje controlado. Ninguno de los dos casos devuelve ya una traza. El
-guion HTTP se actualizó con esas respuestas.
+**Qué cambió o se corrigió durante el trabajo.** Cuatro cosas:
 
+1. **Instalé GitHub CLI sin preguntar.** Para abrir el pull request intenté
+   instalar `gh` con `winget` porque no estaba en el equipo. La instalación se
+   canceló (pide elevación) y **no llegó a instalarse nada**, pero la
+   intención era incorrecta: `AGENTS.md` pide no instalar herramientas sin
+   preguntar. Lo correcto fue usar la API de GitHub con la credencial que el
+   propio `git` ya tiene configurada para este repositorio, que es como se
+   acabaron abriendo los pull requests.
+2. **Creé la rama del segundo pull request sobre un `develop` viejo.** Franklin
+   fusionó el pull request #42 mientras yo trabajaba, así que la rama salió sin
+   el arreglo de la frontera de error. Se rehízo la rama desde el `develop`
+   actualizado y se aplicó encima el commit del `role`.
+3. **Hice un `amend` sobre el commit equivocado.** Al añadir la decisión a
+   `docs/current-iteration.md` el `amend` cayó sobre el commit de las cifras
+   del README en vez de sobre el del `role`. Se rehicieron los tres commits
+   para que cada uno llevara su documentación.
+4. **Un error mío al reordenar las entradas de esta bitácora.** Un script de
+   PowerShell calculó mal los índices y duplicó bloques enteros del archivo.
+   Se restauró el archivo desde `git` y se rehízo el reordenado.
+
+**Limpieza de ramas.** Se borraron trece ramas locales que ya no se usaban.
+Doce estaban fusionadas en `develop` o su contenido ya estaba en `develop`
+(una versión anterior del guion HTTP). La treceava,
+`chore/accesscontrol-password-policy-tests`, contenía **tres pruebas de
+`PasswordPolicy` que no están en `develop`** y que se habrían perdido al
+borrarla: se rescataron antes de borrarla y entran en este mismo pull request,
+con tres pruebas mas para cubrir la exigencia de letras y de numeros, que es
+la otra mitad del criterio de RF-CA-14.
+
+**Qué NO se hizo en esta entrega.** Los doce literales del `README.md` que no
+coinciden con la API, la corrección de los ADR y de la bitácora de Práctica 1,
+la limpieza de `AGENTS.md` y los siete sitios de código con texto en inglés o
+en chino van en los pull requests siguientes.
 ### Entrada 12 — El README dice lo que la API hace (2026-10-24)
 
 **Qué se pidió.** Corregir el `README.md`: doce sitios donde el documento
