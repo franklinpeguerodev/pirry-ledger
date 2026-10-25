@@ -811,3 +811,74 @@ la limpieza de `AGENTS.md` y los siete sitios de código con texto en inglés o
 en chino van en los pull requests siguientes.
 
 
+**Cómo terminó.** La [Entrada 10](#entrada-10--rechazo-controlado-de-la-entrada-y-cobertura-de-rf-gp-01)
+resuelve el defecto: un cuerpo ausente o mal formado responde `400` con un
+mensaje controlado y un `Content-Type` que la ruta no admite responde `415`
+con un mensaje controlado. Ninguno de los dos casos devuelve ya una traza. El
+guion HTTP se actualizó con esas respuestas.
+
+### Entrada 12 — El README dice lo que la API hace (2026-10-24)
+
+**Qué se pidió.** Corregir el `README.md`: doce sitios donde el documento
+prometía un contrato HTTP que la API no cumplía, y cinco sitios donde la
+descripción del repositorio se había quedado atrás.
+
+**Qué devolví.** Un commit en la rama `docs/readme-contract-fixes`, sobre
+`develop`. Solo toca el README y esta bitácora; no cambia el comportamiento de
+la API.
+
+Los doce literales, todos verificados contra la API levantada antes de
+corregirlos:
+
+| El README decía | La API responde |
+|---|---|
+| `{"mensaje":"La cuenta no esta activada."}` | `{"message":"La cuenta no esta activada."}` |
+| `200 {"activado":true}` | `200 {"activated":true}` |
+| `{"enviado":true}` | `{"sent":true}` |
+| `/me` devuelve `nombre` | `/me` devuelve `name` |
+| `email o password incorrectos.` | `Email o contrasena incorrectos.` |
+| `emails tomados / enviados / fallidos` | `Correos tomados / enviados / fallidos` |
+| `No habia emails pendientes de enviar.` | `No habia correos pendientes de enviar.` |
+| `Los emails siguen en la cola…` | `Los correos siguen en la cola…` |
+| `Los emails enviados no se volveran…` | `Los correos enviados no se volveran…` |
+| `[usuario SMTP]` y `[password SMTP]` | `[User SMTP]` y `[contrasena SMTP]` |
+| `servidor de email (RF-NOT-13)` | `servidor de Email (RF-NOT-13)` |
+| `Se creo el primer Administrador…` | `Se creo el primer Administrator…` |
+
+Los cinco sitios de descripción:
+
+- El conteo de tablas: son **siete** tablas de módulo, no ocho. La octava fila
+  de la consulta es `__EFMigrationsHistory`, que crea EF Core y no es de ninguna
+  pieza.
+- El diagrama de arquitectura no tenía el módulo de permisos, ni la
+  dependencia cruzada entre `Permissions` y `AccessControl` que sí existe en
+  los `.csproj`. Los dos están ahora en el diagrama y la dependencia con su
+  explicación.
+- La frase "`Program.cs` solo hace `app.MapAccessControl()` y
+  `app.MapNotifications()`" no mencionaba `app.MapPermissions()`, y daba a
+  entender que la pieza de notificaciones expone rutas: `MapNotifications()` no
+  mapea ninguna, porque el envío de correo es un comando.
+- El árbol del repositorio listaba dos proyectos de pruebas de tres, y la
+  tabla de trazabilidad decía que solo AccessControl y Notifications tienen
+  suite.
+- El diagrama de la base de datos no incluía las dos tablas de permisos. Ahora
+  están, con la nota de que sus cuatro columnas de usuario **no** tienen clave
+  foránea.
+
+**Qué verifiqué.** Con la API levantada contra PostgreSQL, las tres respuestas
+que el README cita literalmente:
+
+```text
+POST /api/auth/login (cuenta inactiva)   401 {"message":"La cuenta no esta activada."}
+POST /api/auth/login (correo inexistente)  401 {"message":"Email o contrasena incorrectos."}
+POST /api/auth/resend-activation          202 {"sent":true}
+```
+
+Y una búsqueda de los doce literales viejos en el README, que ya no devuelve
+ninguno.
+
+**Qué NO se hizo en esta entrega.** La línea del listado administrativo
+(`id`, `name`, `email`, `role`, `active`, `createdAtUtc`) la cambia el pull
+request #43, porque el campo `role` también cambia ahí. Los ADR, la bitácora de
+Práctica 1, `AGENTS.md` y los siete sitios de código con texto en inglés o en
+chino van en los pull requests siguientes.
