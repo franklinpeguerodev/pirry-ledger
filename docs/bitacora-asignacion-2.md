@@ -954,3 +954,62 @@ van en los pull requests siguientes.
 **Nota de numeración.** Esta entrada es la 13 porque la 12 ya existe en
 `develop` (PR #44) y la 11 es la del PR #45, que sigue abierto. El orden
 cronológico 9–10 lo corrige ese mismo PR #45; aquí no se duplica.
+
+### Entrada 14 — `AGENTS.md` deja de afirmar cosas que no son ciertas (2026-10-24)
+
+**Qué se pidió.** Corregir `AGENTS.md`, que se carga en cada sesión y por tanto
+gobierna el trabajo del agente: su lista de problemas conocidos del `.gitignore`
+describía un archivo que ya no es así, y su regla de idioma prohibía nombres de
+test en español cuando la suite entera está en español.
+
+**Qué devolví.** Un commit sobre `AGENTS.md`:
+
+- **Se borra** la afirmación de que el encabezado del `.gitignore` dice
+  ".NET (microservices) + Angular". El encabezado ya dice "Proyecto .NET
+  (Modular Monolith)"; Franklin lo corrigió antes de esta auditoría.
+- **Se borra** `server/` de la lista de patrones. Ese patrón no existe en el
+  `.gitignore` y `server/x.cs` no está ignorado.
+- **Se quita `dist/`** de la lista. Tampoco existe: `dist/x.js` y `a/dist/x.js`
+  no están ignorados.
+- **Se quedan** `[Dd]ebug/`, `[Rr]elease/`, `logs/`, `artifacts/`, `publish/` y
+  `output/` (están en las líneas 85, 86, 218, 239, 240 y 241, sin anclar), las
+  tres variantes de `appsettings.*` y la nota de la lista blanca de `.vscode/*`.
+- **Se añaden** los ADR 008 y 009 a "Resolved and therefore no longer listed",
+  que se habían quedado fuera aunque ambos existen y están en el índice
+  `docs/adr/README.md`.
+- **Se corrige la regla de idioma:** los nombres de test van en español
+  (`PruebasDeRolYEstado`, `CambiarDeRolInvalidaLaSesion`), el código de
+  producción sigue en inglés. Franklin lo decidió el 2026-10-24.
+- **Se corrige la descripción de `Src/Host`:** decía "background processes such
+  as the mail sender", y el ADR 007 decidió que el envío es un comando
+  (`--send-mail`), no un servicio hospedado. Ahora dice "alternate CLI modes".
+
+**Qué verifiqué.** Cada patrón con `git check-ignore -v --no-index`, que no crea
+ni toca archivos:
+
+```text
+x/Debug/a.dll              -> .gitignore:85:[Dd]ebug/
+x/Release/a.dll            -> .gitignore:86:[Rr]elease/
+a/logs/x.log               -> .gitignore:218:logs/
+a/artifacts/x.zip          -> .gitignore:239:artifacts/
+a/publish/x.dll            -> .gitignore:240:publish/
+a/output/x.txt             -> .gitignore:241:output/
+server/x.cs                -> sin coincidencia
+dist/x.js                  -> sin coincidencia
+a/dist/x.js                -> sin coincidencia
+appsettings.Development.json -> .gitignore:145
+.vscode/settings.json      -> .gitignore:57:!.vscode/settings.json (negación: permitido)
+```
+
+Los nombres de test en español se comprobaron en el árbol: 15 archivos
+`PruebasDe*.cs` y métodos como
+`CrearComoAdministradorEsLaSegundaPuertaYElRegistroSigueSiendoEstandar`. Los ADR
+008 y 009 existen en `docs/adr/` y ya figuraban en su índice.
+
+**Qué NO se hizo.** No se toca `.gitignore` (Franklin ya lo corrigió y no es de
+este PR). No se cambia la regla "Franklin opens the PR", aunque en la práctica el
+agente los abre con autorización previa: es una decisión de proceso y queda
+anotada para que Franklin la resuelva. No se toca código.
+
+**Nota de numeración.** Entrada 14 porque la 13 es la del PR #46 y la 11 la del
+PR #45; el orden de merge acordado es #45, #46, #47.
