@@ -1,0 +1,952 @@
+# PirryLedger — verificación manual completa de la Práctica 2.
+#
+# Qué es este archivo: el guion que recorre, contra la API real, todo lo que la
+# Práctica 2 pide comprobar. Está ordenado en las mismas secciones del brief
+# (docs/assignments/practica-2.md):
+#
+#   §1  Registro con activación por correo — frente 1 de la revisión acumulada
+#       (§1.3). Es también el arranque: sin este usuario no hay nada que probar.
+#   §2  Las siete reglas de Gestión de permisos, RF-GP-01 a RF-GP-07 (§1.1),
+#       con su camino feliz y sus rechazos.
+#   §3  Los otros tres frentes de Control de acceso (§1.3): sesión, rechazo por
+#       rol y recuperación de contraseña.
+#   §4  La suite de pruebas y su conteo (§1.1) — comando y resultado esperado.
+#   §5  Los seis defectos plantados (§1.2) — comandos de git y de dotnet test.
+#   §6  Checklist de la rúbrica (§3) y de lo que se revisa (§4).
+#
+# Qué NO puede hacer un archivo .http, y por eso va como comando en §4 y §5:
+#   - Ejecutar la suite: `dotnet test` es un proceso aparte.
+#   - Crear etiquetas ni plantar defectos: eso es git.
+#   - Ejercitar una transición que la API no expone: volver de Applied a Pending,
+#     o de Pending a Applied sin pasar por Approved. Eso lo cubre la matriz de
+#     la máquina de estados en la suite (§4).
+#
+# Qué NO es este archivo:
+#   - No reemplaza las pruebas unitarias (Tests/). Aquí se comprueba lo que se
+#     puede ver por HTTP; la suite comprueba las reglas que la API no alcanza.
+#   - No prueba el envío SMTP real ni el comando --send-mail (fuera de alcance).
+#   - No prueba el módulo de Business: la factura no tiene endpoints todavía.
+#
+# Cómo ejecutarlo
+#   1. Levantar la API (README, paso 7):
+#        dotnet run --project Src/Host/PirryLedger.Host --launch-profile http
+#   2. Ejecutar UNA VEZ la SQL de reinicio de abajo. Deja el escenario como si
+#      la base estuviera recién preparada para esta corrida.
+#   3. Completar el bloque de Entradas.
+#   4. Enviar las peticiones de arriba hacia abajo. Hay dos pausas, las dos del
+#      correo en cola: PAUSA 1 (token de activación) y PAUSA 2 (código de
+#      recuperación). Ninguna respuesta HTTP puede llevarlos: eso es RF-NOT-08
+#      funcionando.
+#   5. Al terminar, correr los comandos de §4 y §5 en la misma terminal del
+#      repositorio.
+#
+# La corrida deja la base como la encontró: el usuario de prueba se puede volver
+# a borrar con la misma SQL y la contraseña del administrador no se toca.
+#
+# Sintaxis: variables @file, separadores ###, nombres # @name y referencias
+# {{name.response.body.$.field}} / {{name.response.body.$[0].field}} (REST Client
+# de VS Code y cliente HTTP de JetBrains).
+
+# --- SQL de reinicio (ejecutar una vez antes de la corrida) -------------------
+#
+# Borra el usuario de prueba y lo que cuelga de él (sesiones, tokens, códigos y
+# solicitudes caen por las claves foráneas en cascada) y borra las solicitudes y
+# concesiones del administrador, para que /pending y /mine sean deterministas.
+# No toca la cuenta del administrador: solo sus filas de permisos.
+#
+# Se puede ejecutar en pgAdmin o con psql, desde PowerShell:
+#
+#   & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h 127.0.0.1 -p 5432 -U pirry_dev -d pirry_ledger
+#
+# En la SQL, sustituye <correoAdmin> por el correo real del administrador (el de
+# tu `.env`). Si cambias @correoEstandar abajo, cambia también el correo de esta
+# SQL.
+#
+#   DELETE FROM not_email_queue
+#   WHERE recipient IN ('practica2@ejemplo.com', '<correoAdmin>');
+#
+#   DELETE FROM ac_users WHERE email = 'practica2@ejemplo.com';
+#
+#   DELETE FROM per_permission_requests
+#   WHERE requester_id IN (SELECT id FROM ac_users WHERE email = '<correoAdmin>');
+#
+#   DELETE FROM per_permission_grants
+#   WHERE user_id IN (SELECT id FROM ac_users WHERE email = '<correoAdmin>');
+
+# --- Entradas (completar una sola vez) ----------------------------------------
+
+# Host de la API. Coincide con el valor por defecto de
+# PIRRY_LEDGER_PUBLIC_BASE_URL (README, paso 4): esa variable fija a la vez el
+# host:puerto donde escucha la API y la dirección de los enlaces de activación.
+@host = http://localhost:5243
+
+# Usuario Estándar de la práctica. Es distinto del fixture de la Práctica 1
+# (ana@ejemplo.com) para que este guion no dependa del estado que dejen los
+# otros dos archivos .http del repositorio. La contraseña cumple RF-CA-14
+# (8+ caracteres con letras y números).
+@nombre = Practica Dos
+@correoEstandar = practica2@ejemplo.com
+@contrasenaEstandar = abc12345
+@contrasenaNueva = abc123456
+
+# Administrador creado por la semilla (README, "El primer Administrador"). Sus
+# valores viven en tu `.env` (PIRRY_LEDGER_FIRST_ADMIN_EMAIL y
+# PIRRY_LEDGER_FIRST_ADMIN_PASSWORD, README paso 4): cópialos aquí para la
+# corrida y no los subas al repositorio. Cuidado: un valor equivocado cuenta
+# como intento fallido y cinco de ellos bloquean la cuenta quince minutos
+# (RF-CA-19).
+@correoAdmin = <correo-del-administrador>
+@contrasenaAdmin = <contrasena-del-administrador>
+
+# Direcciones que deben responder igual que una cuenta real, para no revelar
+# quién tiene cuenta (RF-CA-09, RF-CA-17).
+@correoInexistente = nadie@ejemplo.com
+@correoMalFormado = esto-no-es-correo
+
+# --- Valores de las pausas manuales -------------------------------------------
+#
+# Los dos se leen de la cola de correo, nunca de una respuesta HTTP:
+#
+#   SELECT body FROM not_email_queue
+#   WHERE recipient = '<correo>'
+#   ORDER BY created_at_utc DESC LIMIT 1;
+#
+# El correo de activación trae el enlace con token= + 64 caracteres hex; el de
+# recuperación trae 64 caracteres hex solos en su propia línea. Pegar el valor
+# sin el enlace completo.
+
+@tokenActivacion = <pega-aqui-el-token-de-64-hex-del-correo-de-activacion>
+@codigoRecuperacion = <pega-aqui-el-codigo-de-64-hex-del-correo-de-recuperacion>
+
+# =============================================================================
+# §1. Registro con activación por correo — frente 1 de §1.3
+# =============================================================================
+
+# --- Contrato (artefacto de desarrollo, no un caso de negocio) ----------------
+
+### Documento OpenAPI -> 200. Describe el contrato; no ejercita ninguna regla.
+
+GET {{host}}/openapi/v1.json
+
+# --- RF-CA-01, 14, 15, 16: registro y activación -----------------------------
+
+### Registrar el usuario Estándar -> 202 {"activated":false}. La cuenta existe
+# pero queda inactiva hasta abrir el enlace (RF-CA-01).
+
+# @name registro
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "{{nombre}}",
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### El mismo correo otra vez -> 409. El cuerpo es un mensaje genérico, sin
+# ningún dato de la cuenta que ya existe.
+
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "{{nombre}}",
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### Contraseña débil (menos de 8 caracteres) -> 400 (RF-CA-14). El rechazo es
+# controlado: ni traza, ni consulta, ni ruta local (RD-07, RD-08).
+
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "{{nombre}}",
+  "email": "{{correoEstandar}}",
+  "password": "abc12"
+}
+
+### Iniciar sesión ANTES de activar -> 401 {"message":"La cuenta no esta
+# activada."} (RF-CA-15). Ese mensaje solo aparece con la contraseña CORRECTA:
+# con una incorrecta la respuesta es la genérica, así que este endpoint no
+# sirve para descubrir correos registrados.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### Reenviar el enlace de activación -> 202 {"sent":true} (RF-CA-17). Reenviar
+# invalida el enlace anterior, así que en PAUSA 1 vale el token del correo MÁS
+# RECIENTE, no el del registro.
+
+# @name reenviar
+POST {{host}}/api/auth/resend-activation
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}"
+}
+
+### Reenviar para una cuenta inexistente -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/resend-activation
+Content-Type: application/json
+
+{
+  "email": "{{correoInexistente}}"
+}
+
+### Reenviar para una dirección mal formada -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/resend-activation
+Content-Type: application/json
+
+{
+  "email": "{{correoMalFormado}}"
+}
+
+# PAUSA 1: leer el token del correo más reciente de {{correoEstandar}}
+# (RF-NOT-08) y pegarlo en @tokenActivacion, arriba.
+
+### Abrir el enlace de activación -> 200 {"activated":true} (RF-CA-16).
+
+# @name activar
+GET {{host}}/activate?token={{tokenActivacion}}
+
+### El mismo enlace otra vez -> 400. Los enlaces de activación son de un solo
+# uso (RF-CA-16).
+
+GET {{host}}/activate?token={{tokenActivacion}}
+
+# --- Sesiones de trabajo para §2 y §3 ----------------------------------------
+
+### Iniciar sesión como Estándar -> 200 {"token":"..."} (RF-CA-03).
+
+# @name loginEstandar
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### Iniciar sesión como Administrador -> 200. Si falla, revisar
+# PIRRY_LEDGER_FIRST_ADMIN_* en el `.env` y reiniciar el Host.
+
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoAdmin}}",
+  "password": "{{contrasenaAdmin}}"
+}
+
+# =============================================================================
+# §2. Las siete reglas de Gestión de permisos (RF-GP-01 a RF-GP-07)
+# =============================================================================
+#
+# Cada bloque empieza por su requisito, dice qué se espera y por qué. Las
+# variables de sesión y los ids salen de las respuestas nombradas: no hay que
+# pegar ningún id a mano.
+
+# --- RF-GP-01: el Estándar crea una solicitud, y nace Pendiente --------------
+
+### Crear una solicitud de "ViewSalesSummary" -> 202 {"id":"..."} (RF-GP-01).
+# El id queda en {{crearA.response.body.$.id}}.
+
+# @name crearA
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### Ver las propias -> 200. La solicitud recién creada aparece con
+# state = "Pending", su requesterId y su createdAtUtc (RF-GP-01).
+# La lista viene ordenada por fecha descendente: $[0] es la más reciente.
+
+# @name miasTrasCrear
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Pedir un permiso que no está en el catálogo -> 400 "El permiso solicitado
+# no existe." (RF-GP-01). Rechazo controlado, sin fila nueva.
+
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "PermisoInventado"
+}
+
+### Crear sin token -> 401. El filtro de acceso corre antes del caso de uso
+# (RD-06): sin sesión no se llega a validar el permiso.
+
+POST {{host}}/api/permissions/requests
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+# --- RF-GP-02: el Administrador ve las pendientes; el Estándar no ve las ajenas
+
+### El Administrador crea una solicitud PARA SÍ MISMO -> 202 (RF-GP-01: los dos
+# roles pueden crear). Sirve para tres cosas: probar que el Estándar no la ve
+# aquí abajo, y los dos rechazos de RF-GP-07.
+
+# @name crearB
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### El Estándar ve solo sus propias solicitudes -> 200 (RF-GP-02). Debe contener
+# {{crearA.response.body.$.id}} y NO debe contener
+# {{crearB.response.body.$.id}}, que es de otro usuario.
+
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### El Estándar intenta listar las pendientes globales -> 403 "No tiene permisos
+# para esta operacion." (RF-GP-02, caso del rol). Lo decide el filtro con
+# AccessLevel.Administrator, no el caso de uso.
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### El Administrador lista las pendientes -> 200. Debe contener los dos ids:
+# {{crearA.response.body.$.id}} y {{crearB.response.body.$.id}}, los dos en
+# Pending. Vienen ordenadas por fecha ascendente.
+
+# @name pendientes
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Listar las propias sin token -> 401 "Sesion no valida." (el 401 siempre
+# llega antes que cualquier 403).
+
+GET {{host}}/api/permissions/requests/mine
+
+# --- RF-GP-03 + RF-GP-05: aprobar registra quién y cuándo, y aplica el permiso
+
+### Antes de aprobar, el Estándar NO tiene el permiso -> 403 (RF-GP-05). El
+# filtro consulta per_permission_grants a través de IPermissionAuthority.
+
+GET {{host}}/api/permissions/sales-summary
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### El Estándar intenta aprobar su propia solicitud -> 403, NO 400 de
+# auto-resolución: la ruta exige Administrador y el filtro actúa antes
+# (RD-06). RF-GP-07 se prueba más abajo, con el Administrador.
+
+POST {{host}}/api/permissions/requests/{{crearA.response.body.$.id}}/approve
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### El Administrador aprueba la solicitud del Estándar -> 204 (RF-GP-03).
+# La misma operación aplica el permiso: Pending -> Approved -> Applied y el
+# INSERT en per_permission_grants, todo en la misma transacción (RF-GP-05).
+
+POST {{host}}/api/permissions/requests/{{crearA.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Ahora el Estándar tiene el permiso -> 200 con los datos del resumen
+# (RF-GP-05). Antes daba 403; la aprobación lo abrió.
+
+GET {{host}}/api/permissions/sales-summary
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### La solicitud quedó en Applied con quién y cuándo -> 200 (RF-GP-03 + 05):
+#   state = "Applied"
+#   approverId    = id del Administrador (no nulo)
+#   approvedAtUtc = instante UTC de la aprobación (no nulo)
+#   appliedAtUtc  = instante UTC de la aplicación (no nulo)
+
+# @name miasTrasAprobar
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+# --- RF-GP-04: rechazar exige motivo escrito, y sin él no cambia nada --------
+
+### El Estándar crea otra solicitud para probar el rechazo -> 202 (RF-GP-01).
+
+# @name crearC
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### Rechazar con motivo vacío -> 400 "El motivo del rechazo es obligatorio."
+# (RF-GP-04, caso "vacío").
+
+POST {{host}}/api/permissions/requests/{{crearC.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "   "
+}
+
+### Rechazar con el campo motivo AUSENTE (cuerpo {}) -> 400, mismo mensaje
+# (RF-GP-04, caso "ausente"). El body declara `string? Reason` y el caso de
+# uso lo convierte en cadena vacía antes de validar.
+
+POST {{host}}/api/permissions/requests/{{crearC.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{}
+
+### Rechazar SIN cuerpo -> 400 "El cuerpo de la peticion no es valido."
+# (RD-07, RD-08). No es el caso de RF-GP-04, pero comprueba que la entrada
+# inválida produce un rechazo controlado y no un 500.
+
+POST {{host}}/api/permissions/requests/{{crearC.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Tras los tres intentos fallidos, la solicitud NO cambió -> 200 con
+# $[0].state = "Pending", rejectionReason en null y rejectedAtUtc en null
+# (RF-GP-04: "el rechazo no se completa y el estado no cambia").
+
+# @name miasTrasRechazosFallidos
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### Rechazar con motivo -> 204 (RF-GP-04).
+
+POST {{host}}/api/permissions/requests/{{crearC.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "Ya tienes este permiso concedido."
+}
+
+### La solicitud quedó rechazada y con el motivo guardado -> 200:
+#   state = "Rejected"
+#   rejectionReason = "Ya tienes este permiso concedido."
+#   approverId y rejectedAtUtc no nulos
+
+# @name miasTrasRechazar
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+# --- RF-GP-06: solo las tres transiciones de la tabla ------------------------
+
+### Aprobar otra vez la que ya está Applied -> 400 "Solo se pueden aprobar
+# solicitudes en estado Pendiente." (RF-GP-06). No se inserta una segunda
+# concesión.
+
+POST {{host}}/api/permissions/requests/{{crearA.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Aprobar una que está Rejected -> 400 (RF-GP-06). Rejected es terminal: la
+# tabla no tiene transición Rejected -> Applied.
+
+POST {{host}}/api/permissions/requests/{{crearC.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Nada cambió -> 200: A sigue en "Applied" y C sigue en "Rejected".
+# El resto de transiciones fuera de la tabla (Pending -> Applied directo,
+# Approved -> Rejected, volver a Pending) no tienen endpoint: las cubre la
+# matriz de la máquina de estados en la suite (§4).
+
+# @name miasTrasIntentosInvalidos
+GET {{host}}/api/permissions/requests/mine
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+# --- RF-GP-07: nadie resuelve su propia solicitud ---------------------------
+
+### El Administrador aprueba su propia solicitud -> 400 (RF-GP-07). La regla
+# compara identidades (requesterId == caller.Id), no roles: ser Administrador
+# no habilita resolver lo propio.
+
+POST {{host}}/api/permissions/requests/{{crearB.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### El Administrador rechaza su propia solicitud CON motivo -> 400 (RF-GP-07).
+# El motivo es válido; lo que falla es la identidad.
+
+POST {{host}}/api/permissions/requests/{{crearB.response.body.$.id}}/reject
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "Cualquier motivo valido."
+}
+
+### La solicitud del Administrador sigue en Pending -> 200: los dos rechazos
+# no aplicaron ninguna transición.
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+# --- RF-GP-07, camino realista: un Estándar ascendido -----------------------
+#
+# El brief pide "un Administrador que aprueba o rechaza una solicitud creada por
+# él". El bloque de arriba lo prueba. Este añade el caso que la suite cubre con
+# UnEstandarAscendidoNoPuedeAprobarSuPropiaSolicitud: el rol cambió, la persona
+# no. Es opcional y deja al Estándar como Estándar al final.
+
+### El Estándar crea una solicitud para el camino realista -> 202 (RF-GP-01).
+
+# @name crearD
+POST {{host}}/api/permissions/requests
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "requestedPermission": "ViewSalesSummary"
+}
+
+### El Administrador asciende al Estándar -> 204 (RF-CA-08). El id del Estándar
+# sale de requesterId de su primera solicitud: /me no devuelve el id.
+# La sesión del Estándar queda invalidada (ADR 009, CredentialVersion sube).
+
+POST {{host}}/api/admin/users/{{miasTrasCrear.response.body.$[0].requesterId}}/role
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "role": "Administrator"
+}
+
+### El token anterior del Estándar ya no sirve -> 401 (RF-CA-12 / ADR 009).
+
+GET {{host}}/me
+Authorization: Bearer {{loginEstandar.response.body.$.token}}
+
+### El Estándar, ahora Administrador, inicia sesión de nuevo -> 200.
+
+# @name loginAscendido
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### /me devuelve role = "Administrator" para el token nuevo -> 200 (RF-CA-07).
+
+GET {{host}}/me
+Authorization: Bearer {{loginAscendido.response.body.$.token}}
+
+### Aprueba su propia solicitud -> 400 (RF-GP-07, camino realista). Es el mismo
+# rechazo que el camino directo: la regla mira identidades, no roles.
+
+POST {{host}}/api/permissions/requests/{{crearD.response.body.$.id}}/approve
+Authorization: Bearer {{loginAscendido.response.body.$.token}}
+
+### El Administrador original aprueba la solicitud del ascendido -> 204
+# (RF-GP-03). Con esto la solicitud no queda colgada en Pending.
+
+POST {{host}}/api/permissions/requests/{{crearD.response.body.$.id}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Devolver al Estándar a su rol -> 204, para que la corrida termine como
+# empezó (RF-CA-08). Su sesión vuelve a quedar invalidada; ya no se usa.
+
+POST {{host}}/api/admin/users/{{miasTrasCrear.response.body.$[0].requesterId}}/role
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "role": "Standard"
+}
+
+# =============================================================================
+# §3. Los otros tres frentes de Control de acceso (§1.3)
+# =============================================================================
+
+# --- Frente 2: inicio y cierre de sesión (RF-CA-03, 07, 18) -----------------
+
+### Iniciar sesión como Estándar -> 200.
+
+# @name loginFrente2
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### ¿Quién soy? -> 200 con solo name, email y role = "Standard" (RF-CA-07).
+# Nunca el hash, ni el token, ni credentialVersion.
+
+GET {{host}}/me
+Authorization: Bearer {{loginFrente2.response.body.$.token}}
+
+### Contraseña incorrecta -> 401 con el MISMO cuerpo que una cuenta
+# inexistente: "Email o contrasena incorrectos."
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "malaclave1"
+}
+
+### La misma petición para una cuenta que no existe -> 401, mismo cuerpo.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoInexistente}}",
+  "password": "malaclave1"
+}
+
+### /me sin token -> 401 "Sesion no valida."
+
+GET {{host}}/me
+
+### Cerrar sesión -> 204 (RF-CA-18).
+
+# @name logout
+POST {{host}}/api/auth/logout
+Authorization: Bearer {{loginFrente2.response.body.$.token}}
+
+### La credencial cerrada ya no sirve -> 401.
+
+GET {{host}}/me
+Authorization: Bearer {{loginFrente2.response.body.$.token}}
+
+### Cerrar sesión con un token inventado -> 204 igual. El cierre no es un
+# oráculo sobre si un token existió (RF-CA-18).
+
+POST {{host}}/api/auth/logout
+Authorization: Bearer token-inventado-que-no-existe
+
+### Iniciar sesión otra vez -> 200 (RF-CA-03). Los frentes 3 y 4 necesitan
+# una sesión viva.
+
+# @name loginFrente3
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+# --- Frente 3: un Estándar invoca una operación de Administrador ------------
+
+### Listar usuarios sin token -> 401. El 401 llega antes que el 403.
+
+GET {{host}}/api/admin/users
+
+### Listar usuarios con sesión de Estándar -> 403 (RF-CA-06, RF-CA-21).
+
+GET {{host}}/api/admin/users
+Authorization: Bearer {{loginFrente3.response.body.$.token}}
+
+### Cambiar un rol con sesión de Estándar -> 403, incluso armando la petición a
+# mano: ocultar el botón no bastaría (RD-06).
+
+POST {{host}}/api/admin/users/{{miasTrasCrear.response.body.$[0].requesterId}}/role
+Authorization: Bearer {{loginFrente3.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "role": "Administrator"
+}
+
+### Aprobar una solicitud con sesión de Estándar -> 403 (la misma protección,
+# ahora sobre una ruta del módulo Permissions).
+
+POST {{host}}/api/permissions/requests/{{crearB.response.body.$.id}}/approve
+Authorization: Bearer {{loginFrente3.response.body.$.token}}
+
+### Listar usuarios con sesión de Administrador -> 200 (RF-CA-21). Trae solo
+# id, name, email, role, active y createdAtUtc.
+
+GET {{host}}/api/admin/users
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+# --- Frente 4: recuperación de contraseña (RF-CA-09, 10, 11, 12, 22) --------
+
+### Pedir un código de recuperación -> 202 {"sent":true} (RF-CA-09).
+
+# @name recuperar
+POST {{host}}/api/auth/recovery
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}"
+}
+
+### La misma petición para una cuenta que no existe -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/recovery
+Content-Type: application/json
+
+{
+  "email": "{{correoInexistente}}"
+}
+
+### Y para una dirección mal formada -> 202, mismo cuerpo.
+
+POST {{host}}/api/auth/recovery
+Content-Type: application/json
+
+{
+  "email": "{{correoMalFormado}}"
+}
+
+# PAUSA 2: leer el código del correo MÁS RECIENTE de {{correoEstandar}} y
+# pegarlo en @codigoRecuperacion, arriba. Cada petición de recuperación
+# invalida los códigos pendientes: vale el último.
+
+### Completar el restablecimiento -> 204 (RF-CA-10).
+
+POST {{host}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "code": "{{codigoRecuperacion}}",
+  "password": "{{contrasenaNueva}}"
+}
+
+### El mismo código otra vez -> 400: los códigos son de un solo uso (RF-CA-10).
+
+POST {{host}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "code": "{{codigoRecuperacion}}",
+  "password": "{{contrasenaNueva}}"
+}
+
+### Iniciar sesión con la contraseña anterior -> 401: la recuperación la
+# reemplazó (RF-CA-11).
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+### Iniciar sesión con la contraseña nueva -> 200.
+
+# @name loginRecuperado
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaNueva}}"
+}
+
+### Cambiar la contraseña con la actual INCORRECTA -> 400 (RF-CA-22). Es 400 y
+# no 401: la sesión es válida, lo que no vale es la contraseña actual.
+
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "esta-no-es-la-contrasena",
+  "newPassword": "{{contrasenaNueva}}"
+}
+
+### Cambiar con la actual correcta -> 204. Devuelve @contrasenaEstandar, así
+# que la corrida deja la contraseña como la encontró (RF-CA-22).
+
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "{{contrasenaNueva}}",
+  "newPassword": "{{contrasenaEstandar}}"
+}
+
+### La sesión que hizo el cambio ya no sirve -> 401 (RF-CA-12).
+
+GET {{host}}/me
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+
+### Iniciar sesión con la contraseña restablecida -> 200: el círculo cerró.
+
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoEstandar}}",
+  "password": "{{contrasenaEstandar}}"
+}
+
+# =============================================================================
+# §4. La suite de pruebas (§1.1)
+# =============================================================================
+#
+# Un archivo .http no ejecuta `dotnet test`. Este bloque es el comando y el
+# resultado esperado, para correr en la terminal del repositorio.
+#
+#   dotnet test pirry-ledger.slnx --nologo
+#
+# Esperado: 128 superadas, 0 con error. El desglose por suite:
+#   AccessControl  96
+#   Permissions    26
+#   Notifications   6
+#
+# Solo la pieza de permisos, si se quiere ir directo:
+#
+#   dotnet test Tests/PirryLedger.Core.Permissions.Tests --nologo
+#
+# Esperado: 26 superadas, 0 con error. Ninguna necesita base de datos, servidor
+# SMTP ni la aplicación levantada: dobles en memoria, EF Core en memoria y reloj
+# falso (RD-12).
+#
+# Cobertura por requisito. El ID aparece en el comentario de la clase o de la
+# prueba; estos son los nombres exactos:
+#
+#   RF-GP-01  CrearUnaSolicitudNaceEnPendienteConSolicitanteYFecha
+#             CrearUnPermisoFueraDelCatalogoNoGuardaNada
+#
+#   RF-GP-02  UnEstandarSoloVeSusPropiasSolicitudes
+#             ListarPendientesDevuelveSoloLasQueEstanEnPending
+#             ListarPorSolicitanteDevuelveSoloLasSolicitudesDeEseSolicitante
+#
+#   RF-GP-03  AprobarUnaSolicitudPendienteLaPasaAAplicadaYRegistraConcesion
+#
+#   RF-GP-04  RechazarUnaSolicitudPendienteLaPasaARechazadaConMotivo
+#             RechazarSinMotivoSeRechaza
+#
+#   RF-GP-05  AprobarUnaSolicitudPendienteLaPasaAAplicadaYRegistraConcesion
+#             AprobarDosVecesElMismoPermisoNoCreaUnaFilaDuplicada
+#             AprobarDosVecesElMismoPermisoReasignaElSelloDeTiempo
+#             AprobarDosPermisosDistintosDelMismoUsuarioCreaDosFilas
+#
+#   RF-GP-06  AprobarUnaSolicitudYaAprobadaNoCambiaElEstado
+#             AppliedNoTieneSalidas
+#             RejectedNoTieneSalidas
+#             PendingAApliedDirectamenteLanzaExcepcion
+#             ApprovedARechazadaLanzaExcepcion
+#             SoloLasTresTransicionesDeLaTablaSonValidas
+#
+#   RF-GP-07  UnAdministradorNoPuedeAprobarSuPropiaSolicitud
+#             UnEstandarAscendidoNoPuedeAprobarSuPropiaSolicitud
+#             UnAdministradorNoPuedeRechazarSuPropiaSolicitud
+#
+# Las cinco restantes completan la pieza: PendingAprobadaEsValida,
+# PendingRechazadaEsValida, ApprovedAplicadaEsValida,
+# LaMismaTransicionASiMismoLanzaExcepcion y
+# LaMaquinaDeEstadosNoComparteCodigoConLaDeInvoice.
+#
+# Comprobación de que ninguna prueba necesita la aplicación levantada: parar el
+# Host (Ctrl+C) y volver a correr el comando. Debe dar el mismo resultado.
+
+# =============================================================================
+# §5. Los seis defectos plantados (§1.2)
+# =============================================================================
+#
+# Cada defecto es un commit que cuelga de la etiqueta `practica-2`, etiquetado
+# `practica-2-defecto-N`, que toca solo código de Gestión de permisos (ningún
+# archivo de Tests/) y cuyo mensaje dice qué archivo y qué línea cambió.
+#
+# La tabla es la misma de la sección «Defectos» del README: si una cambia,
+# cambia la otra.
+#
+#   N | Archivo:línea                        | Cambio que se planta
+#   1 | ApprovePermissionRequest.cs:62        | la guarda lanza solo si el estado es Rejected
+#   2 | PermissionRequestStateMachine.cs:28   | añade Rejected -> Applied a la tabla
+#   3 | ApprovePermissionRequest.cs:71        | elimina la comparación de identidades
+#     | RejectPermissionRequest.cs:62         | (la misma, en el rechazo)
+#   4 | PermissionRequestRepository.cs:43     | el filtro pasa de == a !=
+#   5 | PermissionRequestStateMachine.cs:28   | añade Approved -> Pending a la tabla
+#   6 | PermissionRequest.cs:99               | elimina RejectionReason = reason;
+#
+# Comando para ver un defecto (N = 1..6). Desde la raíz del repositorio:
+#
+#   git checkout practica-2-defecto-N
+#   dotnet test pirry-ledger.slnx --nologo
+#   git diff practica-2 practica-2-defecto-N --stat
+#   git checkout practica-2
+#
+# El segundo comando debe terminar en rojo, con al menos una prueba fallida de
+# la fila de abajo. El tercero debe mostrar solo archivos de Src/, nunca de
+# Tests/.
+#
+#   N | Prueba(s) que deben fallar
+#   1 | AprobarUnaSolicitudYaAprobadaNoCambiaElEstado
+#   2 | RejectedNoTieneSalidas, SoloLasTresTransicionesDeLaTablaSonValidas
+#   3 | UnAdministradorNoPuedeAprobarSuPropiaSolicitud,
+#     | UnEstandarAscendidoNoPuedeAprobarSuPropiaSolicitud,
+#     | UnAdministradorNoPuedeRechazarSuPropiaSolicitud
+#   4 | ListarPorSolicitanteDevuelveSoloLasSolicitudesDeEseSolicitante
+#   5 | SoloLasTresTransicionesDeLaTablaSonValidas
+#   6 | RechazarUnaSolicitudPendienteLaPasaARechazadaConMotivo
+#
+# Sobre `practica-2`, el mismo `dotnet test` da 128 superadas y 0 con error.
+#
+# Si las etiquetas todavía no están creadas (fase 6 de la entrega), el mismo
+# control se hace plantando el cambio a mano: el anexo
+# docs/assignments/practica-2-defectos.md trae el cambio exacto de cada uno, y
+# la Entrada 4 de docs/bitacora-practica-2.md, el mapeo y cómo se obtuvo.
+#
+# La comprobación que vale es `dotnet test`. Además, con el defecto plantado y
+# la API reiniciada, el síntoma por HTTP sería este (no hace falta para
+# aprobar; sirve para ver el defecto desde fuera):
+#
+#   1 -> aprobar dos veces (RF-GP-06) respondería 204 en vez de 400
+#   2 -> aprobar una Rejected (RF-GP-06) respondería 204 en vez de 400
+#   3 -> el Administrador aprobaría o rechazaría lo suyo (RF-GP-07) con 204
+#   4 -> /mine devolvería solicitudes ajenas, incluida {{crearB.response.body.$.id}}
+#   5 -> la máquina aceptaría volver de Approved a Pending (no hay endpoint; suite)
+#   6 -> /mine mostraría state = "Rejected" con rejectionReason en null
+
+# =============================================================================
+# §6. Checklist de la rúbrica (§3) y de lo que se revisa (§4)
+# =============================================================================
+#
+# Suite sobre Gestión de permisos (1.5 pts)
+#   [ ] `dotnet test pirry-ledger.slnx` pasa entero en `practica-2`.
+#   [ ] Cada RF-GP-01 a 07 tiene al menos una prueba que lo identifica (§4).
+#   [ ] Las pruebas no levantan la aplicación: se corren con el Host apagado.
+#
+# Detección de los seis defectos (3.0 pts)
+#   [ ] Con cada `practica-2-defecto-N`, la suite falla (§5).
+#   [ ] Sobre `practica-2`, la suite pasa entera.
+#
+# Forma de los defectos plantados (1.5 pts)
+#   [ ] Existen las seis etiquetas `practica-2-defecto-N`.
+#   [ ] El padre de cada una es el commit etiquetado `practica-2`
+#       (`git rev-parse practica-2-defecto-N^` == `git rev-parse practica-2`).
+#   [ ] Ningún commit de defecto toca Tests/ (`git diff practica-2 ... --stat`).
+#   [ ] El mensaje de cada commit dice qué archivo y qué línea cambió.
+#   [ ] El README tiene la sección «Defectos» con la prueba de cada uno.
+#
+# Revisión acumulada: Control de acceso (2.0 pts)
+#   [ ] El proyecto arranca siguiendo el README al pie de la letra.
+#   [ ] Frente 1, registro con activación: §1 de este archivo.
+#   [ ] Frente 2, inicio y cierre de sesión: §3, primer bloque.
+#   [ ] Frente 3, rechazo por rol a un Estándar: §3, segundo bloque.
+#   [ ] Frente 4, recuperación de contraseña: §3, tercer bloque.
+#
+# Entrega (§2)
+#   [ ] Etiqueta `practica-2` sobre el commit evaluado.
+#   [ ] Seis etiquetas `practica-2-defecto-N`.
+#   [ ] `git push origin --tags`.
+#   [ ] En Moodle: la URL del repositorio y el nombre de la etiqueta.
