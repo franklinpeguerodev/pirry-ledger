@@ -39,9 +39,11 @@ internal sealed class PermissionGrantConfiguration : IEntityTypeConfiguration<Pe
         builder.Property(grant => grant.GrantedByUserId)
             .HasColumnName("granted_by_user_id");
 
-        // Las dos claves foraneas hacia ac_users se declaran en la migracion
-        // por la misma razon que en PermissionRequestConfiguration: este modulo
-        // no depende de AccessControl.Domain.Entities.User.
+        // Las columnas que apuntan a un usuario (user_id, granted_by_user_id) NO
+        // declaran clave foranea hacia ac_users, ni aqui ni en la migracion, por
+        // la misma razon que en PermissionRequestConfiguration. La integridad
+        // la aporta la aplicacion, que toma las dos identidades de la sesion
+        // autenticada.
 
         builder.HasIndex(grant => new { grant.UserId, grant.PermissionName })
             .IsUnique()

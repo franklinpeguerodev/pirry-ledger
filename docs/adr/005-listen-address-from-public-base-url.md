@@ -20,7 +20,7 @@ ellas:
 La desincronización ya estaba comprobada con tres arranques reales: `dotnet run`
 escuchaba en 5243, el DLL compilado en 5000 y el perfil `https` en 7258+5243,
 mientras los enlaces de los correos seguían diciendo 5243 en los tres casos. El
-correo de activación real de la cola contenía `http://localhost:5243/activar`,
+correo de activación real de la cola contenía `http://localhost:5243/activate`,
 que solo funciona en la misma máquina: el caso de uso del proyecto es el uso
 diario desde una tablet (`README.md`).
 
@@ -34,10 +34,10 @@ y recuperación", y la recuperación no lleva enlace: lleva un código suelto
 el host y el puerto donde escucha la API **y** la dirección con la que se
 construyen los enlaces de activación.
 
-1. `Program.cs` lee la variable **una sola vez** (`LeerUrlBaseObligatoria`) y ese
-   valor, guardado en `urlBase`, alimenta las dos cosas:
-   `builder.WebHost.UseUrls(urlBase)` y
-   `builder.Services.AddAccessControl(conexion, urlBase)`.
+1. `Program.cs` lee la variable **una sola vez** (`ReadRequiredBaseUrl`) y ese
+   valor, guardado en `baseUrl`, alimenta las dos cosas:
+   `builder.WebHost.UseUrls(baseUrl)` y
+   `builder.Services.AddAccessControl(connection, baseUrl)`.
 2. `Properties/launchSettings.json` **pierde `applicationUrl`** en ambos
    perfiles. Los perfiles siguen existiendo y solo aportan
    `ASPNETCORE_ENVIRONMENT=Development`.
@@ -86,7 +86,7 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
   (`dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`) →
   `Now listening on: http://localhost:5243` (antes era 5000: el bug).
 - **Después**, variable de proceso `http://localhost:5999` →
-  `Now listening on: http://localhost:5999`, y `GET /yo` responde `401` en ese
+  `Now listening on: http://localhost:5999`, y `GET /me` responde `401` en ese
   puerto mientras 5243 no responde: la API sigue a la variable.
 - **Sonda de precedencia:** `ASPNETCORE_URLS=http://localhost:5888` junto con la
   variable en 5243 → escucha 5243. `UseUrls` manda sobre `ASPNETCORE_URLS`.
@@ -96,12 +96,12 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
   PIRRY_LEDGER_PUBLIC_BASE_URL. El README explica como definirla.` y código de
   salida 1, sin traza (RD-08).
 - `dotnet build pirry-ledger.slnx` con 0 errores y 0 advertencias.
-- `dotnet test pirry-ledger.slnx`: 90 pruebas en verde, las mismas que antes del
+- `dotnet test pirry-ledger.slnx`: la suite completa en verde, las mismas que antes del
   cambio (6 de Notifications + 84 de AccessControl).
 - `git diff` limitado a `Src/Host/PirryLedger.Host/`: no hay ningún cambio en
   `Src/Core`, `Src/Business` ni en `Tests/`.
 - **Aviso de redirección:** con el código anterior y el perfil `http`,
-  `GET /yo` imprimía
+  `GET /me` imprimía
   `warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3] Failed
   to determine the https port for redirect.` (comprobado con `git stash`, es
   decir, antes de este cambio). Retirado `UseHttpsRedirection()`, la misma

@@ -25,17 +25,15 @@ El mecanismo ya existe: `CredentialVersion` está en la entidad, está mapeada e
 
 ## Decisión
 
-`User.ChangeRole(newRole, utcNow)` se modifica para sumar `+1` a `CredentialVersion` además de asignar el rol nuevo. La operación que llama (`ChangeUserRole` en la capa de Application) sigue siendo la misma; lo único que cambia es que ahora recibe el `IClock` y le pasa `utcNow` a la entidad. La firma pública de la entidad pasa de:
+`User.ChangeRole(newRole)` se modifica para sumar `+1` a `CredentialVersion` además de asignar el rol nuevo. La operación que llama (`ChangeUserRole` en la capa de Application) sigue siendo la misma y no cambia de firma.
+
+**La firma de la entidad no cambia.** Sigue siendo:
 
 ```csharp
 public void ChangeRole(Role newRole)
 ```
 
-a:
-
-```csharp
-public void ChangeRole(Role newRole, DateTime utcNow)
-```
+El plan inicial de esta ADR contemplaba añadir un `DateTime utcNow` al método, y no se hizo: el incremento de `CredentialVersion` es un `+1` sobre un entero y no usa el reloj para nada, así que el parámetro habría sido código muerto que además obligaría aInjectar el `IClock` en un caso de uso que no lo necesita. La firma real se documenta aquí para que quien lea la entidad no la busque con un parámetro de fecha que no existe.
 
 `UserConfiguration` no cambia (la columna `credential_version` ya existe y está mapeada, ADR 003 + 004). La migración tampoco.
 
@@ -54,13 +52,13 @@ Re-login es la opción correcta: la sesión se considera un artefacto ligado al 
 
 ### Compatibilidad con la firma de `ChangeRole` y los tests existentes
 
-Cambiar la firma de `User.ChangeRole` de `(Role)` a `(Role, DateTime)` es una modificación breaking para:
+La firma de `User.ChangeRole` **no** cambia, y por eso no hay rotura que absorber:
 
-- `ChangeUserRole` (Application): debe pasar `utcNow` además de `newRole`.
-- Los tests que llaman directamente a `User.ChangeRole` en `Tests/PirryLedger.Core.AccessControl.Tests`: deben pasar el `DateTime` (pueden usar `DateTime.UtcNow` o un `FakeClock` ya disponible).
-- Los tests que verifican que un cambio de rol no invalida sesiones (si existen): pasan a verificar lo contrario, que es la nueva propiedad.
+- `ChangeUserRole` (Application) sigue llamando a `user.ChangeRole(role)` con los mismos argumentos de antes.
+- Los tests que llaman directamente a `User.ChangeRole` en `Tests/PirryLedger.Core.AccessControl.Tests` no cambian: siguen pasando solo el rol.
+- El test que verificaba que un cambio de rol **no** invalidaba la sesión pasa a verificar lo contrario, que es la nueva propiedad. Se llama `CambiarDeRolInvalidaLaSesion` y vive en `PruebasDeRolYEstado`.
 
-Esta rotura es local al módulo de AccessControl y no afecta a otros consumidores: ningún otro módulo de Core ni Business llama a `User.ChangeRole` directamente (la entidad es interna al módulo; el contrato hacia fuera es `IUserRepository`).
+La única compatibilidad afectada es la de la base de datos, y no hay ninguna: `UserConfiguration` no cambia (la columna `credential_version` ya existe y está mapeada, ADR 003 + 004) y la migración tampoco.
 
 ## Alternativas consideradas
 
@@ -74,19 +72,19 @@ Esta rotura es local al módulo de AccessControl y no afecta a otros consumidore
 
 ## Persistencia y compatibilidad
 
-- `User.ChangeRole` cambia de firma en la entidad. `ChangeUserRole` (Application) se actualiza para pasar `IClock.UtcNow`.
+- `User.ChangeRole` no cambia de firma en la entidad. `ChangeUserRole` (Application) sigue llamándolo con los mismos argumentos.
 - `UserConfiguration` no cambia. La columna `credential_version` ya existe (migración inicial `20261018191406_InitialSchema`) y ya está mapeada con `HasColumnName("credential_version")` (ADR 004).
 - No se añade migración nueva. El campo `credential_version` ya soporta el incremento.
-- Los tests existentes de `PruebasDeAdministracionDeUsuarios` que llaman a `User.ChangeRole(Role)` se actualizan para pasar `DateTime utcNow`. Los dobles (`FakeUserRepository.Create`) siguen creando el usuario por su fábrica pública; ningún test del repositorio se ve afectado.
+- Los tests existentes que llaman a `User.ChangeRole(Role)` siguen llamándolo igual. Los dobles (`FakeUserRepository.Create`) siguen creando el usuario por su fábrica pública; ningún test del repositorio se ve afectado.
 - El conteo antes y después del cambio: el número de filas y de columnas en `ac_users` no cambia. No hay migración. La verificación es por runtime, no por esquema.
 
 ## Verificación
 
 - `dotnet build pirry-ledger.slnx` con 0 errores.
-- `dotnet test pirry-ledger.slnx`: la suite completa en verde, incluyendo los tests de AccessControl que ahora pasan `utcNow` a `ChangeRole`.
-- **Nueva prueba en `PruebasDeAdministracionDeUsuarios`**: tras `ChangeRole`, `CredentialVersion` se incrementa exactamente en `+1`.
-- **Nueva prueba en `PruebasDeInvalidacionDeCredencial` (o equivalente)**: una sesión emitida antes del cambio de rol queda invalidada tras el cambio. El token antiguo devuelve 401 en `Authenticate.ExecuteAsync`.
-- **Prueba de integración (Host levantado)**: un Estándar inicia sesión, un Administrador lo promueve, la misma sesión devuelve 401 en `/me` y el usuario tiene que re-login para que `/me` devuelva `role: Administrator`. Esta es la verificación que el enunciado de Asignación 2 pide para RF-GP-07 en su camino realista.
+- `dotnet test pirry-ledger.slnx`: la suite completa en verde.
+- **Prueba en `PruebasDeAdministracionDeUsuarios`**: `ElCambioDeRolIncrementaCredentialVersion` verifica que tras `ChangeRole`, `CredentialVersion` se incrementa exactamente en `+1`.
+- **Prueba en `PruebasDeRolYEstado`**: `CambiarDeRolInvalidaLaSesion` verifica que una sesión emitida antes del cambio de rol queda invalidada tras el cambio. El token antiguo devuelve 401 en `Authenticate.ExecuteAsync`.
+- **Prueba de integración (Host levantado)**: un Estándar inicia sesión, un Administrador lo promueve, la misma sesión devuelve 401 en `/me` y el usuario tiene que re-login para que `/me` devuelva `role: Administrator`. Esta es la verificación que el enunciado de Asignación 2 pide para RF-GP-07 en su camino realista, y la hace el guion HTTP de permisos (`Src/Host/PirryLedger.Host/PirryLedger.Permissions.http`).
 
 ## Consecuencias
 
@@ -95,12 +93,12 @@ Esta rotura es local al módulo de AccessControl y no afecta a otros consumidore
 - El camino realista de RF-GP-07 funciona: la sesión del promovido se invalida, el usuario re-entra, y al intentar aprobar su propia solicitud recibe el rechazo propio de la regla, no un 403 del filtro.
 - Una promoción se nota en el siguiente login (≤ unos segundos de operacionalidad perdida), no en el siguiente vencimiento de sesión (≤ 8 horas).
 - Regla uniforme: todo cambio sensible — contraseña, desactivación, rol — invalida la sesión vía `CredentialVersion`. RF-CA-08 hereda el mismo principio que RF-CA-12 y RF-CA-20.
-- Sin migración: el campo ya está y la columna ya está. Es un cambio de una línea de lógica y una de firma.
+- Sin migración: el campo ya está y la columna ya está. Es un cambio de una línea de lógica, sin tocar firmas.
 
 **En contra, asumido a conciencia**
 
 - Un usuario promovido en medio de su jornada tiene que volver a escribir su contraseña. Es un coste operacional pequeño y conocido (las contraseñas son lo que el usuario ya tiene); es el precio de que la promoción sea efectiva inmediatamente.
-- La firma `ChangeRole(Role)` cambia a `ChangeRole(Role, DateTime)`. Toca tests existentes (los que llamaban directamente a la entidad). Es una rotura contenida al módulo AccessControl.
+- La firma `ChangeRole(Role)` se queda como estaba. No hay rotura que los tests tengan que absorber: el único test que cambió es el que afirmaba lo contrario de la regla, `CambiarDeRolInvalidaLaSesion`.
 
 ## Qué queda fuera
 

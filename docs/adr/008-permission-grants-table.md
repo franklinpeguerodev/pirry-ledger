@@ -54,7 +54,7 @@ INSERT INTO per_permission_grants (id, user_id, permission_name, granted_at_utc,
 VALUES (@id, @requester_id, @requested_permission, @applied_at_utc, @approver_id);
 ```
 
-`IPermissionAuthority.UserHasPermissionAsync(userId, permissionName)` deja
+`IPermissionAuthority.UserHasPermissionAsync(userId, permissionName, cancellationToken)` deja
 de consultar `per_permission_requests` y pasa a ser:
 
 ```sql
@@ -115,10 +115,10 @@ existente (`InitialSchema`, snake_case, ADR 004):
 ```sql
 CREATE TABLE per_permission_requests (
     id                   uuid          PRIMARY KEY,
-    requester_id         uuid          NOT NULL REFERENCES ac_users(id) ON DELETE CASCADE,
+    requester_id         uuid          NOT NULL,
     requested_permission varchar(64)   NOT NULL,
     state                varchar(16)   NOT NULL,
-    approver_id          uuid              NULL REFERENCES ac_users(id) ON DELETE SET NULL,
+    approver_id          uuid              NULL,
     rejection_reason     varchar(500)      NULL,
     created_at_utc       timestamptz   NOT NULL,
     approved_at_utc      timestamptz       NULL,
@@ -131,28 +131,61 @@ CREATE INDEX ix_per_permission_requests_state    ON per_permission_requests(stat
 
 CREATE TABLE per_permission_grants (
     id                    uuid          PRIMARY KEY,
-    user_id               uuid          NOT NULL REFERENCES ac_users(id) ON DELETE CASCADE,
+    user_id               uuid          NOT NULL,
     permission_name       varchar(64)   NOT NULL,
     granted_at_utc        timestamptz   NOT NULL,
-    granted_by_user_id    uuid              NULL REFERENCES ac_users(id) ON DELETE SET NULL
+    granted_by_user_id    uuid              NULL
 );
 
 -- Un usuario no puede tener dos concesiones activas del mismo permiso.
--- Esto refleja la regla de RF-GP-05: aprobar dos veces la misma solicitud
--- deja una sola fila porque la segunda aprobación falla con InvalidPermissionRequestTransition
--- ANTES de llegar al INSERT. El índice único es una segunda barrera para
--- protegerse de carrera y de bypass futuro del caso de uso.
+-- El indice unico es la garantia de que el par (user_id, permission_name)
+-- es unico. Lo normal es que nunca se llegue a violarlo, porque el
+-- repositorio de concesiones busca primero la fila y la re-sella en vez de
+-- insertar otra (ver "Por que el INSERT es un upsert", mas abajo). Es la
+-- segunda barrera: protege si alguien mete un INSERT a mano o se bypasea el
+-- repositorio.
 CREATE UNIQUE INDEX ux_per_permission_grants_user_permission ON per_permission_grants(user_id, permission_name);
 CREATE INDEX        ix_per_permission_grants_permission      ON per_permission_grants(permission_name);
 ```
+
+### Las cuatro columnas de usuario no tienen clave foránea
+
+`requester_id`, `approver_id`, `user_id` y `granted_by_user_id` apuntan a
+`ac_users`, pero **no declaran ninguna clave foránea** en la base. Es lo que
+tiene la migración que se entregó, `20261021024258_InitialSchema`, porque el
+modelo de EF Core de la pieza no declara las relaciones: declarar una
+propiedad de navegación hacia `User` haría que `Permissions.Infrastructure`
+dependiera de `AccessControl.Domain`, que es justo la dependencia entre
+piezas que esta ADR quiere evitar.
+
+La integridad la aporta la aplicación, que toma las dos identidades de la
+sesión autenticada (`caller.Id` y `request.RequesterId`) y nunca del cuerpo
+de la petición. Declarar o no las claves foráneas es una decisión que sigue
+abierta: está anotada en `docs/current-iteration.md`, sección "Deferred". Si
+se declara más adelante, será una migración nueva.
+
+### Por qué el INSERT es un upsert y no un INSERT a secas
+
+El caso normal es que una segunda aprobación del mismo permiso **no** falla
+por la clave foránea, porque no llega a intentarlo: `PermissionGrantRepository`
+busca primero el par `(user_id, permission_name)` y, si existe, re-sella la
+fila con `PermissionGrant.Regrant` en vez de insertar otra. Así, aprobar dos
+solicitudes distintas del mismo permiso deja **una** concesión, con la fecha y
+el autor de la última aprobación.
+
+Esto se corrigió después de detectar un `23505` (violación del índice único)
+que se traducía en un `500` sin explicación al cliente; el detalle está en
+`docs/bitacora-asignacion-2.md`, entrada 7.
 
 - Sin renombre de columnas o tablas existentes. Las tablas `ac_*` y `not_*`
   no se tocan.
 - Sin migración de datos: el sistema parte de cero en ambas tablas. La
   verificación de conteos antes/después es trivial (cero en ambos lados).
-- La FK a `ac_users` se declara sin propiedad de navegación: `Permissions.Infrastructure`
-  no necesita ver `AccessControl.Domain.Entities.User`. Se accede a la fila
-  referenciada solo por el `Guid`.
+- Las columnas que apuntan a un usuario son `Guid` sin propiedad de navegación,
+  de modo que `Permissions.Infrastructure` no necesita ver
+  `AccessControl.Domain.Entities.User`. Se accede a la fila referenciada solo
+  por el `Guid`. La ausencia de claves foráneas está explicada en la sección
+  "Las cuatro columnas de usuario no tienen clave foránea".
 
 ## Verificación
 
@@ -166,8 +199,11 @@ CREATE INDEX        ix_per_permission_grants_permission      ON per_permission_g
   `permission_name`, `granted_at_utc`, `granted_by_user_id`).
 - Una prueba verifica que `IPermissionAuthority.UserHasPermissionAsync(requester,
   "ViewSalesSummary")` devuelve `true` tras la aprobación y `false` antes.
-- Una prueba verifica que un INSERT duplicado `(user_id, permission_name)` falla
-  con la violación del índice único (segunda barrera contra bypass).
+- Una prueba del repositorio real (`PruebasDeApprovePermissionGrantUnico`)
+  verifica que aprobar dos veces el mismo permiso **no** crea una segunda fila:
+  la concesión existente se re-sella con la fecha y el autor nuevos. Con el
+  arreglo, las tres pruebas del fichero pasan; sin él, dos fallan con
+  `Assert.Single()` y la colección contiene dos elementos.
 - Una prueba verifica que `RejectPermissionRequest` **no** inserta fila en
   `per_permission_grants`.
 

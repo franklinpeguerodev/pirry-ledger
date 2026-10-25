@@ -8,6 +8,7 @@ using PirryLedger.Core.Permissions.Infrastructure;
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
 // cada pieza expone los suyos (RD-01).
 using DotNetEnv;
+using System.Text.Json.Serialization;
 using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Notifications.Infrastructure;
@@ -26,6 +27,21 @@ LoadEnvFile();
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+// RF-CA-21: el listado de usuarios dice el role de cada uno, y un role
+// serializado como numero (0 = Administrator, 1 = Standard) no lo dice:
+// depende de que el cliente sepa el orden del enum. Con este converter el
+// role viaja como texto ("Administrator" / "Standard"), que es lo que dice el
+// README y lo que el enunciado pide.
+//
+// Afecta a todos los enums que se serialicen. Hoy solo se serializa Role:
+// PermissionRequestState se convierte a texto a mano en el mapeo de la pieza
+// de permisos, y Operation, AccessLevel y RoleRequirements no viajan nunca
+// en una respuesta.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // Un solo reloj en todo el sistema (RD-11): las dos piezas reciben IClock y
 // ninguna llama a DateTime.UtcNow por su cuenta.
@@ -111,28 +127,20 @@ if (app.Environment.IsDevelopment())
 // que redirigir, asi que el middleware no redirige nada y solo imprime un aviso.
 // Si se decide HTTPS, va en un ADR (docs/adr/005-listen-address-from-public-base-url.md).
 
+// RD-07 y RD-08: la frontera de error del API. Este middleware envuelve la
+// ejecucion de la ruta y convierte cualquier excepcion en un rechazo
+// controlado con el formato {"message": "..."}, sin trazas, sin rutas de
+// fichero y sin cabeceras de la peticion. Va fuera del filtro de acceso
+// porque el cuerpo de la peticion lo lee el framework antes de los filtros:
+// un JSON mal formado lo lanza por encima de ellos.
+//
+// El Host solo lo registra: la regla vive en la pieza que define el formato
+// de error (PirryLedger.Core.AccessControl.Api). El Host es composicion.
+app.UseRouting();
+app.Use(ApiErrorHandling.HandleErrorsAsync);
+
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
-app.UseRouting();
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next(context);
-    }
-    catch (OperationNotDeclaredException)
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(
-            new ErrorResponse("La operacion no tiene una exigencia de acceso declarada."));
-    }
-    catch (OperationWithoutRoleRequirementException)
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await context.Response.WriteAsJsonAsync(
-            new ErrorResponse("La operacion no tiene una exigencia de acceso valida."));
-    }
-});
 app.Use(PirryLedger.Core.AccessControl.Api.AccessFilter.RequireDeclaredOperationAsync);
 
 app.MapAccessControl();
@@ -249,6 +257,6 @@ static async Task SeedFirstAdministrator(WebApplication app)
         // Email ni la contrasena (RD-08). No se aborta el arranque, porque la
         // aplicacion sirve igual para registrarse; lo que no habra es
         // Administrator.
-        Console.Error.WriteLine($"No se pudo Create el primer Administrator: {error.Message}");
+        Console.Error.WriteLine($"No se pudo crear el primer Administrator: {error.Message}");
     }
 }

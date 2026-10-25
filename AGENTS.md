@@ -22,7 +22,8 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 
 ## Language
 
-- **Code is in English:** identifiers (classes, methods, variables, test names), commit messages and branch names.
+- **Code is in English:** identifiers (classes, methods, variables), commit messages and branch names.
+- **Test names are in Spanish:** the test classes and methods are named the way the course speaks (`PruebasDeRolYEstado`, `CambiarDeRolInvalidaLaSesion`). Franklin decided this on 2026-10-24: the suite is what he shows the professor, and translating the names would break the link between a test and the requirement it proves. Production code stays in English.
 - **Code comments and every text the user sees are in Spanish:** error messages, API responses and console output.
 - **Course deliverables written for the professor are in Spanish:** `README.md`, PR descriptions (following the existing PR template), logbooks, `docs/maquina-de-estados.md` and architecture decision records in `docs/adr/`.
 - **Files for the agent are in English:** this file, `docs/current-iteration.md` and the notes of `docs/requirements/`. The requirement text itself stays in the professor's original Spanish; do not translate or paraphrase the IDs.
@@ -51,7 +52,7 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Wri
 
 ## Architecture rules
 
-- `Src/Core`: one module per Core piece. `Src/Business`: the business module (Billing). `Src/Host`: composition only (startup, module registration, configuration) plus background processes such as the mail sender. The Host has no controllers and no logic.
+- `Src/Core`: one module per Core piece. `Src/Business`: the business module (Billing). `Src/Host`: composition only (startup, module registration, configuration) plus the alternate CLI modes, such as the mail sender (`--send-mail`, ADR 007). The Host has no controllers and no logic.
 - One-way dependency (RD-03): the Core never references Business. Business references only the Core's contracts project. Mental test: delete Business and the Core must still build.
 - Modules talk only through public interfaces. No module touches another module's internal classes or tables. Each module owns its data.
 - Each module is layered (Domain, Application, Infrastructure, Api). Business logic lives in Domain and Application, never in controllers or presentation (RD-02). A module's controllers belong to that module (RD-01).
@@ -138,13 +139,13 @@ Resolved and therefore no longer listed:
 - minimal password-change traceability via a nullable UTC timestamp (`docs/adr/003-password-change-traceability.md`, accepted 2026-10-02);
 - PostgreSQL column naming (`docs/adr/004-snake-case-column-naming.md`, accepted 2026-10-03);
 - the listen address coming from `PIRRY_LEDGER_PUBLIC_BASE_URL` (`docs/adr/005-listen-address-from-public-base-url.md`, accepted 2026-10-04);
-- loading local environment variables from a `.env` file with `DotNetEnv` (`docs/adr/006-local-env-configuration.md`, accepted 2026-10-04).
+- loading local environment variables from a `.env` file with `DotNetEnv` (`docs/adr/006-local-env-configuration.md`, accepted 2026-10-04);
+- permission grants living in their own table (`docs/adr/008-permission-grants-table.md`, accepted 2026-10-20);
+- role changes invalidating sessions through `CredentialVersion` (`docs/adr/009-role-changes-invalidate-sessions.md`, accepted 2026-10-20).
 
 ## Known issues (temporary, delete when fixed)
 
-- The `.gitignore` header says ".NET (microservices) + Angular", which contradicts the modular monolith and the undefined frontend. Do not assume that stack. Franklin will fix it in its own PR.
 - The `.gitignore` has unanchored patterns that match at any depth. Before adding a file, run `git check-ignore -v <path>`:
-  - `server/` ignores any directory with that name.
-  - `Debug/`, `Release/`, `logs/`, `dist/`, `artifacts/`, `publish/`, `output/` are ignored at any level.
+  - `[Dd]ebug/`, `[Rr]elease/`, `logs/`, `artifacts/`, `publish/` and `output/` are ignored at any level.
   - `appsettings.Development.json`, `appsettings.Staging.json` and `appsettings.*.local.json` are ignored on purpose. Do not "fix" that.
   - `.vscode/*` uses an allow list; if an allowed file does not show in `git status`, force it with `git add -f`.

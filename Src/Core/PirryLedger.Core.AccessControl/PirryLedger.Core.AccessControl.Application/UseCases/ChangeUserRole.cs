@@ -65,7 +65,7 @@ public sealed class ChangeUserRole
 
         if (user is null)
         {
-            throw new AdministrationOperationRejectedException("No existe ese user.");
+            throw new AdministrationOperationRejectedException("No existe ese usuario.");
         }
 
         user.ChangeRole(role);

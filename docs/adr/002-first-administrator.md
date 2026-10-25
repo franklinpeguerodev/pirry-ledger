@@ -7,13 +7,13 @@
 
 ## Contexto
 
-El registro publico siempre crea un `Rol.Estandar`. No es una decision que se
-pueda cambiar sin romper el resto: `Usuario.Crear` fija el rol como constante
+El registro publico siempre crea un `Role.Standard`. No es una decision que se
+pueda cambiar sin romper el resto: `User.Create` fija el rol como constante
 dentro de la fabrica y el comentario de esa linea explica por que.
 
 ```
-Rol.Estandar,
-activo: false,
+Role.Standard,
+active: false,
 ```
 
 Un usuario recien registrado no puede gobernarse a si mismo, y RF-CA-15 exige que
@@ -28,7 +28,7 @@ basta con decir "hay que crear uno a mano": una intervencion manual sobre la bas
 de datos es justamente lo que RD-09 pide evitar, porque el estado tiene que
 sobrevivir al proceso, no depender de que alguien se acuerde.
 
-`FechaDeCreacionUtc` en la entidad ya estaba commentada como "para el seed
+`CreatedAtUtc` en la entidad ya estaba commentada como "para el seed
 idempotente del primer Administrador", pero ese seed nunca se escribio. Esta ADR
 cierra esa mitad pendiente.
 
@@ -40,7 +40,7 @@ arranque del Host, y sus credenciales vienen de variables de entorno (RD-10).
 1. **Tres variables**, todas opcionales:
    - `PIRRY_LEDGER_FIRST_ADMIN_EMAIL`
    - `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD`
-   - `PIRRY_LEDGER_FIRST_ADMIN_NAME`, con `"Administrador"` por defecto
+   - `PIRRY_LEDGER_FIRST_ADMIN_NAME`, con `"Administrator"` por defecto
 
    Si faltan el correo o la contrasena, la semilla no corre y la aplicacion
    arranca igual. Exigirlas habria estorbedo a quien solo quiere registrarse.
@@ -66,16 +66,16 @@ arranque del Host, y sus credenciales vienen de variables de entorno (RD-10).
    `PasswordPolicy`, sin duplicar reglas: una contrasena debil en un
    Administrador es peor que en un Estándar.
 
-6. **Segunda puerta de entrada en la entidad**, `Usuario.CrearComoAdministrador`,
-   que fija `Rol.Administrador` y `activo: true`. `Usuario.Crear` no cambia: sigue
+6. **Segunda puerta de entrada en la entidad**, `User.CreateAsAdministrator`,
+   que fija `Role.Administrator` y `activo: true`. `User.Create` no cambia: sigue
    dando `Estandar` e inactivo. Esta fabrica la consume el caso de uso de la
    capa de aplicacion `SeedFirstAdministrator`, que es el unico llamador:
-   nadie mas puede construir un `Usuario` con `Rol.Administrador`.
+   nadie mas puede construir un `User` con `Role.Administrator`.
 
 ## Por que una segunda fabrica y no un parametro
 
 La entidad tenia una regla escrita: *"Una sola puerta de entrada: nada crea un
-usuario escribiendolo a mano"*. Anyadir el rol como parametro opcional de `Crear`
+usuario escribiendolo a mano"*. Anyadir el rol como parametro opcional de `User.Create`
 la habria eliminado de una linea, pero habria roto el motivo de la regla:
 `RegisterUser` dejaria de poder fijar el rol por si mismo, y pasaria a depender de
 que el llamador recuerde no pasar el parametro.
@@ -84,8 +84,8 @@ Tres alternativas, y por que se descartaron:
 
 | Opcion | Que era | Por que no |
 |---|---|---|
-| `Crear(..., Rol rol = Rol.Estandar)` | Un parametro opcional | El registro publico deja de tener el rol garantizado por la entidad. El default protege solo mientras nadie lo pase. |
-| `Crear` + `CambiarRol` + `Activar` | Reutilizar lo que ya existe | El Administrador nace con `CredencialVersion` ya alterada, que no es su estado real, y depende de tres llamadas en orden. El resultado no dice "nacio como Administrador". |
+| `User.Create(..., Role role = Role.Standard)` | Un parametro opcional | El registro publico deja de tener el rol garantizado por la entidad. El default protege solo mientras nadie lo pase. |
+| `User.Create` + `ChangeRole` + `Activate` | Reutilizar lo que ya existe | El Administrador nace con `CredentialVersion` ya alterada, que no es su estado real, y depende de tres llamadas en orden. El resultado no dice "nacio como Administrador". |
 | SQL a mano en el despliegue | Un `INSERT` documentado | Invisible para el codigo, no se puede probar, y es estado fuera del proceso (RD-09). |
 
 Se eligio una fabrica aparte porque deja cada puerta con sus garantias escritas en

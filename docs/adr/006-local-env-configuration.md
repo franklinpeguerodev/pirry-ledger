@@ -33,15 +33,15 @@ El `.gitignore` ya tenía previsto el formato (`.env`, `.env.*` y la excepción
 El Host carga un archivo `.env` de desarrollo local **antes** de construir la
 configuración, con el paquete `DotNetEnv` 3.2.0.
 
-1. **Punto de carga.** `Program.cs` llama a `CargarArchivoEnv()` antes de
+1. **Punto de carga.** `Program.cs` llama a `LoadEnvFile()` antes de
    `WebApplication.CreateBuilder(args)`. Así las variables entran por el mismo
    camino de siempre: `Environment` → `IConfiguration` →
-   `ConfiguracionEntorno`. RD-10 sigue cumplido porque al final siguen siendo
+   `EnvironmentConfiguration`. RD-10 sigue cumplido porque al final siguen siendo
    variables de entorno, no un mecanismo de configuración distinto.
 2. **El entorno real manda.** Se usa `Env.NoClobber()`: una variable ya definida
    en la terminal o en el sistema **no** la pisa el archivo. Un despliegue con
    variables de verdad sigue funcionando exactamente igual que hoy.
-3. **Falta de archivo no es error.** `CargarArchivoEnv()` busca el `.env` desde
+3. **Falta de archivo no es error.** `LoadEnvFile()` busca el `.env` desde
    el directorio de trabajo hacia arriba y, si no lo encuentra, vuelve sin más.
    El comportamiento anterior (mensaje con el nombre de la variable y código de
    salida 1, sin traza, RD-08) queda intacto y verificado.
@@ -49,7 +49,7 @@ configuración, con el paquete `DotNetEnv` 3.2.0.
    sí se versiona es `.env.example`, con las once variables, sus descripciones y
    valores de ejemplo, nunca valores reales.
 5. **No cambia ninguna variable.** Nombres, obligatoriedad y errores de
-   `ConfiguracionEntorno` y `Program.cs` son los mismos. Solo cambia de dónde
+   `EnvironmentConfiguration` y `Program.cs` son los mismos. Solo cambia de dónde
    salen en desarrollo local.
 
 ## Alternativas consideradas
@@ -72,14 +72,14 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
   → `DotNetEnv 3.2.0` (arrastra `Superpower 3.0.0`, dependencia suya). Es el
   único paquete nuevo del repositorio.
 - `dotnet build pirry-ledger.slnx` → 0 errores y 0 advertencias.
-  `dotnet test pirry-ledger.slnx` → 90 pruebas en verde (6 Notifications + 84
+  `dotnet test pirry-ledger.slnx` → la suite completa en verde (6 Notifications + 84
   AccessControl).
 - **Solo `.env`, sin ninguna variable de entorno en el proceso** (las once
   borradas con `Remove-Item Env:` antes de lanzar) →
-  `Now listening on: http://localhost:5243`, `GET /yo` → `401`, `stderr` vacío.
+  `Now listening on: http://localhost:5243`, `GET /me` → `401`, `stderr` vacío.
 - **Precedencia:** `$env:PIRRY_LEDGER_PUBLIC_BASE_URL = 'http://localhost:5999'`
   con el `.env` en 5243 → `Now listening on: http://localhost:5999`,
-  `GET :5999/yo` → `401` y `GET :5243/yo` sin respuesta.
+  `GET :5999/me` → `401` y `GET :5243/yo` sin respuesta.
 - **Sin `.env` y sin variables:** `ExitCode: 1` y
   `Falta la variable de entorno ConnectionStrings__PirryLedger. El README
   explica como definirla.`, sin traza, idéntico al comportamiento anterior.
@@ -118,7 +118,7 @@ Ejecutada el 2026-10-04 en la rama `fix/standardize-listen-url-on-base-env-var`:
 ## Qué queda fuera
 
 Esta ADR no cambia ninguna variable, su nombre ni su obligatoriedad; no toca
-`ConfiguracionEntorno`, los mensajes de error ni RD-10; no introduce secretos en
+`EnvironmentConfiguration`, los mensajes de error ni RD-10; no introduce secretos en
 el repositorio (el `.env` real sigue ignorado); no decide nada sobre dónde viven
 las variables en un despliegue real, donde siguen siendo variables de entorno del
 sistema; y no cambia el comportamiento cuando el archivo no existe.
