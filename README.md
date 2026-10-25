@@ -185,7 +185,7 @@ dotnet build pirry-ledger.slnx --configuration Release
 dotnet test pirry-ledger.slnx --configuration Release
 ```
 
-Resultado esperado: `0 Errores` y todas las pruebas pasan.
+Resultado esperado: `0 Errores`, `0 Advertencias` y todas las pruebas pasan.
 
 ### Paso 6: aplicar las migraciones
 
@@ -686,8 +686,8 @@ dotnet test pirry-ledger.slnx
 ```
 
 Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (85), Notifications (6) y
-Permissions (22), que cubren la máquina de estados de la solicitud, los casos de
+necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6) y
+Permissions (24), que cubren la máquina de estados de la solicitud, los casos de
 uso y el repositorio de concesiones. Todas usan dobles en memoria y un reloj
 falso (RD-12).
 
