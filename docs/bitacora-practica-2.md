@@ -95,3 +95,27 @@ La regla es la misma de las bitácoras anteriores: **lo que devuelve el agente e
 - `git diff --stat develop..HEAD` tras el arreglo de la rama: solo `docs/maquina-de-estados.md`. Cero cambios en `Src/` y `Tests/`.
 
 **Qué NO incluye.** No toca código, ni pruebas, ni el `README.md`, ni las etiquetas. La máquina de la factura no cambia de contenido salvo encabezados y la frase corregida.
+
+### Entrada 3 — Cerrar los dos huecos que dejaban dos defectos sin detectar (2026-10-25)
+
+**Qué se pidió.** Antes de etiquetar, cerrar los dos huecos que la auditoría encontró: el defecto 4 (el filtro por solicitante del repositorio real, que ningún test ejercitaba) y el defecto 5 (nada afirmaba que `Approved -> Pending` fuera falsa). Cada prueba nueva tenía que verse fallar con su defecto plantado y pasar sin él, sin commitear el defecto.
+
+**Qué devolví.** Rama `test/permissions-suite-gaps` desde `develop` (`3be764a`), tres commits:
+
+1. `2147bed Test the real request repository against EF InMemory (RF-GP-02)` — archivo nuevo `Tests/PirryLedger.Core.Permissions.Tests/Persistencia/PruebasDeListadoPorSolicitante.cs` (53 líneas). Siembra dos solicitudes de dos solicitantes distintos en un `PermissionsDbContext` con `UseInMemoryDatabase`, llama al `PermissionRequestRepository` **real** con `ListByRequesterAsync(A)` y afirma que vuelve una sola y que su `RequesterId` es el de A. Es el mismo patrón que ya usaba `PruebasDeApprovePermissionGrantUnico` para las concesiones.
+2. `ee41f3e Enumerate every state transition pair (RF-GP-06)` — una prueba nueva en `PruebasDeLaMaquinaDeEstados`: `SoloLasTresTransicionesDeLaTablaSonValidas`. Recorre los dieciséis pares de los cuatro estados y afirma que `CanTransition` responde `true` solo en los tres permitidos. Una prueba, un comportamiento: "el conjunto permitido es exactamente este".
+3. `df6ef34 Update the suite counts in the README` — Permissions pasa de 24 a 26 pruebas, y la frase "Todas usan dobles en memoria" pasa a "Usan dobles en memoria, un contexto EF Core en memoria y un reloj falso", porque con la prueba del repositorio ya no era verdad.
+
+**Qué verifiqué.** El rojo y el verde de cada prueba, con el defecto plantado a mano y revertido antes de commitear:
+
+- Defecto 4 (`==` → `!=` en `PermissionRequestRepository.cs:43`): `ListarPorSolicitanteDevuelveSoloLasSolicitudesDeEseSolicitante` falla (`Con error: 1`). Revertido con `git checkout --` sobre el archivo; `git status` solo mostró el archivo de pruebas nuevo, sin trackear.
+- Defecto 2 (añadir `Rejected -> Applied`): `SoloLasTresTransicionesDeLaTablaSonValidas` falla con `La transicion Rejected -> Applied deberia ser prohibida.`
+- Defecto 5 (añadir `Approved -> Pending`): la misma prueba falla con `La transicion Approved -> Pending deberia ser prohibida.`
+- Sin defectos: `dotnet test Tests/PirryLedger.Core.Permissions.Tests` da **26 superadas, 0 con error** (eran 24).
+- Suite completa: `dotnet test pirry-ledger.slnx` da **128 superadas, 0 con error** (96 AccessControl + 26 Permissions + 6 Notifications).
+
+Los tres defectos se plantaron uno por uno y nunca se commitearon: el diff que los contenía se revirtió antes de cada commit, y `git status` quedó limpio salvo el archivo nuevo de la prueba.
+
+**Dónde se equivocó el agente.** En esta fase no hubo un error que corregir. El caso registrado hasta ahora sigue siendo el de la Entrada 2 (el commit que nació en `develop` en vez de en la rama). Lo anoto tal cual: no voy a inventar un fallo para llenar el espacio.
+
+**Qué NO incluye.** La sección `Defectos` del `README.md` y el encabezado de su línea 3 (fase 4), la promoción a `main` (fase 5) y las etiquetas (fase 6). Tampoco se tocó ningún test existente: las 24 pruebas anteriores siguen intactas y verdes.
