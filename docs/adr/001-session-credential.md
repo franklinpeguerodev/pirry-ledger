@@ -1,4 +1,4 @@
-﻿# ADR 001 - Session credential: opaque token with a session table
+# ADR 001 - Session credential: opaque token with a session table
 
 - **Estado:** aceptada
 - **Fecha:** 2026-09-30
@@ -25,15 +25,16 @@ Credencial de sesion **opaca**, guardada en la base:
    `Authorization: Bearer <token>`.
 2. En la base **solo se guarda el SHA-256** del token. El valor en claro no se
    persiste: leer la tabla no permite suplantar a nadie.
-3. Tabla `Sesion` con: hash del token, `UsuarioId`, `EmitidaUtc`, `ExpiraUtc`,
-   `CerradaUtc` y `CredencialVersion`, el valor que tenia el usuario al emitirla.
-4. `Usuario` lleva `CredencialVersion`. Se incrementa al cambiar la contrasena, al
-   restablecerla y al desactivar la cuenta.
+3. Tabla `Session` con: hash del token, `UserId`, `IssuedAtUtc`, `ExpiresAtUtc`,
+   `ClosedAtUtc` y `CredentialVersion`, el valor que tenia el usuario al emitirla.
+4. `User` lleva `CredentialVersion`. Se incrementa al cambiar la contrasena, al
+   restablecerla, al desactivar la cuenta y al cambiar el rol (esta ultima,
+   la documento la ADR 009).
 5. Una sesion es valida **solo si** se cumplen las cinco condiciones:
    - la fila existe;
-   - `CerradaUtc` es nulo;
-   - `ExpiraUtc` es posterior al momento actual;
-   - la `CredencialVersion` de la sesion coincide con la actual del usuario;
+   - `ClosedAtUtc` es nulo;
+   - `ExpiresAtUtc` es posterior al momento actual;
+   - la `CredentialVersion` de la sesion coincide con la actual del usuario;
    - el usuario esta activo.
 6. **Un solo punto de validacion.** Una unica pieza resuelve las cinco condiciones
    y distingue `401` (no hay sesion valida) de `403` (sesion valida, rol
@@ -57,8 +58,8 @@ sistemas, pero aqui se descarto por dos razones concretas:
   30 minutos nunca caduca y sigue valiendo mientras haya trafico. El robo se
   vuelve permanente. Con caducidad absoluta, el dano esta acotado a 8 horas.
 - **Costo de auditar cuando se robo.** Con caducidad absoluta, la hora de emision
-  es un dato fiable: la credencial es valida entre `EmitidaUtc` y `ExpiraUtc`. Si
-  fuera deslizante, `EmitidaUtc` dejaria de ser la referencia y habria que
+  es un dato fiable: la credencial es valida entre `IssuedAtUtc` y `ExpiresAtUtc`. Si
+  fuera deslizante, `IssuedAtUtc` dejaria de ser la referencia y habria que
   reconstruir la historia de uso fila por fila.
 
 El precio es que el usuario tiene que volver a entrar cada jornada de 8 horas. Con
@@ -80,7 +81,7 @@ cerca es una tabla de sesiones: fila por credencial, con su fecha y su estado.
 
 La diferencia real entre las dos opciones:
 
-| | Token opaco + tabla `Sesion` | JWT + lista de revocacion |
+| | Token opaco + tabla `Session` | JWT + lista de revocacion |
 |---|---|---|
 | Donde vive la credencial | Fila en la base | Fila en la lista de revocacion |
 | Consultar la base por peticion | Necesario, obligatorio | Necesario, por la revocacion |
@@ -106,7 +107,7 @@ requisito prohibe.
 **A favor**
 - Cerrar sesion, cambiar o restablecer la contrasena y desactivar anulan todo lo
   emitido, con una sola fila por sesion y sin logica repetida.
-- `CredencialVersion` invalida **todas** las sesiones de golpe con un entero, sin
+- `CredentialVersion` invalida **todas** las sesiones de golpe con un entero, sin
   recorrer la tabla. Es lo que hace que desactivar a un usuario con una sesion
   abierta sea inmediato.
 - El token no viaja interpretable. Robar la base de datos no sirve para
@@ -136,12 +137,12 @@ recomendada:
 2. Un proceso de mantenimiento aparte, como el que ya existe para el envio de
    correo, que corre cada cierto tiempo y limpia por fecha.
 
-**Lo que si se decide ahora:** la tabla lleva indice sobre `ExpiraUtc` para que la
+**Lo que si se decide ahora:** la tabla lleva indice sobre `ExpiresAtUtc` para que la
 consulta de limpieza, cuando exista, no sea un recorrido completo. Sin ese indice,
 la limpieza seria un `WHERE` sobre la tabla entera.
 
 ## Que se descarta de esta ADR
 
-Nada. La decision es firme: token opaco, tabla `Sesion`, `CredencialVersion`.
+Nada. La decision es firme: token opaco, tabla `Session`, `CredentialVersion`.
 Este documento existe para que Franklin pueda defender **por que no JWT**, que es
 la pregunta que seguro aparece en la revision.
