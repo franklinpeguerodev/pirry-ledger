@@ -134,7 +134,7 @@ contiene valores reales.
 | `PIRRY_LEDGER_SMTP_FROM` | Dirección de email que aparece como remitente. |
 | `PIRRY_LEDGER_FIRST_ADMIN_EMAIL` | email del primer Administrador. Ver [El primer Administrador](#el-primer-administrador). |
 | `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` | Contraseña del primer Administrador. Cumple la política de RF-CA-14. |
-| `PIRRY_LEDGER_FIRST_ADMIN_NAME` | Nombre que se muestra. Si no se define, es `Administrador`. |
+| `PIRRY_LEDGER_FIRST_ADMIN_NAME` | Nombre que se muestra. Si no se define, es `Administrator`. |
 
 Las dos obligatorias se necesitan para arrancar la aplicación y para ejecutar el
 enviador de email. Las seis SMTP son opcionales: sin ellas la aplicación y el
@@ -232,7 +232,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son ocho tablas: las cuatro de `ac_`, `not_email_queue` y las dos de `per_`.
+Son siete tablas de módulo: las cuatro de `ac_`, `not_email_queue` y las dos de
+`per_`. La tabla `__EFMigrationsHistory` que crea EF Core es la octava fila, pero
+no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -379,7 +381,7 @@ Cuando esto responda, la instalación básica funciona: continúa con la secció
 
 ### El primer Administrador
 
-El registro público siempre crea un `role.Estandar`, porque un usuario recién
+El registro público siempre crea un `Role.Standard`, porque un usuario recién
 registrado no puede gobernarse a sí mismo. Por eso no hay forma de llegar a
 Administrador por el camino normal, y sin uno **RF-CA-08, RF-CA-20 y RF-CA-21 no
 se pueden probar**: los tres son operaciones que solo un Administrador puede
@@ -406,7 +408,7 @@ Cómo se comporta:
 La primera vez imprime:
 
 ```
-Se creo el primer Administrador desde las variables de entorno.
+Se creo el primer Administrator desde las variables de entorno.
 ```
 
 La segunda vez no imprime nada, porque ya hay uno. Y con esa contraseña puedes
@@ -436,17 +438,17 @@ Imprime siempre un resumen y una línea final que depende del resultado. Sin
 credenciales SMTP válidas, un email pendiente produce esto:
 
 ```
-emails tomados: 1
-emails enviados: 0
-emails fallidos: 1
+Correos tomados: 1
+Correos enviados: 0
+Correos fallidos: 1
   - ana@ejemplo.com: No se pudo entregar el email a ana@ejemplo.com por smtp.gmail.com:587. 534 5.7.9 Please log in with your web browser and then try again. ...
-Los emails siguen en la cola como pendientes y se volveran a intentar la proxima vez.
+Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
 ```
 
-Son cuatro ramas distintas y solo una se cumple a la vez. Los emails que fallan
+Son cuatro ramas distintas y solo una se cumple a la vez. Los correos que fallan
 vuelven a `Pending` con `attempts` incrementado: no se pierden. Sin email
-pendiente la cuarta línea es `No habia emails pendientes de enviar.`; si hubo
-envíos, es `Los emails enviados no se volveran a enviar aunque se ejecute el
+pendiente la cuarta línea es `No habia correos pendientes de enviar.`; si hubo
+envíos, es `Los correos enviados no se volveran a enviar aunque se ejecute el
 comando otra vez.`
 
 ### Paso opcional: SMTP real con Gmail
@@ -544,26 +546,35 @@ flowchart TD
     Host["PirryLedger.Host<br/>composición, arranque y --send-mail"]
     AC["PirryLedger.Core.AccessControl<br/>(Domain, Application, Infrastructure, Api)"]
     NOT["PirryLedger.Core.Notifications<br/>(Domain, Application, Infrastructure, Api)"]
+    PERM["PirryLedger.Core.Permissions<br/>(Domain, Application, Infrastructure, Api)"]
     BUS["PirryLedger.Business<br/>(Domain, Application)"]
     CON["PirryLedger.Core.Contracts<br/>(persistencia, tiempo, notificaciones)"]
 
     Host --> AC
     Host --> NOT
+    Host --> PERM
     Host --> BUS
     AC --> CON
     NOT --> CON
+    PERM --> CON
     BUS --> CON
+    PERM --> AC
 ```
 
 Reglas que se ven en ese diagrama:
 
 - **RD-01**: cada pieza expone sus propios endpoints; el Host no tiene
-  controllers (`Program.cs` solo hace `app.MapAccessControl()` y
-  `app.MapNotifications()`).
+  controllers (`Program.cs` solo hace `app.MapAccessControl()`,
+  `app.MapPermissions()` y `app.MapNotifications()`, que hoy no mapea ninguna
+  ruta porque el envío de correo es un comando, no un endpoint).
 - **RD-02**: la lógica de negocio vive en Domain y Application, nunca en los
   endpoints. En la capa Api solo se traduce HTTP a una llamada de caso de uso.
 - **RD-03**: Business referencia únicamente `PirryLedger.Core.Contracts`; el
   Core no referencia Business en ningún `.csproj`.
+- **Una dependencia cruzada entre dos piezas del Core**: `Permissions`
+  referencia `AccessControl` (la capa Application, para el punto único de
+  acceso, y la capa Api, para el filtro). La razón y el plan para
+  deshacerla están en `docs/current-iteration.md`, decisión 5.
 - **RD-12**: cada pieza tiene su proyecto de pruebas en `Tests/` y corre sin
   levantar la API.
 - Un solo reloj inyectable `IClock` para todo el sistema (RD-11); ninguna clase
@@ -586,7 +597,7 @@ pirry-ledger/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
 │   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
-│   ├── adr/                        Decisiones técnicas 001 a 007: nombre y título en inglés, contenido en español
+│   ├── adr/                        Decisiones técnicas 001 a 010: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -601,7 +612,8 @@ pirry-ledger/
 │       └── PirryLedger.Host/                    Composición + comando --send-mail
 └── Tests/
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
-    └── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
+    ├── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
+    └── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
 ```
 
 Las pruebas usan dobles en memoria y un reloj falso: no necesitan base de datos
@@ -685,8 +697,8 @@ dotnet test pirry-ledger.slnx
 ```
 
 Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (85), Notifications (6) y
-Permissions (22), que cubren la máquina de estados de la solicitud, los casos de
+necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6) y
+Permissions (24), que cubren la máquina de estados de la solicitud, los casos de
 uso y el repositorio de concesiones. Todas usan dobles en memoria y un reloj
 falso (RD-12).
 
@@ -789,7 +801,7 @@ $credenciales = @{ email = 'ana@ejemplo.com'; password = 'abc12345' } | ConvertT
 Invoke-WebRequest -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
-Resultado esperado: `401` con `{"mensaje":"La cuenta no esta activada."}`.
+Resultado esperado: `401` con `{"message":"La cuenta no esta activada."}`.
 
 Este mensaje **sí** es distinto del de credenciales incorrectas, y solo se
 alcanza con la contraseña correcta. Es lo que exige RF-CA-15. Con la contraseña
@@ -799,7 +811,7 @@ falta conocer la contraseña para llegar a él.
 
 #### RF-CA-16 — el enlace activa la cuenta y no se reutiliza
 
-Abre el enlace del email: responde `200 {"activado":true}` y la cuenta queda
+Abre el enlace del email: responde `200 {"activated":true}` y la cuenta queda
 `active = true`. Ábrelo otra vez y responde `400`.
 
 ```sql
@@ -822,7 +834,7 @@ WHERE used_at_utc IS NULL;
 #### RF-CA-17 — el reenvío es idéntico exista o no el email
 
 Compara estas cuatro peticiones: la respuesta debe ser el mismo `202` con el
-mismo body `{"enviado":true}` en los cuatro casos.
+mismo body `{"sent":true}` en los cuatro casos.
 
 ```powershell
 $resendActivation = 'http://localhost:5243/api/auth/resend-activation'
@@ -893,7 +905,7 @@ $sesion = Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Po
 Invoke-RestMethod -Uri http://localhost:5243/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
-Resultado esperado: `nombre`, `email` y `role`. Nunca el hash de la contraseña,
+Resultado esperado: `name`, `email` y `role`. Nunca el hash de la contraseña,
 ni el token, ni `credencialVersion`.
 
 Y sin cabecera:
@@ -932,7 +944,7 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $
 ```
 
 Resultado esperado: `401` con **el mismo mensaje** que los attempts fallidos
-(`email o password incorrectos.`). Un mensaje propio confirmaría que ese
+(`Email o contrasena incorrectos.`). Un mensaje propio confirmaría que ese
 email existe. Pasados quince minutos el bloqueo se levanta solo y entra con la
 contraseña correcta. Ese inicio correcto reinicia el contador:
 
@@ -1043,7 +1055,7 @@ Registra un usuario nuevo y revisa el resultado del listado administrativo:
 SELECT email, role FROM ac_users ORDER BY created_at_utc DESC LIMIT 1;
 ```
 
-El registro público siempre crea el role `Estandar`; no acepta un role enviado por
+El registro público siempre crea el role `Standard`; no acepta un role enviado por
 el cliente. El único cambio posterior es la operación administrativa de
 RF-CA-08.
 
@@ -1136,10 +1148,10 @@ La primera ejecución envía; la segunda responde, con las cuatro líneas que el
 comando imprime siempre:
 
 ```
-emails tomados: 0
-emails enviados: 0
-emails fallidos: 0
-No habia emails pendientes de enviar.
+Correos tomados: 0
+Correos enviados: 0
+Correos fallidos: 0
+No habia correos pendientes de enviar.
 ```
 
 Y el email sigue con `attempts = 1`: no se reclamó dos veces. Con dos emisores
@@ -1163,15 +1175,15 @@ el transporte se niega a enviar. El email sigue en la cola como pendiente y el
 proceso informa:
 
 ```
-emails tomados: 1
-emails enviados: 0
-emails fallidos: 1
-  - <recipient>: Faltan las variables de entorno del servidor de email (RF-NOT-13). Revisa el README.
-Los emails siguen en la cola como pendientes y se volveran a intentar la proxima vez.
+Correos tomados: 1
+Correos enviados: 0
+Correos fallidos: 1
+  - <recipient>: Faltan las variables de entorno del servidor de Email (RF-NOT-13). Revisa el README.
+Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
 ```
 
 Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
-`[usuario SMTP]` y `[password SMTP]` antes de mostrarse o guardarse.
+`[User SMTP]` y `[contrasena SMTP]` antes de mostrarse o guardarse.
 
 ### 3.6 Máquina de estados del negocio
 
@@ -1230,7 +1242,7 @@ del módulo Business.
 | RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. |
 | RD-10 | La conexión, el primer Administrador y SMTP se configuran mediante variables de entorno (sección 1, paso 4). |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
-| RD-12 | AccessControl y Notifications tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
+| RD-12 | AccessControl, Notifications y Permissions tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
 
 ### 3.8 Gestión de permisos (RF-GP-01 a RF-GP-07)
 
@@ -1480,10 +1492,10 @@ que corren sin levantar la API.
 
 ### Endpoints de la Asignación 2 (gestión de permisos)
 
-Estos endpoints llegan con el PR #39 (`feature/permissions-pipeline`). El módulo
-`PirryLedger.Core.Permissions` está activo pero la lista siguiente es la
-**API vigente para esta pieza**; el resto del README sigue describiendo Práctica
-1. Los tokens son los mismos que en la sección anterior.
+Estos endpoints llegaron con el PR #39 (`feature/permissions-pipeline`) y hoy
+forman parte de la API junto con los de Control de acceso. La lista siguiente
+es la **API vigente de esta pieza**; la sección 3.8 explica cómo provocar cada
+uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
@@ -1506,9 +1518,10 @@ Estos endpoints llegan con el PR #39 (`feature/permissions-pipeline`). El módul
 
 ### Esquema de la base de datos
 
-Las dos piezas comparten la misma base PostgreSQL, pero cada una es dueña de sus
+Las tres piezas comparten la misma base PostgreSQL, pero cada una es dueña de sus
 propias tablas. Las tres tablas de tokens y sesiones pertenecen a AccessControl;
-la cola pertenece a Notifications. La cola de email no tiene una clave foránea
+la cola pertenece a Notifications; las dos de solicitudes y concesiones
+pertenecen a Permissions. La cola de email no tiene una clave foránea
 hacia `ac_users`: el vínculo entre ambos módulos ocurre mediante la operación
 que encola el email, no mediante una relación directa entre tablas.
 
@@ -1568,6 +1581,27 @@ erDiagram
         string last_error "nullable"
     }
 
+    per_permission_requests {
+        uuid id PK
+        uuid requester_id
+        string requested_permission
+        string state
+        uuid approver_id "nullable"
+        string rejection_reason "nullable"
+        datetime created_at_utc
+        datetime approved_at_utc "nullable"
+        datetime applied_at_utc "nullable"
+        datetime rejected_at_utc "nullable"
+    }
+
+    per_permission_grants {
+        uuid id PK
+        uuid user_id
+        string permission_name
+        datetime granted_at_utc
+        uuid granted_by_user_id "nullable"
+    }
+
     ac_users ||--o{ ac_recovery_codes : "tiene"
     ac_users ||--o{ ac_activation_tokens : "tiene"
     ac_users ||--o{ ac_sessions : "tiene"
@@ -1575,7 +1609,14 @@ erDiagram
 
 `password_hash`, `code_hash` y `token_hash` almacenan hashes, no
 valores secretos en claro. `status` de `not_email_queue` usa `0 = Pending`,
-`1 = Processing` y `2 = Sent`.
+`1 = Processing` y `2 = Sent`. `state` de `per_permission_requests` usa
+`Pending`, `Approved`, `Applied` y `Rejected`.
+
+Las cuatro columnas que apuntan a un usuario (`requester_id`, `approver_id`,
+`user_id` y `granted_by_user_id`) **no tienen clave foránea** en la base: la
+integridad la aporta la aplicación, que toma las dos identidades de la sesión
+autenticada y no del cuerpo de la petición. La razón está en
+`docs/current-iteration.md`, sección "Deferred".
 
 La tabla `ac_sessions` de esta fase queda así:
 
