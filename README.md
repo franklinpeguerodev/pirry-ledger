@@ -699,9 +699,9 @@ dotnet test pirry-ledger.slnx
 
 Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
 necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6) y
-Permissions (24), que cubren la máquina de estados de la solicitud, los casos de
-uso y el repositorio de concesiones. Todas usan dobles en memoria y un reloj
-falso (RD-12).
+Permissions (26), que cubren la máquina de estados de la solicitud, los casos de
+uso, el repositorio de solicitudes y el de concesiones. Usan dobles en memoria,
+un contexto EF Core en memoria y un reloj falso (RD-12).
 
 Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
 y la lectura de sus credenciales desde variables de entorno se verifican
