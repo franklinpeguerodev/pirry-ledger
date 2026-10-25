@@ -17,10 +17,12 @@ despliegue, modular, sin microservicios. La pregunta es **cómo** se hace
 llegar el correo a Internet sin convertir al Host en un servidor de fondo
 que vigile la cola.
 
-`current-iteration.md` reserva para la semana 11 los reintentos, el
-estado fallido, el último error y la vista administrativa de la cola.
-Aquí se decide solo la **forma** del envío: la lógica de reintentos vive
-en el caso de uso `ProcesarColaDeCorreo` y se documenta aparte.
+La pieza de notificaciones se construye por partes: Práctica 1 entregó la cola
+mínima (encolar, enviar una vez, credenciales por variables de entorno) y las
+iteraciones siguientes dejan fuera de alcance los reintentos, el estado
+fallido, la escritura del último error y la vista administrativa de la cola.
+Aquí se decide solo la **forma** del envío: la lógica de reintentos, cuando
+llegue, vive en el caso de uso `ProcessEmailQueue` y se documenta aparte.
 
 ## Decisión
 
@@ -31,19 +33,20 @@ hospedado ni un proceso separado:
    son:
    - **API HTTP:** sin argumentos especiales (o sin `--send-mail`); el
      proceso se queda escuchando y responde a las rutas de AccessControl
-     y Notifications.
+     y de Permissions. La pieza de Notifications no expone ninguna ruta:
+     su envío es el comando.
    - **Enviador:** cuando uno de los argumentos es exactamente
      `--send-mail` (comparación insensible a mayúsculas), el proceso
-     resuelve `ProcesarColaDeCorreo` del contenedor de DI, ejecuta un
+     resuelve `ProcessEmailQueue` del contenedor de DI, ejecuta un
      solo ciclo, imprime cuatro líneas de resumen y termina con código
      de salida `0`.
-2. La cola (`not_correos_en_cola`) es la única fuente de verdad sobre
+2. La cola (`not_email_queue`) es la única fuente de verdad sobre
    correos por enviar, en proceso y enviados. Tanto el comando del Host como
    cualquier futura pieza administrativa la leen de ahí; nadie la
    escribe en paralelo.
 3. El comando es **idempotente sobre correos enviados**: el caso de uso
-   toma los correos en estado `Pendiente`, los marca `Procesando` y los
-   marca `Enviado` cuando el SMTP responde bien. Una segunda ejecución
+   toma los correos en estado `Pending`, los marca `Processing` y los
+   marca `Sent` cuando el SMTP responde bien. Una segunda ejecución
    ve la cola ya vacía de pendientes y termina sin enviar nada.
 4. La invocación documentada es:
 
@@ -53,7 +56,7 @@ hospedado ni un proceso separado:
 
 5. La configuración SMTP (`PIRRY_LEDGER_SMTP_*`) se lee del mismo modo en
    los dos modos. Sin SMTP configurado, el caso de uso devuelve los
-   correos a `Pendiente` con `intentos += 1` (RF-NOT-13); el comando
+   correos a `Pending` con `attempts += 1` (RF-NOT-13); el comando
    imprime `Correos fallidos: N` y termina `0`. La operación HTTP nunca
    falla por una configuración SMTP ausente.
 
@@ -68,7 +71,7 @@ Se descartó por tres razones concretas:
 - **Acoplamiento al ciclo de vida del API.** Un servicio hospedado arranca
   con `app.Run()` y muere con él. En un despliegue donde el Host se
   reinicia por una actualización, el enviador se reinicia con él y
-  cualquier correo en estado `Procesando` queda huérfano. Con el
+  cualquier correo en estado `Processing` queda huérfano. Con el
   comando, el operador decide cuándo se ejecuta y cuándo no.
 - **Concurrencia con el caso de uso.** Un servicio hospedado en el mismo
   proceso compite por el `DbContext` con las operaciones HTTP. La cola
@@ -103,8 +106,8 @@ de despliegue.
 - El envío corre **fuera** de la operación HTTP que encola el correo:
   registrar un usuario nunca espera al SMTP (RF-NOT-09).
 - Reenviar el comando es seguro: la cola ya no tiene nada pendiente o
-  bien el caso de uso devuelve los fallidos a `Pendiente` con
-  `intentos += 1` (RF-NOT-12, RF-NOT-13).
+  bien el caso de uso devuelve los fallidos a `Pending` con
+  `attempts += 1` (RF-NOT-12, RF-NOT-13).
 - La salida es texto plano: cabe en un pipe, en un archivo de log o en
   un monitor sin parsear JSON.
 - Operacionalmente, un reinicio del Host no se lleva por delante un
@@ -117,16 +120,20 @@ de despliegue.
   desde una terminal). En el futuro se podrá envolver en un cron o en
   un programador de tareas de Windows sin tocar el caso de uso.
 - El comando no aplica límites de tiempo ni reintentos automáticos: si
-  el SMTP está caído, los correos vuelven a `Pendiente` con
-  `intentos += 1` y se vuelven a intentar al próximo lanzamiento. La
-  pieza de reintentos y de último error queda para la semana 11.
+  el SMTP está caído, los correos vuelven a `Pending` con
+  `attempts += 1` y se vuelven a intentar al próximo lanzamiento. La
+  pieza de reintentos y de último error queda fuera del alcance de las
+  iteraciones actuales.
 - La salida se imprime en `Console.Out` en el idioma del operador
   (español hoy). Quien quiera consumirlas desde otra herramienta tendrá
   que parsear las líneas por su cuenta o cambiar la salida.
 
 ## Limpieza
 
-Las filas `Enviado` con más de N días pueden purgarse cuando la cola
-crezca; la columna `enviado_en_utc` ya tiene un índice en la migración
-de creación, así que la limpieza es una consulta pequeña. La política de
-retención se decide en la semana 11 con el resto de la pieza.
+Las filas `Sent` con más de N días pueden purgarse cuando la cola
+crezca. La columna `sent_at_utc` **no tiene índice** hoy: el único índice de
+la cola es `ix_not_email_queue_status_created_at`, sobre
+`(status, created_at_utc)`, que sirve para reclamar los pendientes pero no
+para purgar por antigüedad. Una política de retención, cuando la haya,
+necesitará un índice sobre `sent_at_utc`; la decisión está anotada en
+`docs/current-iteration.md`, sección "Deferred".
