@@ -794,6 +794,85 @@ ninguno.
 
 **Qué NO se hizo en esta entrega.** La línea del listado administrativo
 (`id`, `name`, `email`, `role`, `active`, `createdAtUtc`) la cambia el pull
-request #43, porque el campo `role` también cambia ahí. Los ADR, la bitácora de
+request #45, porque el campo `role` también cambia ahí. Los ADR, la bitácora de
 Práctica 1, `AGENTS.md` y los siete sitios de código con texto en inglés o en
 chino van en los pull requests siguientes.
+
+### Entrada 13 — Los ADR y la bitácora de Práctica 1 dicen lo que el código hace (2026-10-24)
+
+**Qué se pidió.** Continuar la auditoría de los documentos que prometían
+comportamientos, nombres de clases o esquemas distintos de los que hay en el
+backend. En concreto: los ADR 001, 002, 005, 006, 007, 008 y 009, los tres
+comentarios de código que la migración contradice, y la bitácora de Práctica 1,
+que seguía escrita contra la API anterior a la traducción del código al inglés.
+
+**Qué devolví.** Cinco commits en la rama `docs/adr-and-logbook-naming`:
+
+- `Make ADR 009 match the signature that was implemented (RF-CA-08)`. El ADR
+  afirmaba que `User.ChangeRole` pasaba de `(Role)` a `(Role, DateTime)` y que
+  el caso de uso tenía que pasar el reloj. No ocurrió: la firma sigue siendo
+  `ChangeRole(Role)` porque el incremento de `CredentialVersion` es un `+1`
+  sobre un entero y no consulta el reloj. El ADR ahora lo dice, explica por qué
+  el parámetro se descartó y nombra los tests que existen de verdad:
+  `ElCambioDeRolIncrementaCredentialVersion` en `PruebasDeAdministracionDeUsuarios`
+  y `CambiarDeRolInvalidaLaSesion` en `PruebasDeRolYEstado`.
+- `Make ADR 008 and the entity comments match the schema that exists (RF-GP-05)`.
+  El DDL del ADR declaraba cuatro claves foráneas hacia `ac_users` que la
+  migración no tiene y que el modelo nunca declaró. Ahora describe las tablas
+  reales, explica por qué las cuatro columnas de usuario son `Guid` sin FK (una
+  propiedad de navegación haría que `Permissions.Infrastructure` dependiera de
+  `AccessControl.Domain`) y deja la decisión anotada como pendiente en
+  `current-iteration.md`. También registra que aprobar dos veces el mismo permiso
+  reutiliza la fila con `PermissionGrant.Regrant` en vez de fallar con el índice
+  único, y corrige los tres comentarios de código que repetían las FK falsas y
+  el que todavía llamaba «skeleton» a una pieza terminada.
+- `Make ADR 007 match the mail queue that exists (RF-NOT-08, RF-NOT-09)`. El ADR
+  usaba los nombres anteriores a la traducción (`ProcesarColaDeCorreo`,
+  `not_correos_en_cola`, `Pendiente`/`Procesando`/`Enviado`, `intentos`) y
+  afirmaba que `sent_at_utc` ya tenía índice. No lo tiene: el único índice de la
+  cola es `ix_not_email_queue_status_created_at`, sobre
+  `(status, created_at_utc)`, que sirve para reclamar pendientes, no para purgar
+  por antigüedad. El ADR también decía que la API respondía las rutas de
+  Notifications; `MapNotifications()` no registra ninguna, porque el envío es el
+  comando.
+- `Use the current names in the decision records of access control`. ADR 001,
+  002, 005 y 006 pasan de `Sesion`, `Usuario`, `EmitidaUtc`, `CredencialVersion`,
+  `Rol.Estandar`, `Usuario.Crear`, `FechaDeCreacionUtc`, `CargarArchivoEnv`,
+  `ConfiguracionEntorno`, `LeerUrlBaseObligatoria` y `GET /yo` a los
+  identificadores reales. ADR 001 suma el cambio de rol como cuarta operación que
+  incrementa `CredentialVersion` (ADR 009).
+- `Use the current names in the practice 1 logbook`. Corrige rutas
+  (`/yo`, `/activar`, `/api/admin/usuarios`), tablas (`ac_usuarios`,
+  `ac_sesiones`, `not_correos_en_cola`), columnas, nombres de clase, las tres
+  migraciones que se borraron al recrear el esquema y las cifras de la suite
+  (`84`, `90`) que ya no describen ninguna ejecución.
+
+**Qué verifiqué.** Cada afirmación se contrastó con el código y la base, no con
+la memoria:
+
+- `User.ChangeRole(Role newRole)` en `User.cs` y la llamada `user.ChangeRole(role)`
+  en `ChangeUserRole.cs`.
+- `PermissionRequestConfiguration`, `PermissionGrantConfiguration` y la migración
+  `20261021024258_InitialSchema`: una búsqueda de `ForeignKey` en la migración no
+  devuelve nada.
+- `EmailQueueItemConfiguration`: tabla `not_email_queue`, columna `sent_at_utc`,
+  índice `ix_not_email_queue_status_created_at`.
+- Una búsqueda de los identificadores viejos en
+  `docs/bitacoras/bitacora-practica-1.md` devuelve **cero** coincidencias, y las
+  tablas y migraciones que sí existen aparecen con su nombre actual.
+- `dotnet build pirry-ledger.slnx --configuration Release`: 0 errores. Los 8
+  avisos son `NU1902`/`NU1903` de `System.Security.Cryptography.Pkcs` 10.0.0, que
+  llega por MailKit y que cierra el PR #45.
+- `dotnet test pirry-ledger.slnx --configuration Release`: 90 + 24 + 6 = 120
+  pruebas superadas, 0 con error.
+
+**Qué NO se hizo.** No se añadieron claves foráneas ni se regeneró ninguna
+migración: su inclusión sigue siendo una decisión abierta. No se reescribió la
+narración de la bitácora de Práctica 1 (qué se pidió, qué se devolvió, qué se
+verificó y qué falló quedan como estaban); solo se corrigieron identificadores y
+cifras. `AGENTS.md` y los siete sitios de código con texto en inglés o en chino
+van en los pull requests siguientes.
+
+**Nota de numeración.** Esta entrada es la 13 porque la 12 ya existe en
+`develop` (PR #44) y la 11 es la del PR #45, que sigue abierto. El orden
+cronológico 9–10 lo corrige ese mismo PR #45; aquí no se duplica.
