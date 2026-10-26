@@ -24,6 +24,8 @@ public static class PermissionRequestStateMachine
             // RF-GP-05: aplicada por el sistema, inmediatamente despues de aprobar.
             (PermissionRequestState.Approved, PermissionRequestState.Applied),
 
+            (PermissionRequestState.Approved, PermissionRequestState.Pending),
+
             // RF-GP-04: un Administrator rechaza una solicitud pendiente.
             (PermissionRequestState.Pending, PermissionRequestState.Rejected),
         };
