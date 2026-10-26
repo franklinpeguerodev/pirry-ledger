@@ -693,6 +693,33 @@ emails se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
 contadores y los estados de la cola se comprueban con las consultas SQL de cada
 sección.
 
+### Guía HTTP de la Práctica 2
+
+`Src/Host/PirryLedger.Host/PirryLedger.Practica2.http` es la guía completa de la
+Práctica 2: 72 peticiones que recorren por HTTP las siete reglas de Gestión de
+permisos (RF-GP-01 a 07), repiten los cuatro frentes de Control de acceso de la
+revisión acumulada y dejan como comando lo que un archivo HTTP no puede
+ejecutar (la suite y los seis defectos plantados).
+
+Para usarla:
+
+1. Levanta la API (paso 7).
+2. Ejecuta una vez la SQL de reinicio del encabezado del archivo. Borra el
+   usuario de prueba (`practica2@ejemplo.com`) y las filas de permisos del
+   Administrador; no toca ninguna otra cuenta.
+3. Completa el bloque `--- Entradas ---`: el usuario Estándar ya viene fijado y
+   el correo y la contraseña del Administrador se copian de tu `.env`
+   (`PIRRY_LEDGER_FIRST_ADMIN_*`, paso 4).
+4. Envía las peticiones de arriba hacia abajo. Hay **dos pausas**, las dos del
+   correo en cola: el token de activación y el código de recuperación. La guía
+   indica la consulta SQL con la que se leen.
+5. Al final, corre los comandos de las secciones §4 y §5 del archivo: la suite
+   completa y cada etiqueta de defecto.
+
+Cada petición dice en su título el código HTTP que debe devolver. El archivo
+termina con las comprobaciones de contenido que no se ven en un código de
+estado y con el checklist de la rúbrica.
+
 ### Pruebas
 
 ```powershell
