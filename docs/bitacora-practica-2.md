@@ -189,3 +189,41 @@ Además, el primer intento no arrancó porque PowerShell 5.1 necesita `Add-Type 
 - `git check-ignore -v` sobre el archivo nuevo: no está ignorado.
 
 **Qué NO incluye.** No hay etiquetas (fase 6) ni promoción a `main` (fase 5). No se plantó ningún defecto con la API levantada: el síntoma HTTP de §5 queda como comprobación opcional y condicional, y la prueba que vale es `dotnet test`. No se tocó código ni pruebas. No se probó el envío SMTP real ni el comando `--send-mail`, que quedan fuera del alcance de la práctica.
+
+### Entrada 6 — Las siete etiquetas y su subida al remoto (2026-10-25)
+
+**Qué se pidió.** Crear la etiqueta del punto evaluado y las seis de defecto, subirla al remoto con autorización explícita, y comprobar con los comandos que va a usar el profesor que todo se ve como debe.
+
+**Qué devolví.** Siete etiquetas ligeras, una por cada punto de la entrega:
+
+| Etiqueta | Commit | Mensaje del commit |
+|---|---|---|
+| `practica-2` | `1673e15` | Merge pull request #56 from franklinpeguerodev/develop |
+| `practica-2-defecto-1` | `b7c0c3e` | Plant defect 1: ApprovePermissionRequest.cs:62 |
+| `practica-2-defecto-2` | `e826f77` | Plant defect 2: PermissionRequestStateMachine.cs:28 |
+| `practica-2-defecto-3` | `faaea02` | Plant defect 3: ApprovePermissionRequest.cs:71, RejectPermissionRequest.cs:62 |
+| `practica-2-defecto-4` | `4c8f58d` | Plant defect 4: PermissionRequestRepository.cs:43 |
+| `practica-2-defecto-5` | `20ec399` | Plant defect 5: PermissionRequestStateMachine.cs:28 |
+| `practica-2-defecto-6` | `3623e39` | Plant defect 6: PermissionRequest.cs:99 |
+
+Cada commit de defecto se hizo en una rama `defecto-N` que salía de la etiqueta `practica-2`, y la rama se borró después de etiquetar. **Ninguno se mergeó a `main`**: los seis cuelgan de la etiqueta y `main` queda con el código limpio, que es lo que pide el brief («su padre es el commit etiquetado `practica-2`»).
+
+Decisiones que tomé y por qué:
+
+- **Defecto 1 plantado como `== Rejected`, no como `!= Rejected`.** El anexo dice «sustituye la condición "el estado es Pendiente" por "el estado no es Rechazada"», pero la guarda del código está escrita al revés (`si el estado no es Pending, lanza`). Sustituir la condición al pie de la letra invierte la guarda dos veces y rompe también el camino feliz. Con `== Rejected` el defecto rompe exactamente lo que debe romper: una solicitud ya aprobada o aplicada se puede volver a aprobar. Es el mismo criterio de la Entrada 4, ahora aplicado al plantar y no solo al documentar.
+- **Etiquetas ligeras, como las de las entregas anteriores.** `asignacion-1` y `asignacion-2` son ligeras y el brief manda escribir `git tag practica-2`. Solo `practica-1` es anotada.
+
+**Dónde se equivocó el agente.** La primera verificación de qué archivos tocaba cada commit comparó la etiqueta contra el **árbol de trabajo**, en vez de contra la etiqueta base: `git diff --name-only practica-2-defecto-1` no lleva dos etiquetas, así que devolvió una lista vacía. Las dos comprobaciones que dependían de esa lista (si toca `Tests/` y si sale de la pieza de permisos) se evaluaron sobre un vacío y, por tanto, no comprobaban nada: habrían dado `False` aunque el defecto hubiera tocado un archivo de pruebas. Lo detecté porque la lista salió vacía en los seis casos y un defecto que no cambia ningún archivo es imposible. Se repitió con `git diff --name-only practica-2 <etiqueta>` y ahí sí.
+
+**Qué verifiqué.**
+
+- Sobre `practica-2`: `dotnet test pirry-ledger.slnx` da **128 superadas, 0 con error** (96 AccessControl + 26 Permissions + 6 Notifications) y código de salida 0.
+- Sobre cada etiqueta de defecto, con el comando completo del profesor:
+  - el padre es `1673e15`, el mismo commit de `practica-2`;
+  - el diff toca **solo** `Src/Core/PirryLedger.Core.Permissions/`: un archivo en los defectos 1, 2, 4, 5 y 6, dos en el 3, y **ninguna línea de `Tests/`**;
+  - el mensaje dice qué archivo y qué línea se cambió;
+  - la suite termina en rojo, con 1, 2, 3, 1, 1 y 1 pruebas fallidas respectivamente en Permissions, y AccessControl (96) y Notifications (6) siempre verdes.
+- **Ensayo final en un clon limpio**: `git clone` del repositorio en una carpeta temporal. Las siete etiquetas aparecen, `git checkout practica-2` deja el árbol en `1673e15`, la suite da 128 y 0 con error, y cada etiqueta de defecto se puede chequear desde el clon y falla exactamente lo mismo. Es la misma comprobación que hará el profesor, con la misma base de datos pero sin el historial local.
+- `git push origin --tags` subió **exactamente siete etiquetas nuevas**. Las tres anteriores (`asignacion-1`, `asignacion-2`, `practica-1`) ya estaban en el remoto y no se movieron.
+
+**Qué NO incluye.** Ningún commit de defecto está en `main`. No se añadió la prueba del motivo ausente de RF-GP-04: el brief enumera «sin motivo, ausente o vacío» y la suite solo demuestra el caso de espacios en blanco. Se decidió etiquetar tal cual y asumir ese riesgo, que vale como mucho 0.75 de los 8 puntos; el código lo rechaza igual (`IsNullOrWhiteSpace`), lo que no está demostrado es por una prueba. No se probó el envío SMTP real ni el comando `--send-mail`.
