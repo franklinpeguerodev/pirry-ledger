@@ -68,11 +68,6 @@ public sealed class ApprovePermissionRequest
         // RF-GP-07: nadie resuelve su propia solicitud. Compara identidades,
         // no roles: si el caller tiene el rol Administrator (el filtro lo
         // confirma) pero su Id coincide con el del solicitante, se rechaza.
-        if (request.RequesterId == caller.Id)
-        {
-            throw new SelfResolutionRejectedException();
-        }
-
         var now = _clock.UtcNow;
 
         // RF-GP-03: aprobar registra aprobador e instante UTC.

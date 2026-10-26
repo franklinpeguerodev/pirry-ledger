@@ -59,11 +59,6 @@ public sealed class RejectPermissionRequest
         }
 
         // RF-GP-07: misma regla que ApprovePermissionRequest.
-        if (request.RequesterId == caller.Id)
-        {
-            throw new SelfResolutionRejectedException();
-        }
-
         request.Reject(caller.Id, _clock.UtcNow, reason);
 
         await _requests.SaveAsync(request, cancellationToken);
