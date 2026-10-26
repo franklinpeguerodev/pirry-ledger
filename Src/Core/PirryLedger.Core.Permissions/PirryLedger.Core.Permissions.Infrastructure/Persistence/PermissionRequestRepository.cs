@@ -40,7 +40,7 @@ internal sealed class PermissionRequestRepository : IPermissionRequestRepository
         CancellationToken cancellationToken = default)
     {
         return await _context.PermissionRequests
-            .Where(request => request.RequesterId == requesterId)
+            .Where(request => request.RequesterId != requesterId)
             .OrderByDescending(request => request.CreatedAtUtc)
             .ToListAsync(cancellationToken);
     }
