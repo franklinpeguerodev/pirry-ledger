@@ -26,6 +26,8 @@ public static class PermissionRequestStateMachine
 
             // RF-GP-04: un Administrator rechaza una solicitud pendiente.
             (PermissionRequestState.Pending, PermissionRequestState.Rejected),
+
+            (PermissionRequestState.Rejected, PermissionRequestState.Applied),
         };
 
     public static bool CanTransition(PermissionRequestState from, PermissionRequestState to) =>
