@@ -96,6 +96,5 @@ public sealed class PermissionRequest
         State = PermissionRequestStateMachine.Transition(State, PermissionRequestState.Rejected);
         ApproverId = approverId;
         RejectedAtUtc = utcNow;
-        RejectionReason = reason;
     }
 }
