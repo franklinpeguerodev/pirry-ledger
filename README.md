@@ -1,12 +1,14 @@
 # Pirry Ledger
 
-ERP para un negocio de comida rápida. Práctica 1 — Control de acceso.
+ERP para un negocio de comida rápida. Práctica 2 — Una suite que detecta defectos: Gestión de permisos.
 
 En este punto el repositorio tiene la cola de email con su persistencia y un
 comando para enviar lo pendiente. La API expone el registro con activación, el
 inicio de sesión con su tabla de sesiones, la recuperación de contraseña y la
-administración de usuarios. El módulo Business contiene la estructura de la
-máquina de estados de `Invoice`; sus pruebas quedan para la semana 8.
+administración de usuarios. El módulo Permissions expone la gestión de
+solicitudes de permiso con su máquina de estados y su suite de pruebas. El
+módulo Business contiene la estructura de la máquina de estados de `Invoice`;
+sus pruebas quedan para la semana 8.
 
 Este README está ordenado como se usa:
 
@@ -691,6 +693,33 @@ emails se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
 contadores y los estados de la cola se comprueban con las consultas SQL de cada
 sección.
 
+### Guía HTTP de la Práctica 2
+
+`Src/Host/PirryLedger.Host/PirryLedger.Practica2.http` es la guía completa de la
+Práctica 2: 72 peticiones que recorren por HTTP las siete reglas de Gestión de
+permisos (RF-GP-01 a 07), repiten los cuatro frentes de Control de acceso de la
+revisión acumulada y dejan como comando lo que un archivo HTTP no puede
+ejecutar (la suite y los seis defectos plantados).
+
+Para usarla:
+
+1. Levanta la API (paso 7).
+2. Ejecuta una vez la SQL de reinicio del encabezado del archivo. Borra el
+   usuario de prueba (`practica2@ejemplo.com`) y las filas de permisos del
+   Administrador; no toca ninguna otra cuenta.
+3. Completa el bloque `--- Entradas ---`: el usuario Estándar ya viene fijado y
+   el correo y la contraseña del Administrador se copian de tu `.env`
+   (`PIRRY_LEDGER_FIRST_ADMIN_*`, paso 4).
+4. Envía las peticiones de arriba hacia abajo. Hay **dos pausas**, las dos del
+   correo en cola: el token de activación y el código de recuperación. La guía
+   indica la consulta SQL con la que se leen.
+5. Al final, corre los comandos de las secciones §4 y §5 del archivo: la suite
+   completa y cada etiqueta de defecto.
+
+Cada petición dice en su título el código HTTP que debe devolver. El archivo
+termina con las comprobaciones de contenido que no se ven en un código de
+estado y con el checklist de la rúbrica.
+
 ### Pruebas
 
 ```powershell
@@ -699,14 +728,37 @@ dotnet test pirry-ledger.slnx
 
 Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
 necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6) y
-Permissions (24), que cubren la máquina de estados de la solicitud, los casos de
-uso y el repositorio de concesiones. Todas usan dobles en memoria y un reloj
-falso (RD-12).
+Permissions (26), que cubren la máquina de estados de la solicitud, los casos de
+uso, el repositorio de solicitudes y el de concesiones. Usan dobles en memoria,
+un contexto EF Core en memoria y un reloj falso (RD-12).
 
 Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
 y la lectura de sus credenciales desde variables de entorno se verifican
 manualmente con `--send-mail`, más abajo. Las pruebas de la máquina de estados
 de `Invoice` llegan en la semana 8.
+
+### Defectos
+
+La suite se mide por si falla cuando el código tiene un defecto. Los seis
+defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
+uno por uno en un commit que cuelga de `practica-2`, se etiqueta
+`practica-2-defecto-N` y no toca ningún archivo de pruebas. Con el defecto
+plantado, el comando de arriba falla en la prueba que se indica; sobre
+`practica-2` todas pasan.
+
+| Defecto | Qué se planta | Prueba que lo detecta | Qué comprueba esa prueba |
+|---|---|---|---|
+| 1 (RF-GP-06) | `ApprovePermissionRequest.cs:62`: la guarda pasa de «lanza si el estado no es `Pending`» a «lanza solo si es `Rejected`», así que una solicitud ya aprobada o aplicada se vuelve a aprobar. | `AprobarUnaSolicitudYaAprobadaNoCambiaElEstado` | Que una segunda aprobación se rechace y el estado siga en `Applied`. |
+| 2 (RF-GP-06) | `PermissionRequestStateMachine.cs:28`: añade `Rejected -> Applied` a la tabla. | `RejectedNoTieneSalidas` y `SoloLasTresTransicionesDeLaTablaSonValidas` | Que `Rejected` no tenga salidas y que solo las tres transiciones de la tabla sean válidas. |
+| 3 (RF-GP-07) | `ApprovePermissionRequest.cs:71` y `RejectPermissionRequest.cs:62`: elimina la comparación de identidades. | `UnAdministradorNoPuedeAprobarSuPropiaSolicitud`, `UnEstandarAscendidoNoPuedeAprobarSuPropiaSolicitud` y `UnAdministradorNoPuedeRechazarSuPropiaSolicitud` | Que nadie resuelva una solicitud creada por él mismo, ni al aprobar ni al rechazar. |
+| 4 (RF-GP-02) | `PermissionRequestRepository.cs:43`: el filtro pasa de «el solicitante es quien consulta» a «el solicitante no es quien consulta». | `ListarPorSolicitanteDevuelveSoloLasSolicitudesDeEseSolicitante` | Que la consulta devuelva solo las solicitudes del usuario que consulta. |
+| 5 (RF-GP-06) | `PermissionRequestStateMachine.cs:28`: añade `Approved -> Pending` a la tabla. | `SoloLasTresTransicionesDeLaTablaSonValidas` | Que una solicitud aprobada no vuelva a `Pending`: solo las tres transiciones de la tabla son válidas. |
+| 6 (RF-GP-04) | `PermissionRequest.cs:99`: elimina `RejectionReason = reason;`. | `RechazarUnaSolicitudPendienteLaPasaARechazadaConMotivo` | Que la solicitud rechazada guarde el motivo escrito. |
+
+Para ver un defecto: `git checkout practica-2-defecto-N`, correr
+`dotnet test pirry-ledger.slnx` y comprobar que falla al menos una de las pruebas
+de su fila. `git diff practica-2 practica-2-defecto-N --stat` muestra que el
+commit solo toca código de Gestión de permisos y ningún archivo de pruebas.
 
 ### Preparación común
 

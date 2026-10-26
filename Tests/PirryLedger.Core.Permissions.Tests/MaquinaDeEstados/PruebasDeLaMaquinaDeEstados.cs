@@ -139,6 +139,38 @@ public sealed class PruebasDeLaMaquinaDeEstados
     }
 
     [Fact]
+    public void SoloLasTresTransicionesDeLaTablaSonValidas()
+    {
+        // Arrange: RF-GP-06. La tabla permite exactamente tres de los
+        // dieciseis pares posibles entre los cuatro estados. Enumerarlos todos
+        // evita que una transicion nueva (o una que falte) pase inadvertida:
+        // una prueba por par deja huecos, la matriz no.
+        var estados = Enum.GetValues<PermissionRequestState>();
+        var permitidas = new HashSet<(PermissionRequestState From, PermissionRequestState To)>
+        {
+            (PermissionRequestState.Pending, PermissionRequestState.Approved),
+            (PermissionRequestState.Approved, PermissionRequestState.Applied),
+            (PermissionRequestState.Pending, PermissionRequestState.Rejected),
+        };
+
+        // Act + Assert
+        Assert.Equal(4, estados.Length);
+
+        foreach (var from in estados)
+        {
+            foreach (var to in estados)
+            {
+                var esperado = permitidas.Contains((from, to));
+                var obtenido = PermissionRequestStateMachine.CanTransition(from, to);
+
+                Assert.True(
+                    esperado == obtenido,
+                    $"La transicion {from} -> {to} deberia ser {(esperado ? "valida" : "prohibida")}.");
+            }
+        }
+    }
+
+    [Fact]
     public void LaMaquinaDeEstadosNoComparteCodigoConLaDeInvoice()
     {
         // Arrange
