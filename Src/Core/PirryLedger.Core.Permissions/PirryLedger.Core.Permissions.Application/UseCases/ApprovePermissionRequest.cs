@@ -59,7 +59,7 @@ public sealed class ApprovePermissionRequest
 
         // RF-GP-06: aprobar dos veces la misma solicitud falla por la maquina
         // de estados. La regla vive en PermissionRequest.Approve.
-        if (request.State != Domain.Enums.PermissionRequestState.Pending)
+        if (request.State == Domain.Enums.PermissionRequestState.Rejected)
         {
             throw new InvalidPermissionRequestTransitionApplicationException(
                 "Solo se pueden aprobar solicitudes en estado Pendiente.");
