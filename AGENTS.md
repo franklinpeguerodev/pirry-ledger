@@ -53,7 +53,7 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.400 (`global.json
 ## Architecture rules
 
 - `Src/Core`: one module per Core piece. `Src/Business`: the business module (Billing). `Src/Host`: composition only (startup, module registration, configuration) plus the alternate CLI modes, such as the mail sender (`--send-mail`, ADR 007). The Host has no controllers and no logic.
-- One-way dependency (RD-03): the Core never references Business. Business references only the Core's contracts project. Mental test: delete Business and the Core must still build.
+- One-way dependency (RD-03): the Core never references Business. `Business.Application` references only the Core's contracts project; `Business.Api` also plugs into `AccessControl.Api` to declare its routes in the single access point, the same way `Permissions.Api` does. Mental test: delete Business and the Core must still build.
 - Modules talk only through public interfaces. No module touches another module's internal classes or tables. Each module owns its data.
 - Each module is layered (Domain, Application, Infrastructure, Api). Business logic lives in Domain and Application, never in controllers or presentation (RD-02). A module's controllers belong to that module (RD-01).
 - Every piece must be testable without starting the full application (RD-12). Each module has its own test project.
