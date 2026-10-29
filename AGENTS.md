@@ -5,7 +5,7 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 ## Project
 
 - ERP for Pirri, a fast-food business with 2 branches and 2–3 employees per branch. It is real software (daily use from a tablet) and also a university project (Programación III, ITLA).
-- Business module (Billing): invoicing (including the physical invoice given to the customer), daily sales, investment (purchases and expenses) and profit. An owner view shows income and how the business is doing. No delivery for now.
+- Business module (Billing): invoicing (including the physical invoice given to the customer), daily sales, investment (purchases and expenses) and profit. An owner view shows income and how the business is doing. Delivery is handled only at the invoicing level: an invoice is marked as delivery when it is issued, and nothing more (no delivery module, customers, addresses or couriers).
 - Possible future ideas, do not build them unless asked: AI invoice scanning to feed investment, Excel or desktop-web versions, full inventory.
 - Architecture: **modular monolith in C#/.NET**, single deployment, strict module boundaries. Do not propose microservices.
 - The point of the course is learning to build with AI. Franklin directs and decides; you propose, execute and verify. He must be able to explain and defend every decision, so never decide silently on his behalf.
@@ -40,7 +40,7 @@ This file holds permanent rules only. It goes stale as soon as code is written, 
 
 If the agent needs state that is not in those three files, it asks. It never reconstructs it from memory and never writes it here.
 
-Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
+Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.400 (`global.json` pins it with `rollForward: latestFeature`; 10.0.403 is what is installed), Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
 
 ## Truthfulness rules
 
@@ -53,7 +53,7 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Wri
 ## Architecture rules
 
 - `Src/Core`: one module per Core piece. `Src/Business`: the business module (Billing). `Src/Host`: composition only (startup, module registration, configuration) plus the alternate CLI modes, such as the mail sender (`--send-mail`, ADR 007). The Host has no controllers and no logic.
-- One-way dependency (RD-03): the Core never references Business. Business references only the Core's contracts project. Mental test: delete Business and the Core must still build.
+- One-way dependency (RD-03): the Core never references Business. `Business.Application` references only the Core's contracts project; `Business.Api` also plugs into `AccessControl.Api` to declare its routes in the single access point, the same way `Permissions.Api` does. Mental test: delete Business and the Core must still build.
 - Modules talk only through public interfaces. No module touches another module's internal classes or tables. Each module owns its data.
 - Each module is layered (Domain, Application, Infrastructure, Api). Business logic lives in Domain and Application, never in controllers or presentation (RD-02). A module's controllers belong to that module (RD-01).
 - Every piece must be testable without starting the full application (RD-12). Each module has its own test project.
