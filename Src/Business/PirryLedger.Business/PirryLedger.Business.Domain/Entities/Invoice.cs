@@ -298,6 +298,19 @@ public sealed class Invoice
         }
     }
 
+    // Issued -> NotDelivered. Solo una factura de delivery puede marcarse como no
+    // entregada. En produccion el agregado calcula el contexto (es delivery) y
+    // la maquina comprueba la condicion.
+    public void MarkAsNotDelivered(DateTime now)
+    {
+        var context = new InvoiceTransitionContext
+        {
+            IsDelivery = IsDelivery,
+        };
+
+        State = InvoiceStateMachine.Transition(State, InvoiceState.NotDelivered, context);
+    }
+
     // Costura interna: la usan las pruebas de la maquina, que comprueban la
     // tabla fila por fila con un contexto a mano. En produccion el unico camino
     // es TransitionTo(estado), que calcula el contexto desde los items y los
