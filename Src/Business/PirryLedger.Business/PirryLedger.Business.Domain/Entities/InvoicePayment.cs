@@ -113,6 +113,26 @@ public sealed class InvoicePayment
             registeredByUserId);
     }
 
+    // Abono de deuda registrado por un Administrador. Nace confirmado y el
+    // monto recibido es el mismo monto abonado.
+    public static InvoicePayment Debt(
+        decimal amount,
+        DateTime registeredAtUtc,
+        Guid registeredByUserId)
+    {
+        EnsureAmountIsValid(amount);
+
+        return new InvoicePayment(
+            Guid.NewGuid(),
+            PaymentKind.Debt,
+            PaymentMethod.Cash,
+            PaymentStatus.Confirmed,
+            amount,
+            receivedAmount: amount,
+            registeredAtUtc,
+            registeredByUserId);
+    }
+
     // La factura es la unica que asigna el duenio del pago.
     internal void AttachTo(Guid invoiceId)
     {

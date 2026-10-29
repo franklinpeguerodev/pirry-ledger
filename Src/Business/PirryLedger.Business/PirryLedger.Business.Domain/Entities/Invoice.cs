@@ -32,6 +32,9 @@ public sealed class Invoice
 
     public bool IsDelivery { get; private set; }
 
+    // Solo cuando la factura queda en deuda: el nombre de la persona.
+    public string? DebtorName { get; private set; }
+
     // ICollection y no IReadOnlyList: EF Core necesita una coleccion escribible
     // para cargar las lineas. Los metodos del agregado son los unicos que la
     // modifican.
@@ -148,6 +151,150 @@ public sealed class Invoice
         {
             throw new InvoiceRuleViolationException(
                 "El cobro en efectivo de mostrador exige el monto recibido.");
+        }
+    }
+
+    // Issued -> InDebt. El nombre de la persona es obligatorio; el pago parcial
+    // es opcional y los pagos que llegan ya llevan su monto, metodo y estado.
+    public void LeaveAsDebt(
+        string debtorName,
+        IReadOnlyCollection<InvoicePayment>? payments,
+        DateTime now,
+        Guid registeredByUserId)
+    {
+        if (string.IsNullOrWhiteSpace(debtorName))
+        {
+            throw new InvoiceRuleViolationException("La deuda exige el nombre de la persona.");
+        }
+
+        var name = debtorName.Trim();
+        var paidAmount = payments?.Sum(payment => payment.Amount) ?? 0m;
+
+        if (paidAmount > Total)
+        {
+            throw new InvoiceRuleViolationException(
+                "Los pagos no pueden exceder el total de la factura.");
+        }
+
+        EnsureDeliveryDoesNotRegisterReceived(payments ?? Array.Empty<InvoicePayment>());
+
+        var context = new InvoiceTransitionContext
+        {
+            TotalAmount = Total,
+            PaidAmount = paidAmount,
+            DebtorName = name,
+        };
+
+        State = InvoiceStateMachine.Transition(State, InvoiceState.InDebt, context);
+
+        DebtorName = name;
+
+        if (payments is not null)
+        {
+            foreach (var payment in payments)
+            {
+                payment.AttachTo(Id);
+                _payments.Add(payment);
+            }
+        }
+    }
+
+    // InDebt -> Paid si el abono cubre lo que falta. El abono lo registra un
+    // Administrador, por eso lleva la fecha y el usuario.
+    public void RegisterDebtPayment(decimal amount, DateTime registeredAtUtc, Guid registeredByUserId)
+    {
+        if (!Money.HasExactDecimals(amount) || amount <= 0m || amount > Money.MaximumAmount)
+        {
+            throw new InvoiceRuleViolationException(
+                "El monto del abono debe ser mayor que cero, con dos decimales exactos.");
+        }
+
+        var remaining = Total - PaidAmount;
+
+        if (amount > remaining)
+        {
+            throw new InvoiceRuleViolationException(
+                "El abono no puede ser mayor que lo que se debe.");
+        }
+
+        var payment = InvoicePayment.Debt(amount, registeredAtUtc, registeredByUserId);
+
+        payment.AttachTo(Id);
+        _payments.Add(payment);
+
+        var newPaidAmount = PaidAmount;
+
+        if (newPaidAmount >= Total)
+        {
+            var context = new InvoiceTransitionContext
+            {
+                TotalAmount = Total,
+                PaidAmount = newPaidAmount,
+                DebtorName = DebtorName,
+            };
+
+            State = InvoiceStateMachine.Transition(State, InvoiceState.Paid, context);
+        }
+    }
+
+    // PendingVerification -> Paid. Solo si los pagos cubren el total (condicion
+    // de la fila). Confirma todas las transferencias.
+    public void ConfirmTransfer(DateTime confirmedAtUtc)
+    {
+        if (PaidAmount < Total)
+        {
+            throw new InvoiceConditionNotMetException(
+                InvoiceState.PendingVerification,
+                InvoiceState.Paid,
+                "Los pagos no cubren el total de la factura.");
+        }
+
+        var context = new InvoiceTransitionContext
+        {
+            TotalAmount = Total,
+            PaidAmount = PaidAmount,
+            DebtorName = DebtorName,
+        };
+
+        State = InvoiceStateMachine.Transition(State, InvoiceState.Paid, context);
+
+        foreach (var payment in _payments)
+        {
+            if (payment.Method == PaymentMethod.Transfer)
+            {
+                payment.Confirm();
+            }
+        }
+    }
+
+    // PendingVerification -> InDebt. Las transferencias quedan Rejected y no
+    // cuentan; el nombre de la persona que queda debiendo es obligatorio.
+    public void RejectTransfer(string debtorName, DateTime rejectedAtUtc)
+    {
+        if (string.IsNullOrWhiteSpace(debtorName))
+        {
+            throw new InvoiceRuleViolationException("La deuda exige el nombre de la persona.");
+        }
+
+        var name = debtorName.Trim();
+
+        var context = new InvoiceTransitionContext
+        {
+            TotalAmount = Total,
+            PaidAmount = 0m,
+            DebtorName = name,
+        };
+
+        State = InvoiceStateMachine.Transition(State, InvoiceState.InDebt, context);
+
+        DebtorName = name;
+
+        foreach (var payment in _payments)
+        {
+            if (payment.Method == PaymentMethod.Transfer)
+            {
+                payment.Reject();
+            }
         }
     }
 
