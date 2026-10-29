@@ -1,4 +1,5 @@
 using PirryLedger.Business.Domain.Enums;
+using PirryLedger.Business.Domain.Ports;
 using PirryLedger.Business.Domain.Rules;
 using PirryLedger.Business.Domain.StateMachines;
 
@@ -12,6 +13,8 @@ public sealed class Invoice
     private readonly List<InvoiceItem> _items = new();
 
     private readonly List<InvoicePayment> _payments = new();
+
+    private readonly List<InvoiceEdit> _edits = new();
 
     private Invoice()
     {
@@ -43,6 +46,8 @@ public sealed class Invoice
     // Igual que Items: EF Core necesita una coleccion escribible para cargar los
     // pagos. Solo los metodos del agregado la modifican.
     public ICollection<InvoicePayment> Payments => _payments;
+
+    public ICollection<InvoiceEdit> Edits => _edits;
 
     public decimal Total => _items.Sum(item => item.LineTotal);
 
@@ -296,6 +301,38 @@ public sealed class Invoice
                 payment.Reject();
             }
         }
+    }
+
+    // Issued -> Issued (edicion). Solo se puede editar una factura emitida y no
+    // pagada. Agrega, quita o cambia items libremente; registra el historial y
+    // avisa al Administrador por el puerto. Fuera de Issued esta congelada.
+    public void EditItems(
+        IReadOnlyCollection<InvoiceItem> items,
+        DateTime editedAtUtc,
+        Guid editedByUserId,
+        IInvoiceEditedNotifier notifier)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(notifier);
+
+        if (State != InvoiceState.Issued)
+        {
+            throw new InvoiceRuleViolationException(
+                "Solo se puede editar una factura emitida y no pagada.");
+        }
+
+        _items.Clear();
+
+        foreach (var item in items)
+        {
+            item.AttachTo(Id);
+            _items.Add(item);
+        }
+
+        var edit = new InvoiceEdit(Guid.NewGuid(), Id, editedAtUtc, editedByUserId, _items.Count);
+        _edits.Add(edit);
+
+        notifier.Notify(this, editedByUserId, editedAtUtc);
     }
 
     // Issued -> NotDelivered. Solo una factura de delivery puede marcarse como no
