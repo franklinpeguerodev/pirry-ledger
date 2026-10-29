@@ -9,7 +9,7 @@ The assignment briefs (what each practice or assignment asks, its rubric and how
 | `design-rules.md` | Cross-cutting design rules that apply to the whole system | RD-01 to RD-12 | Always applies |
 | `access-control.md` | Registration, activation, session, roles, user administration, passwords | RF-CA-01 to RF-CA-22 | Delivered (Practice 1). Kept as the baseline that must not break |
 | `notifications.md` | Minimal outgoing mail queue | RF-NOT-08, 09, 12, 13 | Delivered (Practice 1). Kept as the baseline that must not break |
-| `business-module.md` | Structure of the business state machine | RF-NEG-03, 04, 05 | Delivered (Practice 1). Tests arrive in week 8 |
+| `business-module.md` | State machine, its conditions and the operations of the invoicing module | RF-NEG-02 to 06, RF-NEG-09 | Delivered (Practice 1 structure). Extended in Practice 3 |
 | `permissions.md` | Permission requests and their state machine | RF-GP-01 to RF-GP-07 | Delivered (Asignación 2). Its suite is extended in Práctica 2 |
 | `entities.md` | Minimum attributes of the entities in use | Usuario, Rol, CodigoRecuperacion, CorreoEnCola, SolicitudPermiso | Always applies |
 

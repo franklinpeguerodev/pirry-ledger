@@ -39,11 +39,13 @@ Deliver at the tag `practica-3`: the business module (invoicing) working and pro
 Business features proposed for RF-NEG-02 (Franklin confirms the final list):
 
 1. Issue the invoice: the client builds the draft and the server creates and persists the invoice already issued, with its items and the delivery mark.
-2. Issue the invoice (marks it as delivery or not).
-3. Collect: register the payments (cash, transfer), or leave the invoice as debt.
-4. Resolve pending payments: verify transfers and register debt payments (Administrator).
-5. Cancel with a permission, requested by whoever collects and approved by an Administrator.
-6. Consult invoices (list and detail, by state). The Administrator also reads the edit history of an invoice.
+2. Collect in cash or by transfer: register the payments that cover the total, with the amount received and the change.
+3. Leave the invoice as debt: register it with the name of the person who owes.
+4. Resolve pending transfers (Administrator): confirm or reject a transfer.
+5. Register debt payments (Administrator); the payment that covers the total moves the invoice to `Paid`.
+6. Cancel with a permission, requested by whoever collects and approved by an Administrator.
+7. Mark a delivery invoice as not delivered.
+8. Consult invoices (list and detail, by state). The Administrator also reads the edit history of an invoice.
 
 ## Out of scope (do not build)
 

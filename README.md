@@ -7,8 +7,8 @@ comando para enviar lo pendiente. La API expone el registro con activación, el
 inicio de sesión con su tabla de sesiones, la recuperación de contraseña y la
 administración de usuarios. El módulo Permissions expone la gestión de
 solicitudes de permiso con su máquina de estados y su suite de pruebas. El
-módulo Business contiene la estructura de la máquina de estados de `Invoice`;
-sus pruebas quedan para la semana 8.
+módulo Business tiene la máquina de estados de `Invoice` con siete estados, sus
+once transiciones permitidas y su suite de pruebas.
 
 Este README está ordenado como se usa:
 
@@ -613,6 +613,7 @@ pirry-ledger/
 │   └── Host/
 │       └── PirryLedger.Host/                    Composición + comando --send-mail
 └── Tests/
+    ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
     ├── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
     └── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
@@ -630,7 +631,7 @@ ni servidor SMTP.
 | Contraseñas (recuperación, forzado, cambio) | RF-CA-09, 10, 11, 12, 13, 22 | [3.3](#33-contraseñas) |
 | rolees y administración de usuarios | RF-CA-04, 05, 06, 08, 20, 21 | [3.4](#34-administración-de-usuarios) |
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
-| Máquina de estados (estructura) | RF-NEG-03, 04, 05, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
+| Máquina de estados del negocio | RF-NEG-03, 04, 05, 09, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
 | **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 
@@ -726,16 +727,17 @@ estado y con el checklist de la rúbrica.
 dotnet test pirry-ledger.slnx
 ```
 
-Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6) y
-Permissions (26), que cubren la máquina de estados de la solicitud, los casos de
-uso, el repositorio de solicitudes y el de concesiones. Usan dobles en memoria,
-un contexto EF Core en memoria y un reloj falso (RD-12).
+Un solo comando, desde un clon limpio, ejecuta **las cuatro** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6),
+Permissions (26) y Business (62). Las tres primeras cubren la máquina de estados
+de la solicitud, los casos de uso, el repositorio de solicitudes y el de
+concesiones; Business cubre la máquina de estados de `Invoice` con una prueba por
+fila de sus tablas. Usan dobles en memoria, un contexto EF Core en memoria y un
+reloj falso (RD-12).
 
 Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
 y la lectura de sus credenciales desde variables de entorno se verifican
-manualmente con `--send-mail`, más abajo. Las pruebas de la máquina de estados
-de `Invoice` llegan en la semana 8.
+manualmente con `--send-mail`, más abajo.
 
 ### Defectos
 
@@ -1241,48 +1243,53 @@ Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
 
 ### 3.6 Máquina de estados del negocio
 
-Esta pieza se entrega **como estructura, sin pruebas automatizadas** (llegan en
-la semana 8). Lo que hay que comprobar ahora es que la máquina existe, está
-declarada en un solo lugar y cumple la tabla (RF-NEG-03, RF-NEG-04, RF-NEG-05,
-RD-04).
+La máquina de la factura tiene siete estados, once transiciones permitidas y
+treinta y ocho prohibidas, y cada fila de esas tablas tiene su prueba. Se
+verifica sin base de datos y sin levantar la aplicación (RF-NEG-03, RF-NEG-04,
+RF-NEG-05, RF-NEG-09, RD-04, RD-12).
 
-Documentación: `docs/maquina-de-estados.md`. Código: `InvoiceStateMachine.cs`
-con `Invoice.cs` e `InvoiceState.cs` en
-`Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/`.
+Documentación: `docs/maquina-de-estados.md`. Código: `InvoiceStateMachine.cs`,
+`InvoiceTransitionContext.cs` con `Invoice.cs` e `InvoiceState.cs` en
+`Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/`. Pruebas:
+`Tests/PirryLedger.Business.Tests/MaquinaDeEstados/`.
 
 Verifica en ese orden:
 
-1. **La entidad central tiene estados declarados en un solo lugar**
-   (RF-NEG-03): `InvoiceState` declara `Draft`, `Issued`, `Paid` y `Cancelled`
-   (3 a 5 estados, como exige la práctica).
+1. **La entidad central tiene sus siete estados declarados en un solo lugar**
+   (RF-NEG-03): `InvoiceState` declara `Draft`, `Issued`, `PendingVerification`,
+   `Paid`, `InDebt`, `Cancelled` y `NotDelivered`.
 2. **Las transiciones permitidas están declaradas en un solo sitio**
    (RF-NEG-04, RD-04): `InvoiceStateMachine` tiene una única lista
-   `AllowedTransitions` con `Draft→Issued`, `Draft→Cancelled`,
-   `Issued→Paid` e `Issued→Cancelled`. Ningún otro punto del código cambia el
-   status.
-3. **Hay al menos una transición explícitamente prohibida y estados
-   terminales** (RF-NEG-05): `Paid→Cancelled` está prohibida; `Cancelled` y
-   `Paid` no tienen transiciones salientes. Intentar una transición prohibida
-   lanza `InvalidInvoiceTransitionException` en lugar de cambiar el status.
-4. **La tabla existe y coincide con el código** (RF-NEG-03): compara la tabla
-   de `docs/maquina-de-estados.md` (from, to, quién la ejecuta, condición) con
-   `AllowedTransitions`.
+   `AllowedTransitions` con las once filas de la tabla de
+   `docs/maquina-de-estados.md`. Ningún otro punto del código cambia el estado.
+3. **Hay transiciones explícitamente prohibidas y dos estados terminales**
+   (RF-NEG-05): los otros treinta y ocho pares lanzan
+   `InvalidInvoiceTransitionException` sin cambiar el estado, y `Cancelled` y
+   `NotDelivered` no tienen ninguna salida.
+4. **Las condiciones de las filas se comprueban de verdad**: emitir sin ítems,
+   cobrar sin cubrir el total, cobrar con transferencia, dejar una deuda sin
+   nombre o marcar como no entregada una factura que no es de delivery se
+   rechazan con `InvoiceConditionNotMetException` y el estado no cambia.
 
 ```powershell
-Get-Content Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/StateMachines/InvoiceStateMachine.cs
-Get-Content docs/maquina-de-estados.md
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-También puedes comprobar el punto 3 por código, sin esperar a la semana 8:
+Salida esperada: **62 pruebas superadas**, 0 con error. Los nombres dicen qué
+prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
+`UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)`,
+`AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`,
+`EmitirSinItemsSeRechazaYNoCambiaElEstado`, entre otras.
 
-```powershell
-dotnet build pirry-ledger.slnx --configuration Release
-```
+Para ver que la suite puede fallar, quita la línea
+`EnsureHasAtLeastOneItem(from, to, context);` del caso
+`(InvoiceState.Draft, InvoiceState.Issued)` de `InvoiceStateMachine` y vuelve a
+ejecutar el comando: `EmitirSinItemsSeRechazaYNoCambiaElEstado` se pone roja.
+Restaura la línea y vuelve a verde. Esa línea es la que elimina el defecto 3.
 
-La estructura compila dentro de la solución (`PirryLedger.Business.Domain` y
-`PirryLedger.Business.Application`), lo que confirma que la pieza existe y está
-declarada. No hay endpoint HTTP para la factura todavía: es una pieza interna
-del módulo Business.
+No hay endpoint HTTP para la factura todavía: es una pieza interna del módulo
+Business. Las operaciones protegidas llegan en un paso posterior de esta
+práctica.
 
 ### 3.7 Trazabilidad de reglas de diseño
 
@@ -1296,7 +1303,7 @@ del módulo Business.
 | RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. |
 | RD-10 | La conexión, el primer Administrador y SMTP se configuran mediante variables de entorno (sección 1, paso 4). |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
-| RD-12 | AccessControl, Notifications y Permissions tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
+| RD-12 | AccessControl, Notifications, Permissions y Business tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
 
 ### 3.8 Gestión de permisos (RF-GP-01 a RF-GP-07)
 
@@ -1712,6 +1719,4 @@ todavía no se escribe: llega en la semana 11.
   20). Quedan para la semana 14; la protección de último Administrador active de
   RF-CA-20 es una regla de negocio de esta iteración, no un sustituto de la
   auditoría.
-- **Pruebas de la máquina de estados.** La estructura de `Invoice` está
-  declarada en `docs/maquina-de-estados.md`; sus pruebas llegan en la semana 8.
 - **Frontend.** Hasta que se decida, la aplicación se consume como API.
