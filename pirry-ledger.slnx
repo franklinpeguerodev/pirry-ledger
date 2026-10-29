@@ -28,6 +28,7 @@
     <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Application/PirryLedger.Business.Application.csproj" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.Permissions.Tests/PirryLedger.Core.Permissions.Tests.csproj" />
