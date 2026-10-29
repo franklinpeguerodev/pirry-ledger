@@ -32,7 +32,9 @@ public static class InvoiceStateMachine
     public static bool CanTransition(InvoiceState from, InvoiceState to) =>
         AllowedTransitions.Contains((from, to));
 
-    public static InvoiceState Transition(
+    // Internal: recibe el contexto de la tentativa, que solo el dominio puede
+    // construir. Las pruebas del dominio la ven por InternalsVisibleTo.
+    internal static InvoiceState Transition(
         InvoiceState from,
         InvoiceState to,
         InvoiceTransitionContext context)
