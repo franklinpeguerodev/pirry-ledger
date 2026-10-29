@@ -5,7 +5,7 @@ Repository: `franklinpeguerodev/pirry-ledger`. This file is loaded every session
 ## Project
 
 - ERP for Pirri, a fast-food business with 2 branches and 2–3 employees per branch. It is real software (daily use from a tablet) and also a university project (Programación III, ITLA).
-- Business module (Billing): invoicing (including the physical invoice given to the customer), daily sales, investment (purchases and expenses) and profit. An owner view shows income and how the business is doing. No delivery for now.
+- Business module (Billing): invoicing (including the physical invoice given to the customer), daily sales, investment (purchases and expenses) and profit. An owner view shows income and how the business is doing. Delivery is handled only at the invoicing level: an invoice is marked as delivery when it is issued, and nothing more (no delivery module, customers, addresses or couriers).
 - Possible future ideas, do not build them unless asked: AI invoice scanning to feed investment, Excel or desktop-web versions, full inventory.
 - Architecture: **modular monolith in C#/.NET**, single deployment, strict module boundaries. Do not propose microservices.
 - The point of the course is learning to build with AI. Franklin directs and decides; you propose, execute and verify. He must be able to explain and defend every decision, so never decide silently on his behalf.
@@ -40,7 +40,7 @@ This file holds permanent rules only. It goes stale as soon as code is written, 
 
 If the agent needs state that is not in those three files, it asks. It never reconstructs it from memory and never writes it here.
 
-Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.302, Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
+Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.400 (`global.json` pins it with `rollForward: latestFeature`; 10.0.403 is what is installed), Node 24. Write commands for PowerShell. Do not use bash syntax (`&&`, `export`, `rm -rf`).
 
 ## Truthfulness rules
 
