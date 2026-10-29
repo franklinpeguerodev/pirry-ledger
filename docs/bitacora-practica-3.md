@@ -63,3 +63,52 @@ La regla es la misma de las bitácoras anteriores: **lo que devuelve el agente e
 7. `ViewSalesSummary` se queda: es la única operación estática de `AccessLevel.Permission` y mantiene viva la guía de la Práctica 2. Quitarla, si se decide, va en un PR aparte.
 8. "Eliminar la factura" es pasarla a `Cancelled`, no borrar la fila.
 9. Los cuatro defectos se plantan al final, cuando la suite esté verde; no se planifican en detalle todavía.
+
+---
+
+### Entrada 2 — La máquina de estados de la factura y su suite (2026-10-29)
+
+**Qué se pidió.** Ejecutar la fase 1 del plan: los siete estados, las once transiciones permitidas con sus condiciones, las treinta y ocho prohibidas y las dos terminales, con una prueba por fila, en la rama `feature/invoice-state-machine`.
+
+**Qué devolví.**
+
+1. **El proyecto de pruebas** `Tests/PirryLedger.Business.Tests`, con solo el dominio como referencia, registrado en `pirry-ledger.slnx`.
+2. **La suite**, en `MaquinaDeEstados/`:
+   - once pruebas, una por fila permitida, cada una con un contexto que satisface solo la condición de esa fila;
+   - una prueba por parámetros con las treinta y ocho filas prohibidas, que además comprueba que el estado no cambió;
+   - una prueba por estado terminal (`AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`);
+   - ocho pruebas de condiciones (sin ítems, pago incompleto, transferencia, deuda sin nombre, no entregada sin delivery, abono parcial);
+   - dos pruebas de la tabla (`LaFacturaDeclaraSieteEstados`, `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares`) y una de independencia (`LaMaquinaDeLaFacturaNoDependeDeLaDePermisos`).
+3. **La implementación mínima:** `InvoiceState` con siete estados, `InvoiceTransitionContext` con los hechos de la tentativa, `InvoiceStateMachine` con la tabla única y una comprobación por fila aislada en su método, `Invoice.TransitionTo(estado, contexto)`, y dos excepciones (`InvalidInvoiceTransitionException` para un par prohibido, `InvoiceConditionNotMetException` para una condición incumplida).
+4. **La documentación:** `docs/maquina-de-estados.md` con las dos tablas y la nota de que `Draft` no se persiste; RF-NEG-02, 06 y 09 en `business-module.md` con el texto del profesor; README §3.6 con el comando y la línea que hace fallar la suite.
+
+**Dónde se equivocó el agente.**
+
+- **Duplicó una funcionalidad en la lista de RF-NEG-02.** En la fase 0 renombré el punto 1 ("emitir la factura") y dejé el punto 2 con el nombre viejo ("emitir la factura, marcando delivery o no"): la misma funcionalidad dos veces. Lo detecté al escribir `business-module.md`, no con una prueba, y lo corregí en el mismo commit de requisitos: ahora la lista tiene ocho funcionalidades separables, que es más de las cinco que exige RF-NEG-02.
+- **La excepción de una condición informaba el par equivocado.** Al escribir las guardas, `EnsurePaymentsCoverTheTotal` construía la excepción con `(Issued, Paid)` fijo, así que el rechazo de `InDebt -> Paid` habría dicho "Issued -> Paid". Lo vi al releer el archivo antes de compilar y pasé `from` y `to` a cada guarda. No llegó a ejecutarse con el error.
+
+**Qué verifiqué.**
+
+- **Rojo primero:** `dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj` falló con `error CS0246: El nombre del tipo o del espacio de nombres 'InvoiceTransitionContext' no se encontró`. Era el rojo correcto: la API que describen las pruebas no existía.
+- **Verde:** `dotnet test pirry-ledger.slnx` → **190 superadas, 0 con error**: Business 62, AccessControl 96, Permissions 26, Notifications 6.
+- **La suite puede fallar, y por la razón correcta.** Quité a mano la guarda de `Draft -> Issued` (el defecto 3 del enunciado): `EmitirSinItemsSeRechazaYNoCambiaElEstado` se puso roja y las otras 61 siguieron verdes. Restauré la línea. Después añadí a mano `Issued -> Draft` (el defecto 1): fallaron la fila concreta y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares`. Restauré la tabla y volvió a verde.
+- **Un solo punto de decisión:** ningún caso de uso ni endpoint valida estados por su cuenta; la lista `AllowedTransitions` es la única que decide, y las condiciones están dentro de la misma máquina.
+
+**Lo que decidí yo.**
+
+1. **Una sola verificación de "al menos un ítem", y en la máquina.** El endpoint no la repite: si estuviera duplicada, quitar la guarda de la máquina (defecto 3) dejaría la suite verde y el defecto no se podría plantar.
+2. **La máquina recibe los hechos, no la entidad.** `InvoiceTransitionContext` lleva cantidad de ítems, delivery, nombre del deudor, total, pagos acumulados y si hay transferencia. Así la máquina se prueba sin agregado, sin base de datos y sin reloj (RD-12), y en la fase 2 el caso de uso calcula el contexto a partir de los ítems y los pagos.
+3. **El permiso de anulación no es una condición de la tabla.** Depende de la factura concreta y vive en una sola línea del caso de uso, que es justo la que elimina el defecto 4. La máquina no conoce la pieza de permisos (RF-NEG-09).
+4. **Una prueba por fila, no una matriz.** La matriz de 49 pares no aporta nada cuando cada fila tiene su prueba; sí se conserva el conteo (11 de 49) como red contra una transición añadida por accidente.
+
+**Desvío del plan.** El plan decía dos commits (suite en rojo, implementación en verde). Los hice en uno solo: el proyecto de pruebas no compila sin la implementación, y un commit que no compila rompe el historial para cualquiera que lo revise o lo biseque. El rojo queda registrado aquí con su salida real.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 190 superadas y 0 con error. Después, quitar `EnsureHasAtLeastOneItem(from, to, context);` de `InvoiceStateMachine` y repetir: una sola prueba en rojo, `EmitirSinItemsSeRechazaYNoCambiaElEstado`.
+
+
