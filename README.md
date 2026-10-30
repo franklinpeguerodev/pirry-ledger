@@ -1615,6 +1615,92 @@ lectura del historial de edición, que será solo del Administrador.
 
 ---
 
+### 3.11 Consumo de una concesión de permiso (RF-GP-05, RF-NEG-06, ADR 011)
+
+Esta sección cubre la pieza de Permissions que la fase 4 va a consumir al anular
+una factura. **No hay endpoints nuevos**: el consumo se ejercita solo desde la
+suite, igual que las reglas de la factura.
+
+Código: `Src/Core/PirryLedger.Core.Contracts/Permissions/PermissionNames.cs`
+(construye y valida el nombre), `Src/Core/PirryLedger.Core.Permissions/.../Domain/PermissionCatalog.cs`
+(catálogo), `.../Application/Ports/IPermissionGrantRepository.cs`,
+`.../Infrastructure/Persistence/PermissionGrantRepository.cs` y
+`.../Infrastructure/Security/EfPermissionAuthority.cs`. Pruebas:
+`Tests/PirryLedger.Core.Permissions.Tests/Catalogo/PruebasDelCatalogoDePermisos.cs`
+y `.../Concesiones/PruebasDeConsumoDeConcesion.cs`.
+
+#### Convención del nombre
+
+El permiso de anular una factura se llama `CancelInvoice:<id de la factura>`,
+con el GUID en formato `D` y en minúsculas. Son 50 caracteres y caben en el
+`varchar(64)` de `permission_name` (ADR 008). La forma es canónica: mayúsculas,
+llaves o espacios se rechazan, para que una factura tenga un solo nombre.
+
+```powershell
+# En código (Core.Contracts):
+PermissionNames.CancelInvoice(Guid.Parse("11111111-1111-1111-1111-111111111111"))
+# => "CancelInvoice:11111111-1111-1111-1111-111111111111"
+```
+
+#### El catálogo
+
+`PermissionCatalog` acepta dos clases de nombre: los fijos (`ViewSalesSummary`)
+y los que cumplen la regla `CancelInvoice:<guid canónico>`. Cualquier otro
+nombre se rechaza con `400` al crear la solicitud. La convención está
+implementada dos veces a propósito (`PermissionNames` en Contracts y
+`PermissionCatalog` en el dominio), para no crear la referencia
+`Permissions.Domain -> Core.Contracts`; la prueba
+`PruebasDelCatalogoDePermisos` ata las dos.
+
+#### El consumo
+
+`IPermissionAuthority` gana `ConsumeAsync(userId, permissionName)`:
+
+- borra el par `(user_id, permission_name)` y devuelve `true` si había una fila,
+  `false` si no;
+- no lanza cuando no hay concesión: \"no tenía el permiso\" es un resultado
+  normal, y el mensaje lo decide el caso de uso de la anulación;
+- con usuario vacío o nombre vacío devuelve `false` sin tocar la base;
+- solo borra el par del usuario que llama.
+
+El orden en la anulación (fase 4) será: resolver la transición a `Cancelled`
+en memoria, consumir la concesión, guardar la factura. Si el consumo devuelve
+`false`, se rechaza antes de guardar. Si el guardado falla después del consumo,
+la concesión se pierde (coste aceptado). Sin migración: la tabla y el índice
+único ya existen (ADR 008).
+
+#### Cómo probarlo
+
+```powershell
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj
+```
+
+Salida esperada: **43 pruebas superadas**, 0 con error (36 anteriores + 10 de
+catálogo + 7 de consumo, descontando solapamientos: el total del proyecto es 43).
+
+Para ejecutar solo una familia:
+
+```powershell
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj --filter "FullyQualifiedName~PruebasDelCatalogoDePermisos"
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj --filter "FullyQualifiedName~PruebasDeConsumoDeConcesion"
+```
+
+**Para ver que la suite puede fallar.** Comenta la línea
+`_context.PermissionGrants.Remove(grant)` en `PermissionGrantRepository.ConsumeAsync`
+y vuelve a ejecutar el comando: `ConsumirUnaConcesionLaBorraYDevuelveTrue` se pone
+roja (la fila sigue en la base) y las otras 42 siguen verdes. Restaura la línea
+y vuelve a verde. Lo mismo con la guarda `if (userId == Guid.Empty ...)` de
+`EfPermissionAuthority.ConsumeAsync`: sin ella, `LaAutoridadNoConsumeConUsuarioVacio`
+falla.
+
+#### Qué NO incluye todavía
+
+No hay operación de negocio que anule la factura y consuma la concesión, ni
+endpoints ni reglas de rol: eso llega con las operaciones protegidas. La prueba
+de la carrera de dos consumos simultáneos contra PostgreSQL queda para esa fase.
+
+---
+
 ## 4. Referencia
 
 ### Endpoints de acceso Control
