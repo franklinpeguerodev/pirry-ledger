@@ -208,6 +208,12 @@ public sealed class Invoice
     // Administrador, por eso lleva la fecha y el usuario.
     public void RegisterDebtPayment(decimal amount, DateTime registeredAtUtc, Guid registeredByUserId)
     {
+        if (State != InvoiceState.InDebt)
+        {
+            throw new InvoiceRuleViolationException(
+                "Solo se puede abonar una factura que está en deuda.");
+        }
+
         if (!Money.HasExactDecimals(amount) || amount <= 0m || amount > Money.MaximumAmount)
         {
             throw new InvoiceRuleViolationException(
@@ -224,10 +230,7 @@ public sealed class Invoice
 
         var payment = InvoicePayment.Debt(amount, registeredAtUtc, registeredByUserId);
 
-        payment.AttachTo(Id);
-        _payments.Add(payment);
-
-        var newPaidAmount = PaidAmount;
+        var newPaidAmount = PaidAmount + amount;
 
         if (newPaidAmount >= Total)
         {
@@ -238,8 +241,13 @@ public sealed class Invoice
                 DebtorName = DebtorName,
             };
 
+            // La transicion se resuelve antes de agregar el pago: si se rechaza,
+            // la factura no cambia.
             State = InvoiceStateMachine.Transition(State, InvoiceState.Paid, context);
         }
+
+        payment.AttachTo(Id);
+        _payments.Add(payment);
     }
 
     // PendingVerification -> Paid. Solo si los pagos cubren el total (condicion

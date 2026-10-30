@@ -109,6 +109,34 @@ public sealed class PruebasDeDeuda
     }
 
     [Fact]
+    public void AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(
+            () => factura.RegisterDebtPayment(100m, Ahora, Admin));
+        Assert.Equal(InvoiceState.Issued, factura.State);
+        Assert.Empty(factura.Payments);
+    }
+
+    [Fact]
+    public void AbonarUnaFacturaPagadaSeRechazaYNoRegistraElPago()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+        factura.Collect(new[] { InvoicePayment.Cash(500m, 500m, Ahora, Cajero) });
+        var pagosAntes = factura.Payments.Count;
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(
+            () => factura.RegisterDebtPayment(100m, Ahora, Admin));
+        Assert.Equal(InvoiceState.Paid, factura.State);
+        Assert.Equal(pagosAntes, factura.Payments.Count);
+    }
+
+    [Fact]
     public void ConfirmarLaTransferenciaPasaAPagadaYConfirmaElPago()
     {
         // Arrange
