@@ -17,4 +17,11 @@ public interface IPermissionAuthority
     // La consulta operativa se hace sobre la tabla de concesiones del modulo
     // de Permissions; la maquina de estados de la solicitud no entra aqui.
     Task<bool> UserHasPermissionAsync(Guid userId, string permissionName, CancellationToken cancellationToken = default);
+
+    // RF-NEG-06: consume la concesion del par (usuario, permiso): la borra y
+    // devuelve true si habia una fila, false si no. No lanza cuando no hay
+    // concesion: "no tenia el permiso" es un resultado normal, y el caso de
+    // uso que anula la factura decide el mensaje al usuario. Solo borra el par
+    // del usuario que llama; la concesion de otro usuario no se toca.
+    Task<bool> ConsumeAsync(Guid userId, string permissionName, CancellationToken cancellationToken = default);
 }
