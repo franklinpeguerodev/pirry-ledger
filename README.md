@@ -207,26 +207,29 @@ $env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_l
 
 Esa línea solo vive en la terminal abierta. En otra terminal hay que repetirla.
 
-Las tres piezas, en este orden:
+Las cuatro piezas, en este orden:
 
 ```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure
+dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedger.Business.Infrastructure
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
 `ac_activation_tokens` y `ac_sessions`), la cola de Notifications
-(`not_email_queue`) y las dos tablas de permisos (`per_permission_requests` y
+(`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`) en la misma base, manteniendo la
-propiedad de cada módulo.
+`ux_per_permission_grants_user_permission`) y las cuatro tablas de facturas del
+módulo Business (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments` y
+`bil_invoice_edits`), en la misma base y manteniendo la propiedad de cada módulo.
 
-El orden de los tres comandos da igual: las tablas de permisos no declaran
-claves foráneas hacia `ac_users`, así que ninguna depende de que la otra exista.
-Está comprobado también ejecutándolos en orden inverso.
+El orden de los cuatro comandos da igual: ninguna de esas tablas declara claves
+foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
+cuatro de `bil_` sí se referencian entre ellas, pero se crean en la misma
+migración. Está comprobado también ejecutándolos en orden inverso.
 
-Para comprobar que las tres se aplicaron:
+Para comprobar que las cuatro se aplicaron:
 
 ```sql
 SELECT table_name FROM information_schema.tables
@@ -234,9 +237,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son siete tablas de módulo: las cuatro de `ac_`, `not_email_queue` y las dos de
-`per_`. La tabla `__EFMigrationsHistory` que crea EF Core es la octava fila, pero
-no es de ninguna pieza.
+Son once tablas de módulo: las cuatro de `ac_`, `not_email_queue`, las dos de
+`per_` y las cuatro de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
+es la duodécima fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -255,7 +258,12 @@ Applying migration '20261021024258_InitialSchema'.
 Done.
 ```
 
-Tres mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
+```
+Applying migration '20261029150722_InitialBusinessSchema'.
+Done.
+```
+
+Cuatro mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
 las ejecuciones. Y en una base recién creada, EF Core va primero a preguntar por
 su tabla de migraciones, que todavía no existe, así que imprime un
 `Failed executing DbCommand` con el `SELECT ... FROM "__EFMigrationsHistory"`
@@ -1275,8 +1283,9 @@ Verifica en ese orden:
 dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-Salida esperada: **62 pruebas superadas**, 0 con error. Los nombres dicen qué
-prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
+Salida esperada: **104 pruebas superadas**, 0 con error: las 62 de la máquina de
+esta sección y las 42 de las reglas y la persistencia de la sección 3.10. Los
+nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
 `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)`,
 `AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`,
 `EmitirSinItemsSeRechazaYNoCambiaElEstado`, entre otras.
@@ -1533,6 +1542,77 @@ respuesta es el JSON de la tabla. El mismo comportamiento está cubierto por las
 pruebas de `Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeManejoDeErroresHttp.cs`,
 que corren sin levantar la API.
 
+### 3.10 Reglas de la factura y persistencia (RF-NEG-02, RD-07, RD-09)
+
+Las reglas del negocio viven en el agregado `Invoice`, en el dominio, y se
+verifican sin base de datos, sin SMTP y sin levantar la aplicación (RD-12).
+Todavía **no hay endpoints** para la factura: las operaciones protegidas llegan
+en un paso posterior de esta práctica, así que cada criterio se provoca con la
+suite, no con una petición HTTP.
+
+Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities/`
+(`Invoice.cs`, `InvoiceItem.cs`, `InvoicePayment.cs`, `InvoiceEdit.cs`) y
+`PirryLedger.Business.Infrastructure/Persistence/`. Pruebas:
+`Tests/PirryLedger.Business.Tests/Reglas/` y `.../Persistencia/`.
+
+| Criterio | Qué hace el código | Prueba que lo demuestra |
+|---|---|---|
+| Emitir exige al menos un ítem y guarda el total | `Issue` rechaza la lista vacía y suma precio por cantidad | `EmitirGuardaLaFacturaConSusItemsYSuTotal`, `EmitirSinItemsSeRechazaYNoCreaNada` |
+| El delivery se marca al emitir | `Issue(..., isDelivery)` guarda la marca | `EmitirUnaFacturaDeDeliveryGuardaLaMarca` |
+| Cantidad positiva, precio no negativo y dos decimales exactos | `InvoiceItem.Create` valida; nunca redondea | `UnItemConCantidadCeroSeRechaza`, `UnItemConPrecioNegativoSeRechaza`, `UnPrecioConTresDecimalesSeRechaza` |
+| Cobro dividido en efectivo con recibido y cambio | `Collect` acepta varios pagos y calcula el cambio | `CobrarEnEfectivoGuardaElRecibidoYElCambio` |
+| El recibido no puede ser menor que el monto ni los pagos exceder el total | `Collect` rechaza ambos casos sin cambiar el estado | `CobrarConRecibidoMenorQueElMontoSeRechaza`, `CobrarConUnPagoQueExcedeElTotalSeRechaza` |
+| En delivery solo se guarda el monto | `Collect` rechaza recibido y cambio en delivery | `UnaFacturaDeDeliveryNoRegistraRecibidoNiCambio`, `CobrarUnaFacturaDeDeliveryEnEfectivoGuardaSoloElMonto` |
+| Cualquier transferencia manda la factura a verificación pendiente | `Collect` mira si algún pago es `Transfer` | `CobrarConTransferenciaPasaAVerificacionPendiente`, `CobrarConEfectivoYTransferenciaPasaAVerificacionPendiente` |
+| La deuda exige nombre, de 120 caracteres como máximo | `NormalizeDebtorName` recorta y valida | `DejarComoDeudaSinNombreSeRechaza`, `UnNombreDeDeudorDemasiadoLargoSeRechaza` |
+| Un abono solo se registra si la factura está en deuda y no pasa de lo que se debe | `RegisterDebtPayment` comprueba el estado y el saldo antes de agregar | `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza`, `AbonarUnaFacturaPagadaSeRechazaYNoRegistraElPago`, `UnAbonoMayorQueLoQueSeDebeSeRechaza` |
+| El abono no tiene método de pago ni recibido | `InvoicePayment.Debt` usa `PaymentMethod.None` | `UnAbonoDeDeudaNoTieneMetodo` |
+| El abono que cubre el total deja la factura pagada | `RegisterDebtPayment` transiciona antes de agregar el pago | `ElAbonoQueCubreElTotalPasaAPagada` |
+| Confirmar una transferencia exige verificación pendiente y que cubra el total | `ConfirmTransfer` valida estado y saldo | `ConfirmarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza`, `ConfirmarUnaTransferenciaQueNoCubreElTotalSeRechaza` |
+| Rechazar una transferencia deja el pago rechazado, no cuenta y pasa a deuda | `RejectTransfer` solo corre desde verificación pendiente | `RechazarLaTransferenciaDejaElPagoRechazadoYPasaADeuda`, `RechazarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza` |
+| Solo una factura de delivery puede quedar no entregada | `MarkAsNotDelivered` delega en la máquina | `MarcarNoEntregadaUnaFacturaQueNoEsDeliverySeRechaza`, `UnaFacturaEnVerificacionPendienteNoSeMarcaComoNoEntregada` |
+| Editar solo en `Issued`, con al menos un ítem, con historial y aviso al Administrador | `EditItems` valida, reemplaza los ítems, registra quién y cuándo y notifica | `EditarLosItemsDeUnaFacturaEmitidaGuardaElHistorial`, `EditarSinItemsSeRechazaYNoCambiaLaFactura`, `EditarLosItemsFueraDeIssuedSeRechaza`, `EditarAvisaAlAdministradorUnaVez` |
+| La factura se guarda y se recupera con sus ítems, pagos e historial | El repositorio y `BusinessDbContext` escriben las cuatro tablas `bil_` | `UnaFacturaGuardadaSeRecuperaConSusItemsYPagosYSuHistorial` |
+| El esquema usa snake_case y `numeric(12,2)` | Las configuraciones de EF fijan tabla, columna y tipo | `ElEsquemaUsaNombresEnSnakeCase` |
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
+```
+
+Salida esperada: **104 pruebas superadas**, 0 con error.
+
+Para ejecutar solo una familia, sin tocar el código:
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDeCobro"
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDeDeuda"
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDePersistencia"
+```
+
+**Para ver que la suite puede fallar.** Quita la guarda
+`if (State != InvoiceState.InDebt)` de `RegisterDebtPayment` en `Invoice.cs` y
+vuelve a ejecutar el comando: `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza` se pone
+roja y las otras 103 siguen verdes. Restaura la guarda y vuelve a verde. Lo mismo
+pasa con `if (items.Count < 1)` en `EditItems`: sin ella falla
+`EditarSinItemsSeRechazaYNoCambiaLaFactura`.
+
+**La persistencia.** La factura se guarda en cuatro tablas propias
+(`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments` y
+`bil_invoice_edits`), con la migración `20261029150722_InitialBusinessSchema`
+que se aplica con el cuarto comando del paso 6. Las columnas siguen
+`docs/adr/004-snake-case-column-naming.md`: `debtor_name`, `unit_price`,
+`received_amount`, `registered_by_user_id`, `edited_by_user_id`. La prueba de
+ida y vuelta usa EF InMemory y comprueba que la factura vuelve con su estado,
+sus ítems, sus pagos y su historial; la prueba de esquema construye el modelo de
+Npgsql **sin abrir conexión** y comprueba los nombres de tabla y columna y el
+tipo `numeric(12,2)`. El reinicio real de la aplicación se prueba en el paso de
+las operaciones, cuando exista una operación que escriba.
+
+**Qué NO incluye todavía.** No hay endpoints ni casos de uso: el agregado no se
+puede tocar desde HTTP. La anulación de una factura pagada o en deuda con
+permiso `CancelInvoice:<id>` llega con las operaciones protegidas, igual que la
+lectura del historial de edición, que será solo del Administrador.
+
 ---
 
 ## 4. Referencia
@@ -1579,12 +1659,15 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 
 ### Esquema de la base de datos
 
-Las tres piezas comparten la misma base PostgreSQL, pero cada una es dueña de sus
-propias tablas. Las tres tablas de tokens y sesiones pertenecen a AccessControl;
-la cola pertenece a Notifications; las dos de solicitudes y concesiones
-pertenecen a Permissions. La cola de email no tiene una clave foránea
-hacia `ac_users`: el vínculo entre ambos módulos ocurre mediante la operación
-que encola el email, no mediante una relación directa entre tablas.
+Las cuatro piezas comparten la misma base PostgreSQL, pero cada una es dueña de
+sus propias tablas. Las tres tablas de tokens y sesiones pertenecen a
+AccessControl; la cola pertenece a Notifications; las dos de solicitudes y
+concesiones pertenecen a Permissions; las cuatro de facturas pertenecen a
+Business. La cola de email no tiene una clave foránea hacia `ac_users`: el
+vínculo entre ambos módulos ocurre mediante la operación que encola el email, no
+mediante una relación directa entre tablas. Lo mismo pasa con las facturas: no
+hay clave foránea hacia `ac_users`, porque el negocio no puede depender de las
+tablas de otra pieza (RD-03).
 
 ```mermaid
 erDiagram
@@ -1663,15 +1746,62 @@ erDiagram
         uuid granted_by_user_id "nullable"
     }
 
+    bil_invoices {
+        uuid id PK
+        int state
+        datetime issued_at_utc
+        boolean is_delivery
+        string debtor_name "nullable"
+    }
+
+    bil_invoice_items {
+        uuid id PK
+        uuid invoice_id FK
+        string name
+        numeric unit_price
+        int quantity
+    }
+
+    bil_invoice_payments {
+        uuid id PK
+        uuid invoice_id FK
+        int kind
+        int method
+        int status
+        numeric amount
+        numeric received_amount "nullable"
+        numeric change_amount "nullable"
+        datetime registered_at_utc
+        uuid registered_by_user_id
+    }
+
+    bil_invoice_edits {
+        uuid id PK
+        uuid invoice_id FK
+        datetime edited_at_utc
+        uuid edited_by_user_id
+        int item_count
+    }
+
     ac_users ||--o{ ac_recovery_codes : "tiene"
     ac_users ||--o{ ac_activation_tokens : "tiene"
     ac_users ||--o{ ac_sessions : "tiene"
+    bil_invoices ||--o{ bil_invoice_items : "tiene"
+    bil_invoices ||--o{ bil_invoice_payments : "tiene"
+    bil_invoices ||--o{ bil_invoice_edits : "tiene"
 ```
 
 `password_hash`, `code_hash` y `token_hash` almacenan hashes, no
 valores secretos en claro. `status` de `not_email_queue` usa `0 = Pending`,
 `1 = Processing` y `2 = Sent`. `state` de `per_permission_requests` usa
 `Pending`, `Approved`, `Applied` y `Rejected`.
+
+En las tablas de facturas, `state` de `bil_invoices` guarda el ordinal de
+`InvoiceState` y `kind`, `method` y `status` de `bil_invoice_payments` los de
+sus enums: `0 = Sale, 1 = Debt`; `0 = Cash, 1 = Transfer, 2 = None`;
+`0 = Registered, 1 = Confirmed, 2 = Rejected`. Los cuatro montos
+(`unit_price`, `amount`, `received_amount` y `change_amount`) son
+`numeric(12,2)`: dos decimales exactos, nunca redondeados.
 
 Las cuatro columnas que apuntan a un usuario (`requester_id`, `approver_id`,
 `user_id` y `granted_by_user_id`) **no tienen clave foránea** en la base: la
