@@ -276,6 +276,12 @@ public sealed class Invoice
     // cuentan; el nombre de la persona que queda debiendo es obligatorio.
     public void RejectTransfer(string debtorName, DateTime rejectedAtUtc)
     {
+        if (State != InvoiceState.PendingVerification)
+        {
+            throw new InvoiceRuleViolationException(
+                "Solo se puede rechazar una transferencia de una factura en verificación pendiente.");
+        }
+
         if (string.IsNullOrWhiteSpace(debtorName))
         {
             throw new InvoiceRuleViolationException("La deuda exige el nombre de la persona.");
@@ -283,10 +289,17 @@ public sealed class Invoice
 
         var name = debtorName.Trim();
 
+        // Los pagos que no son transferencia siguen contando; solo se rechazan
+        // las transferencias.
+        var paidWithoutTransfers = _payments
+            .Where(payment => payment.Method != PaymentMethod.Transfer)
+            .Where(payment => payment.Status != PaymentStatus.Rejected)
+            .Sum(payment => payment.Amount);
+
         var context = new InvoiceTransitionContext
         {
             TotalAmount = Total,
-            PaidAmount = 0m,
+            PaidAmount = paidWithoutTransfers,
             DebtorName = name,
         };
 

@@ -152,4 +152,17 @@ public sealed class PruebasDeDeuda
         Assert.All(factura.Payments, p => Assert.Equal(PaymentStatus.Rejected, p.Status));
         Assert.Equal(0m, factura.PaidAmount);
     }
+
+    [Fact]
+    public void RechazarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.RejectTransfer("Juan", Ahora));
+        Assert.Equal(InvoiceState.Issued, factura.State);
+        Assert.Empty(factura.Payments);
+        Assert.Null(factura.DebtorName);
+    }
 }
