@@ -254,6 +254,12 @@ public sealed class Invoice
     // de la fila). Confirma todas las transferencias.
     public void ConfirmTransfer(DateTime confirmedAtUtc)
     {
+        if (State != InvoiceState.PendingVerification)
+        {
+            throw new InvoiceRuleViolationException(
+                "Solo se puede confirmar una transferencia de una factura en verificación pendiente.");
+        }
+
         if (PaidAmount < Total)
         {
             throw new InvoiceConditionNotMetException(

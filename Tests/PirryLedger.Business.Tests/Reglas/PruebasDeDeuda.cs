@@ -166,6 +166,18 @@ public sealed class PruebasDeDeuda
     }
 
     [Fact]
+    public void ConfirmarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+        factura.Collect(new[] { InvoicePayment.Cash(500m, 500m, Ahora, Cajero) });
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.ConfirmTransfer(Ahora));
+        Assert.Equal(InvoiceState.Paid, factura.State);
+    }
+
+    [Fact]
     public void RechazarLaTransferenciaDejaElPagoRechazadoYPasaADeuda()
     {
         // Arrange
