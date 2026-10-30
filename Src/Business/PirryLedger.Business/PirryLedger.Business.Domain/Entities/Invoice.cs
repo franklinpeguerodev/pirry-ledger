@@ -10,6 +10,8 @@ namespace PirryLedger.Business.Domain.Entities;
 // invoice is created in memory and issued in the same operation.
 public sealed class Invoice
 {
+    public const int MaximumDebtorNameLength = 120;
+
     private readonly List<InvoiceItem> _items = new();
 
     private readonly List<InvoicePayment> _payments = new();
@@ -167,12 +169,7 @@ public sealed class Invoice
         DateTime now,
         Guid registeredByUserId)
     {
-        if (string.IsNullOrWhiteSpace(debtorName))
-        {
-            throw new InvoiceRuleViolationException("La deuda exige el nombre de la persona.");
-        }
-
-        var name = debtorName.Trim();
+        var name = NormalizeDebtorName(debtorName);
         var paidAmount = payments?.Sum(payment => payment.Amount) ?? 0m;
 
         if (paidAmount > Total)
@@ -296,12 +293,7 @@ public sealed class Invoice
                 "Solo se puede rechazar una transferencia de una factura en verificación pendiente.");
         }
 
-        if (string.IsNullOrWhiteSpace(debtorName))
-        {
-            throw new InvoiceRuleViolationException("La deuda exige el nombre de la persona.");
-        }
-
-        var name = debtorName.Trim();
+        var name = NormalizeDebtorName(debtorName);
 
         // Los pagos que no son transferencia siguen contando; solo se rechazan
         // las transferencias.
@@ -379,6 +371,24 @@ public sealed class Invoice
         };
 
         State = InvoiceStateMachine.Transition(State, InvoiceState.NotDelivered, context);
+    }
+
+    private static string NormalizeDebtorName(string debtorName)
+    {
+        if (string.IsNullOrWhiteSpace(debtorName))
+        {
+            throw new InvoiceRuleViolationException("La deuda exige el nombre de la persona.");
+        }
+
+        var name = debtorName.Trim();
+
+        if (name.Length > MaximumDebtorNameLength)
+        {
+            throw new InvoiceRuleViolationException(
+                $"El nombre del deudor no puede pasar de {MaximumDebtorNameLength} caracteres.");
+        }
+
+        return name;
     }
 
     // Costura interna: la usan las pruebas de la maquina, que comprueban la

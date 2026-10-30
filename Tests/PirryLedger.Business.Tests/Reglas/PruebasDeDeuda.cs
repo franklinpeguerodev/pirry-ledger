@@ -65,6 +65,20 @@ public sealed class PruebasDeDeuda
     }
 
     [Fact]
+    public void UnNombreDeDeudorDemasiadoLargoSeRechaza()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+        var nombre = new string('a', 121);
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(
+            () => factura.LeaveAsDebt(nombre, null, Ahora, Cajero));
+        Assert.Equal(InvoiceState.Issued, factura.State);
+        Assert.Null(factura.DebtorName);
+    }
+
+    [Fact]
     public void AbonarParcialNoCambiaElEstadoYSumaAlPagado()
     {
         // Arrange
