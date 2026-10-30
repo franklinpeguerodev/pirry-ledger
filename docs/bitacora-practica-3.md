@@ -111,4 +111,73 @@ dotnet test pirry-ledger.slnx
 
 Debe decir 190 superadas y 0 con error. Después, quitar `EnsureHasAtLeastOneItem(from, to, context);` de `InvoiceStateMachine` y repetir: una sola prueba en rojo, `EmitirSinItemsSeRechazaYNoCambiaElEstado`.
 
+---
+
+### Entrada 3 — Las reglas de la factura, su persistencia y los ocho commits de la auditoría (2026-10-29)
+
+**Qué se pidió.** Ejecutar la fase 2 del plan en la rama `feature/invoice-rules`: las reglas de la factura y su persistencia (paso 2 de `current-iteration.md`), con pruebas primero, commits atómicos y la documentación en el mismo pull request. El pull request ya estaba abierto cuando empezó la auditoría, así que los arreglos se agregaron como commits nuevos, sin reescribir el historial.
+
+**Qué devolví.**
+
+1. **Los seis commits originales**, uno por comportamiento:
+   - `601e9b9` ítems y regla de emisión;
+   - `875fff9` cobro en efectivo o por transferencia;
+   - `0ce0961` deuda y abonos;
+   - `0677053` factura de delivery no entregada;
+   - `6fcc348` edición de los ítems de una factura emitida;
+   - `e40768b` persistencia en tablas propias y migración.
+2. **La auditoría del propio trabajo, que encontró cinco reglas mal puestas.** Cada una se arregló en su commit, con la prueba escrita antes y mostrada en rojo:
+   - `8ac1f81` `RejectTransfer` se podía ejecutar desde cualquier estado; ahora solo desde `PendingVerification`;
+   - `2935eeb` `RegisterDebtPayment` se podía ejecutar desde cualquier estado y agregaba el pago antes de transicionar; ahora exige `InDebt` y transiciona primero;
+   - `c63eb90` `ConfirmTransfer` se podía ejecutar desde cualquier estado; ahora solo desde `PendingVerification`;
+   - `67c8fb5` `EditItems` aceptaba una lista vacía y dejaba la factura sin ítems; ahora la rechaza;
+   - `9ef9c30` el nombre del deudor no tenía límite y la columna es `varchar(120)`; ahora se valida antes de escribir.
+3. **La prueba de persistencia que faltaba** (`2936b66`): ida y vuelta con EF InMemory y comprobación del esquema de Npgsql sin abrir conexión. RD-09 no estaba probado, solo implementado.
+4. **La limpieza** (`ba85ad0`): parámetros que nadie usaba (`LeaveAsDebt` ya no recibe fecha ni usuario, `ConfirmTransfer`, `RejectTransfer` y `MarkAsNotDelivered` pierden su fecha), `PaymentMethod.None` para el abono de deuda y comentarios en español.
+5. **El nombre de una prueba** (`df30bd2`): `UnaFacturaEnVerificacionPendienteNoSeEdita` en `PruebasDeNoEntrega` probaba `MarkAsNotDelivered`, no una edición. Ahora se llama `UnaFacturaEnVerificacionPendienteNoSeMarcaComoNoEntregada`.
+6. **La documentación:** README §3.10 con la tabla de criterios y la prueba de cada uno, el cuarto comando de migración en el paso 6, las cuatro tablas `bil_` en el esquema, y las decisiones 6, 7 y 9 de `current-iteration.md` cerradas con las reglas que quedaron.
+
+**Dónde se equivocó el agente.**
+
+- **Confundió "el agregado lo permite" con "la regla lo permite".** `RejectTransfer`, `RegisterDebtPayment` y `ConfirmTransfer` delegaban en la máquina de estados, que rechaza el par prohibido, pero no comprobaban el estado de partida que la operación necesita. El resultado era un error de transición en vez de un rechazo de la regla, y en el abono el pago se agregaba antes de saber si la transición valía. Las tres pruebas que lo demuestran se escribieron después de la auditoría, no antes: la suite original estaba verde porque probaba el camino feliz de cada método.
+- **Dejó `RD-09` sin prueba.** La persistencia estaba implementada y la migración generada, pero ninguna prueba guardaba y recuperaba una factura. Lo detecté al revisar el criterio de aceptación punto por punto, no al ejecutar la suite.
+- **Escribió un nombre de prueba que describe otra cosa.** La prueba de no entrega se llamaba "no se edita". Pasó desapercibido porque el nombre era plausible y la prueba pasaba.
+- **Dejó parámetros muertos en la API del agregado** (`now`, `callerId`, `registeredAtUtc` sin uso). No rompen nada, pero mienten sobre lo que el método necesita.
+
+**Qué verifiqué.**
+
+- **Rojo primero, en cada arreglo.** Por ejemplo, `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza` falló con `Expected: typeof(InvoiceRuleViolationException)` y sin excepción antes de la guarda; `ConfirmarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza` falló con `Actual: typeof(InvalidInvoiceTransitionException)`. Era el rojo correcto en los dos casos: la regla no existía.
+- **Verde:** `dotnet test pirry-ledger.slnx` → **232 superadas, 0 con error**: Business 104, AccessControl 96, Permissions 26, Notifications 6. `dotnet build pirry-ledger.slnx` → 0 advertencias, 0 errores.
+- **La migración se aplica de verdad.** `dotnet ef migrations list --project Src\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure` mostró `20261029150722_InitialBusinessSchema (Pending)`; después de `dotnet ef database update` sobre la misma pieza, la migración se aplicó (`Applying migration '20261029150722_InitialBusinessSchema'. Done.`) y la lista volvió a mostrarla sin `(Pending)`. La base de desarrollo de mi máquina quedó con las cuatro tablas `bil_`.
+- **La prueba de persistencia usa la base real solo para leer el modelo.** `ElEsquemaUsaNombresEnSnakeCase` construye el modelo de Npgsql y comprueba nombres y `numeric(12,2)` sin conectarse; `UnaFacturaGuardadaSeRecuperaConSusItemsYPagosYSuHistorial` usa EF InMemory. Ninguna necesita PostgreSQL ni SMTP (RD-12).
+- **La suite puede fallar, y por la razón correcta.** Quitar `if (State != InvoiceState.InDebt)` de `RegisterDebtPayment` pone en rojo `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza` y deja las otras 103 verdes; quitar `if (items.Count < 1)` de `EditItems` pone en rojo `EditarSinItemsSeRechazaYNoCambiaLaFactura`.
+
+**Lo que decidí yo.**
+
+1. **Editar a cero ítems se rechaza.** Una factura sin ítems no es una factura: si el cliente ya no quiere nada, se anula y se emite otra.
+2. **Una factura cobrada de menos se anula y se emite de nuevo.** No se edita una factura pagada ni se le agrega un pago negativo.
+3. **Una transferencia rechazada no cuenta.** Queda `Rejected`, el monto pagado baja y la factura pasa a `InDebt` con el nombre de quien debe.
+4. **El abono de deuda no tiene método de pago.** `PaymentMethod.None` expresa "no aplica"; no se inventa un método para llenar la columna.
+5. **En delivery solo se guarda el monto.** Quien cobra no sabe cuánto entregó ni cuánto devolvió el courier, así que el recibido y el cambio se rechazan en vez de inventarse.
+6. **El nombre del deudor se valida contra la columna.** 120 caracteres, el mismo límite de `debtor_name`, para que la base no tenga que truncar ni fallar.
+
+**Desvío del plan.** El plan decía dos commits por comportamiento (prueba en rojo e implementación). En la práctica cada comportamiento quedó en un commit con la prueba y el código juntos, porque el proyecto de pruebas no compila sin la API que describe; el rojo queda registrado aquí con su salida real. La persistencia llegó en un commit y su prueba en otro, después de la auditoría.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 232 superadas y 0 con error. Para ver solo las reglas de esta fase:
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
+```
+
+Debe decir 104. Después, quitar `if (State != InvoiceState.InDebt)` de `RegisterDebtPayment` en `Invoice.cs` y repetir: una sola prueba en rojo, `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza`.
+
+Si la base no tiene todavía las tablas de facturas, el cuarto comando del paso 6 del README las crea. En mi máquina ya están aplicadas.
+
+
 
