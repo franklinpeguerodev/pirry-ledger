@@ -113,8 +113,8 @@ public sealed class InvoicePayment
             registeredByUserId);
     }
 
-    // Abono de deuda registrado por un Administrador. Nace confirmado y el
-    // monto recibido es el mismo monto abonado.
+    // Abono de deuda registrado por un Administrador: monto y fecha, sin metodo
+    // (decision 7 de current-iteration.md). No lleva recibido ni cambio.
     public static InvoicePayment Debt(
         decimal amount,
         DateTime registeredAtUtc,
@@ -125,10 +125,10 @@ public sealed class InvoicePayment
         return new InvoicePayment(
             Guid.NewGuid(),
             PaymentKind.Debt,
-            PaymentMethod.Cash,
+            PaymentMethod.None,
             PaymentStatus.Confirmed,
             amount,
-            receivedAmount: amount,
+            receivedAmount: null,
             registeredAtUtc,
             registeredByUserId);
     }

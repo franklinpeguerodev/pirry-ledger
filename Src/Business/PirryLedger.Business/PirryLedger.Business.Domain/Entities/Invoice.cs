@@ -5,9 +5,9 @@ using PirryLedger.Business.Domain.StateMachines;
 
 namespace PirryLedger.Business.Domain.Entities;
 
-// RF-NEG-03: central business entity carrying the state machine state.
-// The draft lives only in the client, so a row is never stored in Draft: the
-// invoice is created in memory and issued in the same operation.
+// RF-NEG-03: entidad central del negocio que lleva el estado de la maquina.
+// El borrador vive solo en el cliente, asi que nunca se guarda una fila en
+// Draft: la factura se crea en memoria y se emite en la misma operacion.
 public sealed class Invoice
 {
     public const int MaximumDebtorNameLength = 120;
@@ -101,6 +101,7 @@ public sealed class Invoice
                 "Los pagos no pueden exceder el total de la factura.");
         }
 
+        EnsureNoDebtPayments(payments);
         EnsureDeliveryDoesNotRegisterReceived(payments);
         EnsureCashRegistersReceived(payments, IsDelivery);
 
@@ -121,6 +122,17 @@ public sealed class Invoice
         {
             payment.AttachTo(Id);
             _payments.Add(payment);
+        }
+    }
+
+    // Un abono de deuda no es un cobro de la venta: se registra desde la deuda,
+    // no al emitir ni al cobrar.
+    private static void EnsureNoDebtPayments(IReadOnlyCollection<InvoicePayment> payments)
+    {
+        if (payments.Any(payment => payment.Kind == PaymentKind.Debt))
+        {
+            throw new InvoiceRuleViolationException(
+                "Un abono de deuda no se registra como cobro de la venta.");
         }
     }
 
@@ -165,9 +177,7 @@ public sealed class Invoice
     // es opcional y los pagos que llegan ya llevan su monto, metodo y estado.
     public void LeaveAsDebt(
         string debtorName,
-        IReadOnlyCollection<InvoicePayment>? payments,
-        DateTime now,
-        Guid registeredByUserId)
+        IReadOnlyCollection<InvoicePayment>? payments)
     {
         var name = NormalizeDebtorName(debtorName);
         var paidAmount = payments?.Sum(payment => payment.Amount) ?? 0m;
@@ -178,7 +188,12 @@ public sealed class Invoice
                 "Los pagos no pueden exceder el total de la factura.");
         }
 
-        EnsureDeliveryDoesNotRegisterReceived(payments ?? Array.Empty<InvoicePayment>());
+        if (payments is not null)
+        {
+            EnsureNoDebtPayments(payments);
+            EnsureDeliveryDoesNotRegisterReceived(payments);
+            EnsureCashRegistersReceived(payments, IsDelivery);
+        }
 
         var context = new InvoiceTransitionContext
         {
@@ -249,7 +264,7 @@ public sealed class Invoice
 
     // PendingVerification -> Paid. Solo si los pagos cubren el total (condicion
     // de la fila). Confirma todas las transferencias.
-    public void ConfirmTransfer(DateTime confirmedAtUtc)
+    public void ConfirmTransfer()
     {
         if (State != InvoiceState.PendingVerification)
         {
@@ -285,7 +300,7 @@ public sealed class Invoice
 
     // PendingVerification -> InDebt. Las transferencias quedan Rejected y no
     // cuentan; el nombre de la persona que queda debiendo es obligatorio.
-    public void RejectTransfer(string debtorName, DateTime rejectedAtUtc)
+    public void RejectTransfer(string debtorName)
     {
         if (State != InvoiceState.PendingVerification)
         {
@@ -363,7 +378,7 @@ public sealed class Invoice
     // Issued -> NotDelivered. Solo una factura de delivery puede marcarse como no
     // entregada. En produccion el agregado calcula el contexto (es delivery) y
     // la maquina comprueba la condicion.
-    public void MarkAsNotDelivered(DateTime now)
+    public void MarkAsNotDelivered()
     {
         var context = new InvoiceTransitionContext
         {
@@ -392,9 +407,9 @@ public sealed class Invoice
     }
 
     // Costura interna: la usan las pruebas de la maquina, que comprueban la
-    // tabla fila por fila con un contexto a mano. En produccion el unico camino
-    // es TransitionTo(estado), que calcula el contexto desde los items y los
-    // pagos y no puede mentir.
+    // tabla fila por fila con un contexto a mano. En produccion no se llama
+    // desde fuera del dominio: cada metodo del agregado arma su contexto desde
+    // los items y los pagos y delega aqui.
     internal void TransitionTo(InvoiceState newState, InvoiceTransitionContext context)
     {
         State = InvoiceStateMachine.Transition(State, newState, context);

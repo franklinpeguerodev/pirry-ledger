@@ -139,4 +139,17 @@ public sealed class PruebasDeCobro
         Assert.Null(pago.ChangeAmount);
         Assert.Equal(InvoiceState.Paid, factura.State);
     }
+
+    [Fact]
+    public void UnAbonoDeDeudaNoSeRegistraComoCobroDeLaVenta()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+        var abono = InvoicePayment.Debt(500m, Ahora, Guid.Parse("99999999-9999-9999-9999-999999999999"));
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.Collect(new[] { abono }));
+        Assert.Equal(InvoiceState.Issued, factura.State);
+        Assert.Empty(factura.Payments);
+    }
 }

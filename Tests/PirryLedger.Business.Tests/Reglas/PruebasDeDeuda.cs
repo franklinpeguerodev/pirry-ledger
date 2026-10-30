@@ -30,7 +30,7 @@ public sealed class PruebasDeDeuda
         var factura = FacturaEmitida();
 
         // Act
-        factura.LeaveAsDebt("Juan", new[] { InvoicePayment.Cash(200m, 200m, Ahora, Cajero) }, Ahora, Cajero);
+        factura.LeaveAsDebt("Juan", new[] { InvoicePayment.Cash(200m, 200m, Ahora, Cajero) });
 
         // Assert
         Assert.Equal(InvoiceState.InDebt, factura.State);
@@ -46,7 +46,7 @@ public sealed class PruebasDeDeuda
 
         // Act + Assert
         Assert.Throws<InvoiceRuleViolationException>(
-            () => factura.LeaveAsDebt("   ", null, Ahora, Cajero));
+            () => factura.LeaveAsDebt("   ", null));
         Assert.Equal(InvoiceState.Issued, factura.State);
     }
 
@@ -57,7 +57,7 @@ public sealed class PruebasDeDeuda
         var factura = FacturaEmitida();
 
         // Act
-        factura.LeaveAsDebt("Juan", null, Ahora, Cajero);
+        factura.LeaveAsDebt("Juan", null);
 
         // Assert
         Assert.Equal(InvoiceState.InDebt, factura.State);
@@ -73,9 +73,34 @@ public sealed class PruebasDeDeuda
 
         // Act + Assert
         Assert.Throws<InvoiceRuleViolationException>(
-            () => factura.LeaveAsDebt(nombre, null, Ahora, Cajero));
+            () => factura.LeaveAsDebt(nombre, null));
         Assert.Equal(InvoiceState.Issued, factura.State);
         Assert.Null(factura.DebtorName);
+    }
+
+    [Fact]
+    public void UnAbonoDeDeudaNoTieneMetodo()
+    {
+        // Act
+        var abono = InvoicePayment.Debt(100m, Ahora, Admin);
+
+        // Assert
+        Assert.Equal(PaymentMethod.None, abono.Method);
+        Assert.Null(abono.ReceivedAmount);
+        Assert.Null(abono.ChangeAmount);
+    }
+
+    [Fact]
+    public void DejarComoDeudaConEfectivoSinRecibidoSeRechaza()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+        var sinRecibido = new[] { InvoicePayment.Cash(200m, null, Ahora, Cajero) };
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.LeaveAsDebt("Juan", sinRecibido));
+        Assert.Equal(InvoiceState.Issued, factura.State);
+        Assert.Empty(factura.Payments);
     }
 
     [Fact]
@@ -83,7 +108,7 @@ public sealed class PruebasDeDeuda
     {
         // Arrange
         var factura = FacturaEmitida();
-        factura.LeaveAsDebt("Juan", null, Ahora, Cajero);
+        factura.LeaveAsDebt("Juan", null);
 
         // Act
         factura.RegisterDebtPayment(100m, Ahora, Admin);
@@ -98,7 +123,7 @@ public sealed class PruebasDeDeuda
     {
         // Arrange
         var factura = FacturaEmitida();
-        factura.LeaveAsDebt("Juan", null, Ahora, Cajero);
+        factura.LeaveAsDebt("Juan", null);
 
         // Act
         factura.RegisterDebtPayment(500m, Ahora, Admin);
@@ -113,7 +138,7 @@ public sealed class PruebasDeDeuda
     {
         // Arrange
         var factura = FacturaEmitida();
-        factura.LeaveAsDebt("Juan", new[] { InvoicePayment.Cash(200m, 200m, Ahora, Cajero) }, Ahora, Cajero);
+        factura.LeaveAsDebt("Juan", new[] { InvoicePayment.Cash(200m, 200m, Ahora, Cajero) });
 
         // Act + Assert
         Assert.Throws<InvoiceRuleViolationException>(
@@ -159,7 +184,7 @@ public sealed class PruebasDeDeuda
         Assert.Equal(InvoiceState.PendingVerification, factura.State);
 
         // Act
-        factura.ConfirmTransfer(Ahora);
+        factura.ConfirmTransfer();
 
         // Assert
         Assert.Equal(InvoiceState.Paid, factura.State);
@@ -171,11 +196,12 @@ public sealed class PruebasDeDeuda
     {
         // Arrange
         var factura = FacturaEmitida();
-        // Partial transfer: payment 200 of 500 total → PendingVerification (HasTransfer)
+        // Transferencia parcial: 200 de un total de 500. La factura queda en
+        // verificacion pendiente porque hay una transferencia.
         factura.Collect(new[] { InvoicePayment.Transfer(200m, Ahora, Cajero) });
 
         // Act + Assert
-        Assert.Throws<InvoiceConditionNotMetException>(() => factura.ConfirmTransfer(Ahora));
+        Assert.Throws<InvoiceConditionNotMetException>(() => factura.ConfirmTransfer());
         Assert.Equal(InvoiceState.PendingVerification, factura.State);
     }
 
@@ -187,7 +213,7 @@ public sealed class PruebasDeDeuda
         factura.Collect(new[] { InvoicePayment.Cash(500m, 500m, Ahora, Cajero) });
 
         // Act + Assert
-        Assert.Throws<InvoiceRuleViolationException>(() => factura.ConfirmTransfer(Ahora));
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.ConfirmTransfer());
         Assert.Equal(InvoiceState.Paid, factura.State);
     }
 
@@ -199,7 +225,7 @@ public sealed class PruebasDeDeuda
         factura.Collect(new[] { InvoicePayment.Transfer(500m, Ahora, Cajero) });
 
         // Act
-        factura.RejectTransfer("Juan", Ahora);
+        factura.RejectTransfer("Juan");
 
         // Assert
         Assert.Equal(InvoiceState.InDebt, factura.State);
@@ -214,7 +240,7 @@ public sealed class PruebasDeDeuda
         var factura = FacturaEmitida();
 
         // Act + Assert
-        Assert.Throws<InvoiceRuleViolationException>(() => factura.RejectTransfer("Juan", Ahora));
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.RejectTransfer("Juan"));
         Assert.Equal(InvoiceState.Issued, factura.State);
         Assert.Empty(factura.Payments);
         Assert.Null(factura.DebtorName);

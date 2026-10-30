@@ -25,7 +25,7 @@ public sealed class PruebasDeNoEntrega
         var factura = FacturaEmitida(isDelivery: true);
 
         // Act
-        factura.MarkAsNotDelivered(Ahora);
+        factura.MarkAsNotDelivered();
 
         // Assert
         Assert.Equal(InvoiceState.NotDelivered, factura.State);
@@ -38,7 +38,7 @@ public sealed class PruebasDeNoEntrega
         var factura = FacturaEmitida(isDelivery: false);
 
         // Act + Assert
-        Assert.Throws<InvoiceConditionNotMetException>(() => factura.MarkAsNotDelivered(Ahora));
+        Assert.Throws<InvoiceConditionNotMetException>(() => factura.MarkAsNotDelivered());
         Assert.Equal(InvoiceState.Issued, factura.State);
     }
 
@@ -50,7 +50,7 @@ public sealed class PruebasDeNoEntrega
         factura.Collect(new[] { InvoicePayment.Transfer(500m, Ahora, Guid.Parse("11111111-1111-1111-1111-111111111111")) });
 
         // Act + Assert
-        Assert.Throws<InvalidInvoiceTransitionException>(() => factura.MarkAsNotDelivered(Ahora));
+        Assert.Throws<InvalidInvoiceTransitionException>(() => factura.MarkAsNotDelivered());
         Assert.Equal(InvoiceState.PendingVerification, factura.State);
     }
 }
