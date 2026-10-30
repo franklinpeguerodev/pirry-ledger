@@ -180,4 +180,60 @@ Debe decir 104. Después, quitar `if (State != InvoiceState.InDebt)` de `Registe
 Si la base no tiene todavía las tablas de facturas, el cuarto comando del paso 6 del README las crea. En mi máquina ya están aplicadas.
 
 
+---
+
+### Entrada 4 — Consumir una concesión en Permissions (RF-GP-05, RF-NEG-06) (2026-10-30)
+
+**Qué se pidió.** Ejecutar la fase 3 del plan en la rama `feature/permission-consumption`: una operación nueva en el contrato de Permissions que borre la concesión, con pruebas en la suite de Permissions, sin migración y sin tocar Business ni endpoints. Antes de escribir código: presentar el ADR 011 con alternativas y esperar autorización. Franklin eligió la opción B (duplicar el prefijo en el dominio y en los contratos, atados por una prueba) y autorizó el ADR.
+
+**Qué devolví.**
+
+1. **Commit `Add the invoice cancellation permission name (RF-GP-01, RF-NEG-06)`**: `PermissionNames` en `Core.Contracts` (constructor y validador con GUID canónico) y `PermissionCatalog.IsKnown` extendido para aceptar `CancelInvoice:<guid>`. 10 pruebas de catálogo.
+2. **Commit `Consume a permission grant in Permissions (RF-GP-05, RF-NEG-06)`**: `ConsumeAsync` en `IPermissionAuthority` y en `IPermissionGrantRepository`; `PermissionGrantRepository.ConsumeAsync` busca, borra y captura `DbUpdateConcurrencyException`; `EfPermissionAuthority` delega; dobles actualizados (`ConsumeAsync` en el doble de Permissions y en el de AccessControl). 7 pruebas de consumo.
+3. **Commit `Document the consumption of a permission grant (ADR 011)`**: ADR 011, índice del ADR, README §3.11, `current-iteration.md` con la decisión 10 cerrada y la corrección "ADR 010" → "ADR 011".
+4. **Commit `Record phase 3 in the logbook (RF-GP-05)`**: esta entrada.
+
+**Dónde se equivocó el agente.**
+
+- **La primera prueba del catálogo usó un GUID solo de dígitos** (`11111111-…`), así que "mayúsculas" era el mismo texto y la prueba pasaba cuando debía fallar. Lo detecté al ver el rojo malo y cambié el GUID a `abcdef01-2345-6789-abcd-ef0123456789`. La prueba no se debilitó: se corrigió el dato.
+- **La carrera de dos consumos simultáneos** (`DbUpdateConcurrencyException`) no se puede reproducir con EF InMemory, así que quedó cubierta por el código y por el razonamiento, no por una prueba. Se probará contra PostgreSQL en la fase 4. Lo dejé anotado en el ADR y en el README.
+- **El plan inicial decía "ADR 010"**, pero ese número ya estaba ocupado por `010-role-as-text-in-responses.md`. Lo detecté en la fase 0 y el consumo quedó como ADR 011. Corregí `current-iteration.md` en esta fase.
+
+**Qué verifiqué.**
+
+- **Rojo primero.** El primer intento de compilar las pruebas de catálogo falló con `CS0103: El nombre 'PermissionNames' no existe` y `CS0117: 'PermissionCatalog' no contiene una definición para 'IsKnown'`. El primer intento de compilar las pruebas de consumo falló con `CS1061: 'PermissionGrantRepository' no contiene una definición para 'ConsumeAsync'`. Los dos rojos eran los correctos: la API que describen las pruebas no existía.
+- **Verde:** `dotnet test pirry-ledger.slnx` → **249 superadas, 0 con error**: Business 104, AccessControl 96, Permissions 43, Notifications 6. `dotnet build pirry-ledger.slnx` → 0 advertencias, 0 errores.
+- **La suite puede fallar, y por la razón correcta.** Comentar `_context.PermissionGrants.Remove(grant)` en `PermissionGrantRepository.ConsumeAsync` pone en rojo `ConsumirUnaConcesionLaBorraYDevuelveTrue` (la fila sigue en la base) y deja las otras 42 verdes. Quitar la guarda `if (userId == Guid.Empty …)` de `EfPermissionAuthority.ConsumeAsync` pone en rojo `LaAutoridadNoConsumeConUsuarioVacio`.
+- **Una sola migración en Permissions.** `dotnet ef migrations list` sigue mostrando solo `20261021024258_InitialSchema`: consumir es un `DELETE`, no hay esquema nuevo.
+- **No se tocó Business, ni endpoints, ni el Host.** El diff de la fase es solo contratos, dominio, infraestructura de Permissions y pruebas.
+
+**Lo que decidí yo.**
+
+1. **Opción B para el nombre del permiso.** El prefijo vive duplicado en `PermissionCatalog` (dominio) y en `PermissionNames` (contratos), atados por `PruebasDelCatalogoDePermisos`. Evita la referencia `Permissions.Domain -> Core.Contracts`, que hoy no existe en ningún dominio del repositorio; el coste es un literal y un validador duplicados.
+2. **GUID canónico (formato `D` y minúsculas).** Mayúsculas, llaves o espacios se rechazan, para que una factura tenga un solo nombre de permiso y no se pida dos veces con dos textos distintos.
+3. **`ConsumeAsync` devuelve `true/false`, no lanza.** "No tenía el permiso" es un resultado normal; el mensaje al usuario lo decide el caso de uso de la anulación.
+4. **Solo borra el par del llamante.** La concesión de otro usuario para la misma factura es su propio permiso.
+5. **Orden B en la anulación.** Transición en memoria → consumo → guardar. Si el consumo devuelve `false`, se rechaza antes de guardar. Si el guardado falla después del consumo, la concesión se pierde; se prefiere a dejar una concesión viva sobre una factura ya anulada.
+6. **Sin migración.** La tabla y el índice único ya existen (ADR 008).
+
+**Desvío del plan.** El plan decía un commit por comportamiento (prueba en rojo, implementación en verde). En la práctica la prueba y el código de cada comportamiento quedaron en el mismo commit, porque el proyecto de pruebas no compila sin la API que describe; el rojo queda registrado aquí con su salida real, igual que en las fases 1 y 2.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 249 superadas y 0 con error. Para ver solo Permissions:
+
+```powershell
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj
+```
+
+Debe decir 43. Después, comentar `_context.PermissionGrants.Remove(grant)` en `PermissionGrantRepository.ConsumeAsync` y repetir: una sola prueba en rojo, `ConsumirUnaConcesionLaBorraYDevuelveTrue`.
+
+Para abrir el pull request: rama `feature/permission-consumption`, base `develop`, título sugerido `Consume a permission grant (RF-GP-05, RF-NEG-06)`. Franklin hace el push, el PR y el merge.
+
+
+
 
