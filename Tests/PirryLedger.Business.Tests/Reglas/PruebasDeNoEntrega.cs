@@ -43,7 +43,7 @@ public sealed class PruebasDeNoEntrega
     }
 
     [Fact]
-    public void UnaFacturaEnVerificacionPendienteNoSeEdita()
+    public void UnaFacturaEnVerificacionPendienteNoSeMarcaComoNoEntregada()
     {
         // Arrange
         var factura = FacturaEmitida(isDelivery: false);
