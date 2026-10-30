@@ -118,6 +118,15 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
         string permissionName,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(IsKnown(permissionName) && userId != Guid.Empty);
+
+    // RF-NEG-06: este doble no guarda concesiones (UserHasPermissionAsync
+    // responde solo por el catalogo), asi que no hay nada que consumir. La
+    // suite de AccessControl no ejerce el consumo; la de Permissions si.
+    public Task<bool> ConsumeAsync(
+        Guid userId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(false);
 }
 
 internal sealed class FakeSessionRepository : ISessionRepository

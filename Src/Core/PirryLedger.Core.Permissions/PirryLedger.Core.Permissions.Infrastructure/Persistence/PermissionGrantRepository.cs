@@ -52,4 +52,37 @@ internal sealed class PermissionGrantRepository : IPermissionGrantRepository
                 grant.UserId == userId
                 && grant.PermissionName == permissionName,
                 cancellationToken);
+
+    public async Task<bool> ConsumeAsync(
+        Guid userId,
+        string permissionName,
+        CancellationToken cancellationToken = default)
+    {
+        var grant = await _context.PermissionGrants
+            .FirstOrDefaultAsync(candidate =>
+                candidate.UserId == userId
+                && candidate.PermissionName == permissionName,
+                cancellationToken);
+
+        if (grant is null)
+        {
+            return false;
+        }
+
+        _context.PermissionGrants.Remove(grant);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Otra peticion borro la fila entre la consulta y el DELETE. El
+            // perdedor devuelve false, que es la verdad: ya no hay concesion.
+            _context.Entry(grant).State = EntityState.Detached;
+            return false;
+        }
+
+        return true;
+    }
 }
