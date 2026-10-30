@@ -26,6 +26,7 @@
   <Folder Name="/Src/Business/">
     <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/PirryLedger.Business.Domain.csproj" />
     <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Application/PirryLedger.Business.Application.csproj" />
+    <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Infrastructure/PirryLedger.Business.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj" />

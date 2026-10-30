@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Api\PirryLedger.Core.Permissions.Api.csproj" />
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
+    <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure\PirryLedger.Business.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

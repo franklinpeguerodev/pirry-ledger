@@ -2,12 +2,16 @@ namespace PirryLedger.Business.Domain.StateMachines;
 
 // Los datos que la maquina necesita para comprobar la condicion de una fila.
 // La maquina no conoce la entidad ni sus colecciones: recibe los hechos de la
-// tentativa, y el caso de uso los calcula a partir de la factura. Asi la
-// maquina se prueba sin agregado, sin base de datos y sin reloj (RD-12).
+// tentativa, y el agregado los calcula. Asi la maquina se prueba sin agregado,
+// sin base de datos y sin reloj (RD-12).
+//
+// Es internal a proposito: fuera del dominio nadie puede decirle a la maquina
+// "esta factura tiene 3 items" sobre una factura que no los tiene. Las pruebas
+// del dominio la ven por InternalsVisibleTo.
 //
 // Los importes son los de la tentativa, no los de la factura guardada: en la
 // emision el total sale de los items y en el cobro, de los pagos acumulados.
-public sealed record InvoiceTransitionContext
+internal sealed record InvoiceTransitionContext
 {
     // Cuantos items lleva la factura. Draft -> Issued exige al menos uno.
     public int ItemCount { get; init; }
