@@ -70,6 +70,23 @@ public sealed class PruebasDeEdicion
     }
 
     [Fact]
+    public void EditarSinItemsSeRechazaYNoCambiaLaFactura()
+    {
+        // Arrange
+        var factura = FacturaEmitida();
+        var notifier = new ContadorDeNotificaciones();
+
+        // Act + Assert
+        Assert.Throws<InvoiceRuleViolationException>(
+            () => factura.EditItems(Array.Empty<InvoiceItem>(), Ahora, Cajero, notifier));
+        Assert.Equal(InvoiceState.Issued, factura.State);
+        Assert.Single(factura.Items);
+        Assert.Equal(500m, factura.Total);
+        Assert.Empty(factura.Edits);
+        Assert.Equal(0, notifier.Llamadas);
+    }
+
+    [Fact]
     public void UnaFacturaEnVerificacionPendienteNoSeEdita()
     {
         // Arrange

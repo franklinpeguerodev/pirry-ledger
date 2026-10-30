@@ -348,6 +348,12 @@ public sealed class Invoice
                 "Solo se puede editar una factura emitida y no pagada.");
         }
 
+        if (items.Count < 1)
+        {
+            throw new InvoiceRuleViolationException(
+                "La factura debe conservar al menos un ítem.");
+        }
+
         _items.Clear();
 
         foreach (var item in items)
