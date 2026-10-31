@@ -235,5 +235,69 @@ Debe decir 43. Después, comentar `_context.PermissionGrants.Remove(grant)` en `
 Para abrir el pull request: rama `feature/permission-consumption`, base `develop`, título sugerido `Consume a permission grant (RF-GP-05, RF-NEG-06)`. Franklin hace el push, el PR y el merge.
 
 
+---
+
+### Entrada 5 — Las operaciones del negocio protegidas por acceso (RF-NEG-02, RF-NEG-06) (2026-10-31)
+
+**Qué se pidió.** Ejecutar la fase 4 del plan en la rama `feature/business-operations`: exponer las nueve capacidades del negocio como doce rutas protegidas por sesión y rol (paso 4 de `current-iteration.md`), con la anulación consumiendo la concesión `CancelInvoice:<id>` de la fase 3, las pruebas en las dos suites, el ADR 012 y el README §3.12. Sin migración y sin paquetes nuevos. Franklin autorizó el ADR 012 antes de que se escribiera.
+
+**Qué devolví.**
+
+1. **Commit `Add the invoice cancellation operation (RF-NEG-03, RF-NEG-04)`**: `CancelInvoice` en Application con el orden del ADR 011 (transición en memoria → consumo → guardar) y la prueba de que una factura pagada sin concesión no se anula.
+2. **Commit `Request a permission from a business operation (RF-GP-01, RF-NEG-06)`**: `IPermissionRequestGateway` y `PermissionRequestOutcome` en `Core.Contracts`; `PermissionRequestGateway` en `Permissions.Application`, registrado en `AddPermissions`; el caso de uso pide el permiso cuando no hay concesión y no guarda la factura.
+3. **Commit `Add the business use cases (RF-NEG-02, RF-NEG-06)`**: los doce casos de uso y sus entradas, cada uno recibiendo el `Guid` del llamante que ya validó el filtro.
+4. **Commit `Protect the business operations behind access control (RF-NEG-02, RF-NEG-06)`**: `PirryLedger.Business.Api` con `MapBusiness()` y las doce rutas, `AccessLevel.Standard` y las doce entradas de `Operation`, la tabla de `RoleRequirements`, la rama nueva del filtro y el cableado del Host. En AccessControl, `PruebasDelPuntoUnicoDeAcceso` se amplió con las rutas del negocio (26 pruebas, incluida `UnAdministradorNoEjecutaUnaOperacionDeCajero`).
+5. **Commit `Save the new invoice child rows as inserts (RF-NEG-02, RD-09)`**: el arreglo del defecto que se describe abajo, con sus dos pruebas de regresión.
+6. **Commit `Document the protected business operations (RF-NEG-02, RF-NEG-06)`**: ADR 012, README §3.12 con la salida real de las 28 llamadas y los recuentos al día, y `current-iteration.md` con la decisión 10 cerrada y el avance de los pasos 1 a 4.
+7. **Commit `Record phase 4 in the logbook (RF-NEG-02, RF-NEG-06)`**: esta entrada.
+
+**Dónde se equivocó el agente.**
+
+- **La suite estaba verde y la API real devolvía `500`.** Cobrar, editar ítems y registrar un abono funcionaban en las pruebas con EF InMemory y fallaban contra PostgreSQL con `DbUpdateConcurrencyException: The database operation was expected to affect 1 row(s), but actually affected 0 row(s)`. Causa: las cuatro entidades tienen la clave `Guid` generada por el dominio, pero el modelo no lo declaraba, y por convención EF marca las claves `Guid` como generadas por la base (`ValueGeneratedOnAdd`). Con esa convención, una fila hija nueva que se agrega a una factura ya cargada se toma por una fila existente y se guarda con `UPDATE ... WHERE id = <guid nuevo>`; contra PostgreSQL eso afecta cero filas. EF InMemory no lo detecta porque su `UPDATE` de una fila inexistente no falla. Lo encontré al ejecutar el guion HTTP completo, no al ejecutar la suite: las pruebas de persistencia de la fase 2 guardaban y recuperaban, pero ninguna agregaba un pago a una factura ya cargada. Se arregló con `ValueGeneratedNever()` en las cuatro configuraciones, sin migración porque el esquema no cambia, y se fijó con `UnPagoNuevoDeUnaFacturaCargadaSeGuardaComoFilaNueva` y `LasClavesLasGeneraElDominioYNoLaBase`, escritas después del hallazgo.
+- **Los recuentos de la documentación quedaron viejos en el mismo commit.** El ADR 012 se redactó antes de agregar las dos pruebas de regresión y decía 292 pruebas (Business 129); el número real al cerrar la fase es 297 (Business 134). Lo corregí al revisar el ADR contra la salida de `dotnet test`, antes de commitear.
+- **El paso 8 del README tenía un cuerpo que la API rechaza.** La guía de registro usaba `nombre` y el endpoint espera `name`, así que el ejemplo tal como estaba devolvía un error de validación. Apareció al ejecutar los fragmentos del README tal cual, no al leerlos; está corregido en este mismo PR.
+
+**Qué verifiqué.**
+
+- **Verde:** `dotnet test pirry-ledger.slnx` → **297 superadas, 0 con error**: Business 134, AccessControl 109, Permissions 48, Notifications 6. `dotnet build pirry-ledger.slnx` → 0 advertencias, 0 errores.
+- **Rojo primero, con la razón correcta.** Con el mapeo anterior, `LasClavesLasGeneraElDominioYNoLaBase` fallaba con `Expected: Never / Actual: OnAdd` y `UnPagoNuevoDeUnaFacturaCargadaSeGuardaComoFilaNueva` con `Expected: Added / Actual: Modified`. Quitar la línea de `ConsumeAsync` en `CancelInvoice` pone en rojo las tres pruebas de anulación con permiso (el defecto 4 del enunciado). Quitar un `.WithAccess(Operation.X)` de `MapBusiness()` pone en rojo `TodaRutaDeclaraSuOperacion` nombrando la ruta, por ejemplo `/api/billing/invoices/{id:guid}/not-delivered`.
+- **Las doce rutas contra PostgreSQL, no solo la suite.** Un guion de 28 llamadas con el token de un Estándar y el del Administrador dio el resultado que transcribe el README §3.12: `201` al emitir, `200` al cobrar, `403` al anular sin permiso con la solicitud creada, `409` al reintentar con la solicitud ya pendiente, `204` al aprobar y `200` con `Cancelled` al anular con la concesión. El estado de la factura se consultó después del `403` y seguía en `Paid`.
+- **La concesión se consume.** En la base, `per_permission_requests` quedó con la solicitud en `Applied` y `SELECT count(*) FROM per_permission_grants WHERE permission_name LIKE 'CancelInvoice:%'` devolvió `0`.
+- **Los rechazos por rol y por sesión.** Un Administrador emitiendo y un Estándar confirmando una transferencia reciben `403`; sin cabecera, `401`; una factura inexistente, `404`; una transición prohibida, `400` con el mensaje de la máquina y sin traza.
+- **Los fragmentos del README funcionan tal cual.** Ejecuté los bloques de §3.12 en una consola limpia, con el ayudante `Pedir` copiado del README, y dieron los mismos códigos y cuerpos. El bloque de las 28 llamadas se comparó línea por línea contra una corrida real: las dos únicas diferencias fueron el id de la factura (cambia en cada corrida) y el total de facturas listadas, que depende de si la tabla estaba vacía al empezar.
+- **La base quedó limpia de mis pruebas.** Borré las facturas y las solicitudes `CancelInvoice:%` que crearon las corridas y dejé intactas las siete solicitudes y las dos concesiones `ViewSalesSummary` que ya existían del 20 y 25 de octubre.
+
+**Lo que decidí yo.**
+
+1. **Seis operaciones de mostrador, solo para el Estándar.** Emitir, cobrar, dejar en deuda, editar, marcar no entregada y anular exigen el rol de cajero; un Administrador recibe `403`. Las tres de administración (confirmar transferencia, rechazar transferencia y abonar deuda) son del Administrador, y las dos lecturas aceptan cualquier sesión.
+2. **`AccessLevel.Standard` en vez de reutilizar `AnySession`.** Sin el nivel nuevo, un Administrador podría emitir y cobrar, que es justo lo que el reparto de roles del negocio no quiere.
+3. **Opción A para pedir el permiso:** un contrato en `Core.Contracts` implementado por Permissions. `Business.Application` sigue dependiendo solo del dominio y de los contratos (RD-03), y el caso de uso no conoce la URL ni el formato del endpoint de solicitudes.
+4. **La identidad viaja como `Guid`, no como token.** El filtro ya validó la sesión; repetir la validación dentro del caso de uso sería una segunda verdad sobre lo mismo.
+5. **Solo una solicitud `Pending` bloquea.** Una rechazada deja volver a pedir el permiso de esa factura; una ya consumida tampoco impide pedirlo de nuevo.
+6. **`403` y `409` con mensajes distintos.** El primero dice "acabo de pedirlo"; el segundo, "ya lo habías pedido, espera". La factura no cambia en ninguno de los dos.
+7. **Sin migración.** Las tablas `bil_` y `per_` ya existen; el arreglo del mapeo de claves cambia cómo interpreta EF la clave, no el esquema.
+
+**Desvío del plan.** El plan tenía cinco commits de código y uno de documentación. Apareció un sexto de código, el del mapeo de claves, porque el defecto se descubrió al probar por HTTP después de que el resto estuviera verde. Va como commit propio y no dentro del anterior para que el arreglo se pueda revisar y revertir solo.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet build pirry-ledger.slnx
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 0 advertencias, 0 errores y **297 superadas, 0 con error**. Para ver solo Business:
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
+```
+
+Debe decir 134. Después, quitar la línea de `ConsumeAsync` en `CancelInvoice` y repetir: se ponen en rojo las tres pruebas de anulación con permiso, porque una factura pagada se anularía sin permiso.
+
+Para probar por HTTP, la API levantada (pasos 1 a 7 del README), un usuario Estándar activado y el token del Administrador de la semilla; los bloques de §3.12 se copian tal cual. La base de mi máquina quedó sin las facturas de prueba.
+
+Para abrir el pull request: rama `feature/business-operations`, base `develop`, título sugerido `Protect the business operations (RF-NEG-02, RF-NEG-06)`. Franklin hace el push, el PR y el merge.
+
+
 
 
