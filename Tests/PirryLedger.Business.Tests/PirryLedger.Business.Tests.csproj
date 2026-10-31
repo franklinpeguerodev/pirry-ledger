@@ -22,9 +22,12 @@
   <ItemGroup>
     <!-- Dominio para las reglas y la maquina de estados (RD-12). La
          infraestructura solo la usa la prueba de persistencia, que corre con
-         EF InMemory: sin base real y sin SMTP. -->
+         EF InMemory: sin base real y sin SMTP. Application para los casos de
+         uso y Core.Contracts para los contratos que reciben. -->
     <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
     <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure\PirryLedger.Business.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using PirryLedger.Business.Domain.Entities;
 using PirryLedger.Business.Domain.Enums;
 using PirryLedger.Business.Domain.Ports;
@@ -64,6 +65,61 @@ public sealed class PruebasDePersistencia
             Assert.Single(recuperada.Edits);
             Assert.Equal(575m, recuperada.PaidAmount);
         }
+    }
+
+    // RF-NEG-02: agregar un pago a una factura que ya existe tiene que ser un
+    // INSERT, no un UPDATE de una fila que no esta. La diferencia se ve contra
+    // PostgreSQL (un UPDATE de cero filas lanza DbUpdateConcurrencyException);
+    // InMemory no la ve, asi que aqui se comprueba el estado del cambio.
+    [Fact]
+    public async Task UnPagoNuevoDeUnaFacturaCargadaSeGuardaComoFilaNueva()
+    {
+        // Arrange: la factura se guarda primero y despues se carga en otro contexto.
+        var options = OpcionesEnMemoria();
+        var factura = Invoice.Create();
+        factura.Issue(new[] { InvoiceItem.Create("Combo", 500m, 1) }, isDelivery: false, Ahora);
+
+        await using (var contexto = new BusinessDbContext(options))
+        {
+            var repositorio = new InvoiceRepository(contexto);
+            await repositorio.AddAsync(factura);
+            await repositorio.SaveChangesAsync();
+        }
+
+        await using var segundo = new BusinessDbContext(options);
+        var cargada = await new InvoiceRepository(segundo).GetByIdAsync(factura.Id);
+
+        // Act
+        cargada!.Collect(new[] { InvoicePayment.Cash(500m, 500m, Ahora, Cajero) });
+
+        // Assert
+        var estadoDelPago = segundo.ChangeTracker.Entries<InvoicePayment>().Single().State;
+        Assert.Equal(EntityState.Added, estadoDelPago);
+        Assert.Equal(EntityState.Modified, segundo.ChangeTracker.Entries<Invoice>().Single().State);
+    }
+
+    // Las claves las genera el dominio (Invoice.Create, InvoiceItem.Create...).
+    // Si el modelo las declarara generadas por la base, EF tomaria una fila hija
+    // nueva por una fila existente y la guardaria con UPDATE.
+    [Theory]
+    [InlineData(typeof(Invoice))]
+    [InlineData(typeof(InvoiceItem))]
+    [InlineData(typeof(InvoicePayment))]
+    [InlineData(typeof(InvoiceEdit))]
+    public void LasClavesLasGeneraElDominioYNoLaBase(Type tipoDeEntidad)
+    {
+        // Arrange: el modelo se construye sin abrir conexion a la base.
+        var options = new DbContextOptionsBuilder<BusinessDbContext>()
+            .UseNpgsql("Host=127.0.0.1;Database=pirry_ledger;Username=test;Password=test")
+            .Options;
+
+        using var contexto = new BusinessDbContext(options);
+
+        // Act
+        var clave = contexto.Model.FindEntityType(tipoDeEntidad)!.FindPrimaryKey()!.Properties.Single();
+
+        // Assert
+        Assert.Equal(ValueGenerated.Never, clave.ValueGenerated);
     }
 
     [Fact]

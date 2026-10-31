@@ -19,4 +19,11 @@ public interface IPermissionRequestRepository
     // RF-GP-02: las solicitudes de un solicitante concreto, para que vea solo
     // las suyas en /mine.
     Task<IReadOnlyList<PermissionRequest>> ListByRequesterAsync(Guid requesterId, CancellationToken cancellationToken = default);
+
+    // ADR 012: evita duplicar una solicitud Pending cuando el negocio pide el
+    // permiso en nombre del usuario. Solo Pending bloquea.
+    Task<bool> ExistsPendingAsync(
+        Guid requesterId,
+        string permissionName,
+        CancellationToken cancellationToken = default);
 }

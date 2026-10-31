@@ -63,16 +63,34 @@ public enum Operation
     // ventas exige este permiso, no un rol. Se declara con AccessLevel.Permission
     // y el nombre del permiso vive en Requirement.Permission.
     ViewSalesSummary,
+
+    // Operaciones del negocio (RF-NEG-02, RF-NEG-06). Las rutas viven en
+    // PirryLedger.Business.Api y se declaran aqui para que la tabla siga siendo
+    // el unico punto donde se lee que acceso exige cada operacion.
+    IssueInvoice,
+    CollectInvoicePayment,
+    LeaveInvoiceAsDebt,
+    EditInvoiceItems,
+    MarkInvoiceAsNotDelivered,
+    CancelInvoice,
+    ConfirmInvoiceTransfer,
+    RejectInvoiceTransfer,
+    RegisterDebtPayment,
+    ListInvoices,
+    GetInvoice,
+    ListInvoiceEdits,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica
 // no necesita Session, una de Session acepta a cualquiera con una Session valida,
-// una de Administrator exige ese rol concreto (RD-06), y una de Permission
-// exige tener concedida una entrada en per_permission_grants (RF-GP-05).
+// una de Standard exige el rol de cajero, una de Administrator exige ese rol
+// concreto (RD-06), y una de Permission exige tener concedida una entrada en
+// per_permission_grants (RF-GP-05).
 public enum AccessLevel
 {
     Public,
     AnySession,
+    Standard,
     Administrator,
     Permission,
 }

@@ -45,13 +45,23 @@ internal sealed class PermissionRequestRepository : IPermissionRequestRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task SaveAsync(PermissionRequest request, CancellationToken cancellationToken = default)
+    public Task SaveAsync(PermissionRequest request, CancellationToken cancellationToken = default)
     {
         if (!_context.PermissionRequests.Local.Any(local => local.Id == request.Id))
         {
             _context.PermissionRequests.Add(request);
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        return _context.SaveChangesAsync(cancellationToken);
     }
+
+    public Task<bool> ExistsPendingAsync(
+        Guid requesterId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        _context.PermissionRequests.AnyAsync(
+            request => request.RequesterId == requesterId
+                && request.RequestedPermission == permissionName
+                && request.State == PermissionRequestState.Pending,
+            cancellationToken);
 }

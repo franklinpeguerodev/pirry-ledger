@@ -120,6 +120,15 @@ internal sealed class FakePermissionRequestRepository : IPermissionRequestReposi
         Task.FromResult<IReadOnlyList<PermissionRequest>>(
             _requests.Values.Where(r => r.RequesterId == requesterId).ToList());
 
+    public Task<bool> ExistsPendingAsync(
+        Guid requesterId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_requests.Values.Any(r =>
+            r.RequesterId == requesterId
+            && r.RequestedPermission == permissionName
+            && r.State == PermissionRequestState.Pending));
+
     public Task SaveAsync(PermissionRequest request, CancellationToken cancellationToken = default)
     {
         _requests[request.Id] = request;

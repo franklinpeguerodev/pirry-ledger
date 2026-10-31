@@ -4,6 +4,7 @@ using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Contracts.Auth;
+using PirryLedger.Business.Api;
 using PirryLedger.Core.Permissions.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -45,6 +46,20 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(PirryLedger.Core.Permissions.Application.UseCases.ListPendingPermissionRequests),
         typeof(PirryLedger.Core.Permissions.Application.UseCases.ApprovePermissionRequest),
         typeof(PirryLedger.Core.Permissions.Application.UseCases.RejectPermissionRequest),
+        // Casos de uso del negocio que las Route de MapBusiness() piden por
+        // inyeccion. Igual que arriba, esta prueba no ejecuta ninguno.
+        typeof(PirryLedger.Business.Application.UseCases.IssueInvoice),
+        typeof(PirryLedger.Business.Application.UseCases.CollectInvoicePayment),
+        typeof(PirryLedger.Business.Application.UseCases.LeaveInvoiceAsDebt),
+        typeof(PirryLedger.Business.Application.UseCases.EditInvoiceItems),
+        typeof(PirryLedger.Business.Application.UseCases.MarkInvoiceAsNotDelivered),
+        typeof(PirryLedger.Business.Application.UseCases.CancelInvoice),
+        typeof(PirryLedger.Business.Application.UseCases.ConfirmInvoiceTransfer),
+        typeof(PirryLedger.Business.Application.UseCases.RejectInvoiceTransfer),
+        typeof(PirryLedger.Business.Application.UseCases.RegisterDebtPayment),
+        typeof(PirryLedger.Business.Application.UseCases.ListInvoices),
+        typeof(PirryLedger.Business.Application.UseCases.GetInvoice),
+        typeof(PirryLedger.Business.Application.UseCases.ListInvoiceEdits),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de
@@ -64,6 +79,7 @@ public class PruebasDelPuntoUnicoDeAcceso
 
         app.MapAccessControl();
         app.MapPermissions();
+        app.MapBusiness();
 
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(fuente => fuente.Endpoints)
@@ -132,7 +148,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     // Administrator y Public tendria un nivel muerto, y uno que solo usara
     // Administrator no estaria cumpliendo el criterio.
     [Fact]
-    public void LaTablaUsaLosTresNiveles()
+    public void LaTablaUsaLosCuatroNiveles()
     {
         var niveles = RoleRequirements.DeclaredOperations()
             .Select(RoleRequirements.RequiredLevel)
@@ -140,7 +156,47 @@ public class PruebasDelPuntoUnicoDeAcceso
 
         Assert.Contains(AccessLevel.Public, niveles);
         Assert.Contains(AccessLevel.AnySession, niveles);
+        Assert.Contains(AccessLevel.Standard, niveles);
         Assert.Contains(AccessLevel.Administrator, niveles);
+    }
+
+    // RF-NEG-06: quien cobra es el cajero. Las seis operaciones de mostrador
+    // exigen Standard y un Administrator recibe 403; el rol concreto se pide a
+    // la tabla, no se escribe en el endpoint.
+    [Theory]
+    [InlineData(Operation.IssueInvoice)]
+    [InlineData(Operation.CollectInvoicePayment)]
+    [InlineData(Operation.LeaveInvoiceAsDebt)]
+    [InlineData(Operation.EditInvoiceItems)]
+    [InlineData(Operation.MarkInvoiceAsNotDelivered)]
+    [InlineData(Operation.CancelInvoice)]
+    public void LasOperacionesDeMostradorExigenElRolDeCajero(Operation operation)
+    {
+        Assert.Equal(AccessLevel.Standard, RoleRequirements.RequiredLevel(operation));
+        Assert.Equal(Role.Standard, RoleRequirements.RequiredRole(operation));
+    }
+
+    // RF-NEG-02: confirmar o rechazar transferencias, abonar deuda y leer el
+    // historial de edicion son del Administrator.
+    [Theory]
+    [InlineData(Operation.ConfirmInvoiceTransfer)]
+    [InlineData(Operation.RejectInvoiceTransfer)]
+    [InlineData(Operation.RegisterDebtPayment)]
+    [InlineData(Operation.ListInvoiceEdits)]
+    public void LasOperacionesDeAdministracionDelNegocioExigenAdministrador(Operation operation)
+    {
+        Assert.Equal(AccessLevel.Administrator, RoleRequirements.RequiredLevel(operation));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(operation));
+    }
+
+    // Consultar facturas lo puede hacer cualquier sesion valida: el cajero
+    // tambien necesita verlas.
+    [Theory]
+    [InlineData(Operation.ListInvoices)]
+    [InlineData(Operation.GetInvoice)]
+    public void ConsultarFacturasEsDeCualquierSesion(Operation operation)
+    {
+        Assert.Equal(AccessLevel.AnySession, RoleRequirements.RequiredLevel(operation));
     }
 
     // Pedir el Role de una Operation publica es un error de programacion, y tiene

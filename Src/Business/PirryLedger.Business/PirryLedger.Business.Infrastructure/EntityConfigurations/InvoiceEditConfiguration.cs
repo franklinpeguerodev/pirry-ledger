@@ -12,7 +12,9 @@ public sealed class InvoiceEditConfiguration : IEntityTypeConfiguration<InvoiceE
 
         builder.HasKey(edit => edit.Id);
 
-        builder.Property(edit => edit.Id).HasColumnName("id");
+        builder.Property(edit => edit.Id)
+            .HasColumnName("id")
+            .ValueGeneratedNever();
 
         builder.Property(edit => edit.InvoiceId).HasColumnName("invoice_id");
 
