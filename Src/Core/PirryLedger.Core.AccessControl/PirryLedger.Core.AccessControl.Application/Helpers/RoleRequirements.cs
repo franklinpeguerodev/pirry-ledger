@@ -90,6 +90,28 @@ public static class RoleRequirements
         // no un role. El filtro consulta IPermissionAuthority (inyectado via DI
         // por el Host, registrado por PirryLedger.Core.Permissions.Infrastructure).
         [Operation.ViewSalesSummary] = new(AccessLevel.Permission, Permission: PermissionName),
+
+        // RF-NEG-02 + RF-NEG-06: quien cobra es el cajero (Standard). Emitir,
+        // cobrar, dejar en deuda, editar, marcar no entregada y anular son
+        // operaciones de mostrador; un Administrator recibe 403 en ellas.
+        [Operation.IssueInvoice] = new(AccessLevel.Standard),
+        [Operation.CollectInvoicePayment] = new(AccessLevel.Standard),
+        [Operation.LeaveInvoiceAsDebt] = new(AccessLevel.Standard),
+        [Operation.EditInvoiceItems] = new(AccessLevel.Standard),
+        [Operation.MarkInvoiceAsNotDelivered] = new(AccessLevel.Standard),
+        [Operation.CancelInvoice] = new(AccessLevel.Standard),
+
+        // RF-NEG-02: confirmar o rechazar una transferencia, registrar un abono
+        // de deuda y leer el historial de edicion son del Administrator.
+        [Operation.ConfirmInvoiceTransfer] = new(AccessLevel.Administrator),
+        [Operation.RejectInvoiceTransfer] = new(AccessLevel.Administrator),
+        [Operation.RegisterDebtPayment] = new(AccessLevel.Administrator),
+        [Operation.ListInvoiceEdits] = new(AccessLevel.Administrator),
+
+        // Consultar facturas: cualquier Session valida, porque tanto el cajero
+        // como el Administrator necesitan verlas.
+        [Operation.ListInvoices] = new(AccessLevel.AnySession),
+        [Operation.GetInvoice] = new(AccessLevel.AnySession),
     };
 
     // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui
@@ -139,12 +161,13 @@ public static class RoleRequirements
     }
 
     // El role concreto cuando la operation exige uno. Las operaciones que no son
-    // de Administrator no tienen role que comprobar, y preguntar por el suyo
-    // seria un error de programacion, no un caso de negocio: por eso lanza
-    // ArgumentException en vez de inventar un valor.
+    // de Standard ni de Administrator no tienen role que comprobar, y preguntar
+    // por el suyo seria un error de programacion, no un caso de negocio: por eso
+    // lanza ArgumentException en vez de inventar un valor.
     public static Role RequiredRole(Operation operation) =>
         RequiredLevel(operation) switch
         {
+            AccessLevel.Standard => Role.Standard,
             AccessLevel.Administrator => Role.Administrator,
             _ => throw new ArgumentException(
                 $"La operation {operation} no exige un role concreto: es {RequiredLevel(operation)}.",

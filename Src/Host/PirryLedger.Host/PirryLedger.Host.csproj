@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure\PirryLedger.Business.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Api\PirryLedger.Business.Api.csproj" />
   </ItemGroup>
 
 </Project>
