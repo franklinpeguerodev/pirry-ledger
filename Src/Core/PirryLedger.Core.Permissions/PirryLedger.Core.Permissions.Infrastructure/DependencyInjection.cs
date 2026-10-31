@@ -4,6 +4,7 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Permissions.Application.Ports;
+using PirryLedger.Core.Permissions.Application.Services;
 using PirryLedger.Core.Permissions.Application.UseCases;
 using PirryLedger.Core.Permissions.Infrastructure.Persistence;
 using PirryLedger.Core.Permissions.Infrastructure.Security;
@@ -30,6 +31,11 @@ public static class DependencyInjection
         // Aqui registramos la implementacion que vive en Infrastructure. El
         // resto del sistema pide IPermissionAuthority por DI.
         services.AddScoped<IPermissionAuthority, EfPermissionAuthority>();
+
+        // ADR 012: el negocio pide el permiso en nombre del usuario a traves
+        // de este contrato de Core.Contracts. La implementacion vive en
+        // Application y usa los mismos puertos y el mismo reloj.
+        services.AddScoped<IPermissionRequestGateway, PermissionRequestGateway>();
 
         // Casos de uso. Cada uno recibe sus dependencias por el constructor;
         // aqui se conectan los puertos a sus implementaciones y los servicios
