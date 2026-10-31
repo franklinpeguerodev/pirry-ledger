@@ -337,7 +337,7 @@ En una segunda terminal, registra un usuario Estándar:
 
 ```powershell
 $cuenta = @{
-    nombre = 'Ana'
+    name = 'Ana'
     email = 'ana@ejemplo.com'
     password = 'abc12345'
 } | ConvertTo-Json
@@ -607,12 +607,12 @@ pirry-ledger/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
 │   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
-│   ├── adr/                        Decisiones técnicas 001 a 010: nombre y título en inglés, contenido en español
+│   ├── adr/                        Decisiones técnicas 001 a 012: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
 │   ├── Core/
-│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority)
+│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority, IPermissionRequestGateway)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
 │   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
 │   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
@@ -641,6 +641,7 @@ ni servidor SMTP.
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
 | Máquina de estados del negocio | RF-NEG-03, 04, 05, 09, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
 | **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
+| **Operaciones del negocio (facturas)** | **RF-NEG-02, RF-NEG-06**, RF-GP-01, RD-01, RD-02, RD-06 | **[3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 
 > **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
@@ -649,6 +650,15 @@ ni servidor SMTP.
 > [3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07), donde está cómo provocar
 > cada criterio. La tabla de arriba y los enlaces a las secciones 3.x cubren
 > ambas.
+
+> **Práctica 3** — esta entrega añade el módulo Business completo (la máquina de
+> estados, las reglas de la factura y sus operaciones por HTTP) y el consumo de
+> una concesión de permiso al anular. Las secciones [3.6](#36-máquina-de-estados-del-negocio),
+> [3.10](#310-reglas-de-la-factura-y-persistencia-rf-neg-02-rd-07-rd-09),
+> [3.11](#311-consumo-de-una-concesión-de-permiso-rf-gp-05-rf-neg-06-adr-011) y
+> [3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)
+> son suyas. La integración de las dos piezas (paso 5) llega en el siguiente
+> pull request.
 
 ### Decisiones documentadas
 
@@ -666,6 +676,8 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Concesiones de permisos viven en su propia tabla `per_permission_grants`, independiente de `per_permission_requests` | `docs/adr/008-permission-grants-table.md` |
 | Cambiar el role invalida las sesiones abiertas vía `CredentialVersion`, igual que cambiar la contraseña o desactivar | `docs/adr/009-role-changes-invalidate-sessions.md` |
 | El `role` de las respuestas viaja como texto, no como número | `docs/adr/010-role-as-text-in-responses.md` |
+| La anulación consume la concesión `CancelInvoice:<id>` antes de guardar, y sin concesión se rechaza | `docs/adr/011-consume-permission-grant.md` |
+| La operación de negocio pide el permiso por un contrato de `Core.Contracts`, y el `403`/`409` distingue "recién pedido" de "ya pendiente" | `docs/adr/012-request-permission-from-business.md` |
 
 ---
 
@@ -1283,9 +1295,9 @@ Verifica en ese orden:
 dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-Salida esperada: **104 pruebas superadas**, 0 con error: las 62 de la máquina de
-esta sección y las 42 de las reglas y la persistencia de la sección 3.10. Los
-nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
+Salida esperada: **134 pruebas superadas**, 0 con error: las 62 de la máquina de
+esta sección y las 72 de las reglas, la persistencia y los casos de uso de las
+secciones 3.10 y 3.12. Los nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
 `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)`,
 `AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`,
 `EmitirSinItemsSeRechazaYNoCambiaElEstado`, entre otras.
@@ -1296,9 +1308,9 @@ Para ver que la suite puede fallar, quita la línea
 ejecutar el comando: `EmitirSinItemsSeRechazaYNoCambiaElEstado` se pone roja.
 Restaura la línea y vuelve a verde. Esa línea es la que elimina el defecto 3.
 
-No hay endpoint HTTP para la factura todavía: es una pieza interna del módulo
-Business. Las operaciones protegidas llegan en un paso posterior de esta
-práctica.
+No hay endpoint HTTP para la máquina de estados: es una pieza interna del
+módulo Business. Los endpoints que la exponen están en la sección 3.12 y no
+deciden transiciones: llaman al agregado, que delega en la máquina.
 
 ### 3.7 Trazabilidad de reglas de diseño
 
@@ -1546,9 +1558,8 @@ que corren sin levantar la API.
 
 Las reglas del negocio viven en el agregado `Invoice`, en el dominio, y se
 verifican sin base de datos, sin SMTP y sin levantar la aplicación (RD-12).
-Todavía **no hay endpoints** para la factura: las operaciones protegidas llegan
-en un paso posterior de esta práctica, así que cada criterio se provoca con la
-suite, no con una petición HTTP.
+Aquí cada criterio se provoca con la suite; los endpoints que exponen estas
+reglas por HTTP están en la sección 3.12.
 
 Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities/`
 (`Invoice.cs`, `InvoiceItem.cs`, `InvoicePayment.cs`, `InvoiceEdit.cs`) y
@@ -1579,7 +1590,7 @@ Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities
 dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-Salida esperada: **104 pruebas superadas**, 0 con error.
+Salida esperada: **134 pruebas superadas**, 0 con error.
 
 Para ejecutar solo una familia, sin tocar el código:
 
@@ -1592,7 +1603,7 @@ dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj -
 **Para ver que la suite puede fallar.** Quita la guarda
 `if (State != InvoiceState.InDebt)` de `RegisterDebtPayment` en `Invoice.cs` y
 vuelve a ejecutar el comando: `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza` se pone
-roja y las otras 103 siguen verdes. Restaura la guarda y vuelve a verde. Lo mismo
+roja y las otras 133 siguen verdes. Restaura la guarda y vuelve a verde. Lo mismo
 pasa con `if (items.Count < 1)` en `EditItems`: sin ella falla
 `EditarSinItemsSeRechazaYNoCambiaLaFactura`.
 
@@ -1605,21 +1616,34 @@ que se aplica con el cuarto comando del paso 6. Las columnas siguen
 ida y vuelta usa EF InMemory y comprueba que la factura vuelve con su estado,
 sus ítems, sus pagos y su historial; la prueba de esquema construye el modelo de
 Npgsql **sin abrir conexión** y comprueba los nombres de tabla y columna y el
-tipo `numeric(12,2)`. El reinicio real de la aplicación se prueba en el paso de
-las operaciones, cuando exista una operación que escriba.
+tipo `numeric(12,2)`. El guardado real contra PostgreSQL se ejercita en la
+sección 3.12.
 
-**Qué NO incluye todavía.** No hay endpoints ni casos de uso: el agregado no se
-puede tocar desde HTTP. La anulación de una factura pagada o en deuda con
-permiso `CancelInvoice:<id>` llega con las operaciones protegidas, igual que la
-lectura del historial de edición, que será solo del Administrador.
+**Un defecto que apareció al probar por HTTP.** Las cuatro entidades tienen la
+clave `Guid` generada por el dominio, pero el modelo no lo declaraba: por
+convención EF marca las claves `Guid` como generadas por la base
+(`ValueGeneratedOnAdd`). Con esa convención, una fila hija nueva que se agrega a
+una factura ya cargada se tomaba por una fila existente y se guardaba con
+`UPDATE ... WHERE id = <guid nuevo>`; contra PostgreSQL eso afecta cero filas y
+responde `DbUpdateConcurrencyException`, es decir un `500`. EF InMemory no lo
+detecta porque su `UPDATE` de una fila inexistente no falla. Las cuatro
+configuraciones declaran ahora `ValueGeneratedNever()`, y
+`PruebasDePersistencia` lo fija con `UnPagoNuevoDeUnaFacturaCargadaSeGuardaComoFilaNueva`
+y `LasClavesLasGeneraElDominioYNoLaBase`. No hay migración: el esquema no
+cambia, solo cómo interpreta EF la clave.
+
+**Qué NO incluye todavía.** No hay interfaz: la factura se opera por HTTP. El
+aviso al Administrador cuando se edita una factura es un puerto con
+implementación vacía (RF-NEG-07, semana 10), y los reportes de ventas del día y
+de ganancia son de una entrega posterior.
 
 ---
 
 ### 3.11 Consumo de una concesión de permiso (RF-GP-05, RF-NEG-06, ADR 011)
 
-Esta sección cubre la pieza de Permissions que la fase 4 va a consumir al anular
-una factura. **No hay endpoints nuevos**: el consumo se ejercita solo desde la
-suite, igual que las reglas de la factura.
+Esta sección cubre la pieza de Permissions que la anulación consume. El consumo
+se prueba aquí desde la suite; el flujo HTTP completo, con el `403` y el `409`
+que piden el permiso, está en la sección 3.12.
 
 Código: `Src/Core/PirryLedger.Core.Contracts/Permissions/PermissionNames.cs`
 (construye y valida el nombre), `Src/Core/PirryLedger.Core.Permissions/.../Domain/PermissionCatalog.cs`
@@ -1663,11 +1687,11 @@ implementada dos veces a propósito (`PermissionNames` en Contracts y
 - con usuario vacío o nombre vacío devuelve `false` sin tocar la base;
 - solo borra el par del usuario que llama.
 
-El orden en la anulación (fase 4) será: resolver la transición a `Cancelled`
-en memoria, consumir la concesión, guardar la factura. Si el consumo devuelve
-`false`, se rechaza antes de guardar. Si el guardado falla después del consumo,
-la concesión se pierde (coste aceptado). Sin migración: la tabla y el índice
-único ya existen (ADR 008).
+El orden en la anulación es: resolver la transición a `Cancelled` en memoria,
+consumir la concesión, guardar la factura. Si el consumo devuelve `false`, se
+rechaza antes de guardar y se pide el permiso (ADR 012). Si el guardado falla
+después del consumo, la concesión se pierde (coste aceptado). Sin migración: la
+tabla y el índice único ya existen (ADR 008).
 
 #### Cómo probarlo
 
@@ -1675,8 +1699,8 @@ la concesión se pierde (coste aceptado). Sin migración: la tabla y el índice
 dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj
 ```
 
-Salida esperada: **43 pruebas superadas**, 0 con error (36 anteriores + 10 de
-catálogo + 7 de consumo, descontando solapamientos: el total del proyecto es 43).
+Salida esperada: **48 pruebas superadas**, 0 con error (41 anteriores + 10 de
+catálogo + 7 de consumo, descontando solapamientos: el total del proyecto es 48).
 
 Para ejecutar solo una familia:
 
@@ -1688,16 +1712,287 @@ dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permission
 **Para ver que la suite puede fallar.** Comenta la línea
 `_context.PermissionGrants.Remove(grant)` en `PermissionGrantRepository.ConsumeAsync`
 y vuelve a ejecutar el comando: `ConsumirUnaConcesionLaBorraYDevuelveTrue` se pone
-roja (la fila sigue en la base) y las otras 42 siguen verdes. Restaura la línea
+roja (la fila sigue en la base) y las otras 47 siguen verdes. Restaura la línea
 y vuelve a verde. Lo mismo con la guarda `if (userId == Guid.Empty ...)` de
 `EfPermissionAuthority.ConsumeAsync`: sin ella, `LaAutoridadNoConsumeConUsuarioVacio`
 falla.
 
 #### Qué NO incluye todavía
 
-No hay operación de negocio que anule la factura y consuma la concesión, ni
-endpoints ni reglas de rol: eso llega con las operaciones protegidas. La prueba
-de la carrera de dos consumos simultáneos contra PostgreSQL queda para esa fase.
+La prueba de la carrera de dos consumos simultáneos contra PostgreSQL sigue
+pendiente, y la carrera de dos solicitudes de permiso tampoco está cerrada con un
+índice único parcial (ADR 012). El aviso al Administrador cuando llega una
+solicitud nueva es de la semana 10 (RF-NEG-07).
+
+---
+
+### 3.12 Operaciones del negocio protegidas por acceso (RF-NEG-02, RF-NEG-06, RF-GP-01, RD-06)
+
+Todo lo de esta sección se ejecutó contra la API levantada con los pasos 1 a 7 y
+PostgreSQL local, y las salidas son reales. Las rutas viven en
+`Src/Business/PirryLedger.Business/PirryLedger.Business.Api/` (RD-01) y solo
+traducen HTTP a un caso de uso (RD-02). El acceso no se decide en el endpoint:
+cada ruta declara **qué operación es** con `WithAccess(Operation.X)` y el filtro
+consulta la tabla única de `RoleRequirements` (RF-CA-05), la misma de las
+secciones 3.4 y 3.8.
+
+#### Las doce rutas y su acceso
+
+| Método | Ruta | Operación | Acceso |
+|---|---|---|---|
+| `POST` | `/api/billing/invoices` | `IssueInvoice` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/collect` | `CollectInvoicePayment` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/debt` | `LeaveInvoiceAsDebt` | `Standard` |
+| `PUT` | `/api/billing/invoices/{id}/items` | `EditInvoiceItems` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/not-delivered` | `MarkInvoiceAsNotDelivered` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/cancel` | `CancelInvoice` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/transfers/confirm` | `ConfirmInvoiceTransfer` | `Administrator` |
+| `POST` | `/api/billing/invoices/{id}/transfers/reject` | `RejectInvoiceTransfer` | `Administrator` |
+| `POST` | `/api/billing/invoices/{id}/payments` | `RegisterDebtPayment` | `Administrator` |
+| `GET` | `/api/billing/invoices` | `ListInvoices` | `AnySession` |
+| `GET` | `/api/billing/invoices/{id}` | `GetInvoice` | `AnySession` |
+| `GET` | `/api/billing/invoices/{id}/edits` | `ListInvoiceEdits` | `Administrator` |
+
+`AccessLevel.Standard` es nuevo en esta fase: exige el rol de cajero y, al revés
+que `Administrator`, también rechaza a un Administrador. Lo demuestra
+`UnAdministradorNoEjecutaUnaOperacionDeCajero`. La prueba
+`TodaRutaDeclaraSuOperacion` recorre las rutas reales de `MapBusiness()` igual
+que hace con las de acceso y permisos: si una ruta se queda sin declarar, la
+suite se pone roja y el mensaje nombra la ruta.
+
+#### Preparación
+
+Necesitas un usuario **Estándar** activado (paso 8) y el token del Administrador
+de la semilla ([El primer Administrador](#el-primer-administrador)). El cajero es
+un usuario normal: con el Administrador no se puede emitir ni cobrar, porque esas
+operaciones son de mostrador.
+
+Para no repetir `try/catch` en cada llamada, define un ayudante que devuelva el
+código y el cuerpo también cuando la respuesta es un rechazo:
+
+```powershell
+$base = 'http://localhost:5243'
+
+function Pedir([string]$metodo, [string]$ruta, $cabeceras, $cuerpo) {
+    $peticion = @{ Uri = "$base$ruta"; Method = $metodo; Headers = $cabeceras }
+    if ($null -ne $cuerpo) {
+        $peticion.ContentType = 'application/json'
+        $peticion.Body = ($cuerpo | ConvertTo-Json -Depth 8)
+    }
+    try {
+        $r = Invoke-WebRequest @peticion
+        [pscustomobject]@{ Codigo = [int]$r.StatusCode; Cuerpo = $r.Content }
+    }
+    catch {
+        $respuesta = $_.Exception.Response
+        $texto = (New-Object System.IO.StreamReader($respuesta.GetResponseStream())).ReadToEnd()
+        [pscustomobject]@{ Codigo = [int]$respuesta.StatusCode; Cuerpo = $texto }
+    }
+}
+
+$estHeaders = @{ Authorization = "Bearer $tokenDelEstandar" }
+$adminHeaders = @{ Authorization = "Bearer $tokenDelAdministrador" }
+$combo = @{ isDelivery = $false; items = @(@{ name = 'Combo'; unitPrice = 500; quantity = 1 }) }
+```
+
+#### Emitir, cobrar y anular con permiso (RF-NEG-02, RF-NEG-06, RF-GP-01)
+
+El recorrido completo del permiso son cinco llamadas: cobrar, intentar anular,
+volver a intentarlo, aprobar y anular.
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$factura = ($r.Cuerpo | ConvertFrom-Json).id
+
+Pedir Post "/api/billing/invoices/$factura/collect" $estHeaders `
+    @{ payments = @(@{ method = 'Cash'; amount = 500; receivedAmount = 500 }) } | Out-Null
+
+Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+
+$pendientes = Invoke-RestMethod -Uri "$base/api/permissions/requests/pending" -Headers $adminHeaders
+$solicitud = $pendientes | Where-Object { $_.requestedPermission -eq "CancelInvoice:$factura" }
+Invoke-RestMethod -Uri "$base/api/permissions/requests/$($solicitud.id)/approve" -Method Post -Headers $adminHeaders
+
+Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+```
+
+Lo que devuelve cada llamada:
+
+| Llamada | Código | Cuerpo |
+|---|---|---|
+| Emitir | `201` | La factura completa, en estado `Issued` y con `total` 500.00 |
+| Cobrar en efectivo | `200` | `state` `Paid`, `paidAmount` 500.00, `balance` 0.00 |
+| Anular sin permiso | `403` | `{"message":"Se envió una solicitud de permiso para anular esta factura. Un Administrador debe aprobarla."}` |
+| Consultar tras el rechazo | `200` | La factura **sigue** en `Paid`: el rechazo no cambió nada |
+| Anular otra vez | `409` | `{"message":"Ya se envió una solicitud de permiso para anular esta factura; espera la aprobación del Administrador."}` |
+| Aprobar la solicitud | `204` | Sin cuerpo |
+| Anular con la concesión | `200` | `state` `Cancelled`, y la concesión queda consumida |
+
+El `403` y el `409` no son un capricho: el primero dice "acabo de pedirlo" y el
+segundo "ya lo habías pedido, no hace falta repetirlo". Solo una solicitud
+`Pending` bloquea; una `Rejected` deja volver a pedir el permiso (ADR 012). La
+factura no cambia en ninguno de los dos rechazos porque el caso de uso consume la
+concesión y pide el permiso **antes** de guardar (ADR 011).
+
+Así se ve una factura anulada por este camino:
+
+```json
+{"id":"af06bdde-c974-4631-922a-e4016ae7ef0c","state":"Cancelled","isDelivery":false,"issuedAtUtc":"2026-10-31T13:13:43.829192Z","total":500.00,"paidAmount":500.00,"balance":0.00,"debtorName":null,"items":[{"id":"28ce00f9-84f6-4d68-b517-453c87e9e6aa","name":"Combo","unitPrice":500.00,"quantity":1,"lineTotal":500.00}],"payments":[{"id":"dd1af380-45bd-4956-939c-4889240ddc97","kind":"Sale","method":"Cash","status":"Confirmed","amount":500.00,"receivedAmount":500.00,"changeAmount":0.00,"registeredAtUtc":"2026-10-31T13:13:43.9692Z","registeredByUserId":"e3f24770-4944-45b7-961e-37511dcb3394"}]}
+```
+
+Y así se comprueba en la base que la solicitud quedó aprobada y que la concesión
+no sobrevive al uso:
+
+```sql
+SELECT requested_permission, state FROM per_permission_requests WHERE requested_permission LIKE 'CancelInvoice:%';
+SELECT count(*) FROM per_permission_grants WHERE permission_name LIKE 'CancelInvoice:%';
+```
+
+```
+ CancelInvoice:af06bdde-c974-4631-922a-e4016ae7ef0c | Applied
+ concesiones_restantes = 0
+```
+
+#### Deuda, abonos y transferencias (RF-NEG-02)
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$deuda = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Post "/api/billing/invoices/$deuda/debt" $estHeaders @{ debtorName = 'Ana Perez' } | Out-Null
+
+Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 100 } | Out-Null
+Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 400 } | Out-Null
+Pedir Post "/api/billing/invoices/$deuda/payments" $estHeaders  @{ amount = 10 }  | Out-Null
+```
+
+- Dejar en deuda: `200`, `state` `InDebt`, `debtorName` `Ana Perez`, `balance` 500.00.
+- Abono de 100: `200`, sigue `InDebt` con `paidAmount` 100 y `balance` 400.
+- Abono de 400: `200`, pasa a `Paid` porque el abono cubre el total.
+- El mismo abono con el cajero: `403`, porque `RegisterDebtPayment` es del
+  Administrador.
+
+Una transferencia nace en verificación pendiente y solo el Administrador la
+resuelve:
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$transferencia = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Post "/api/billing/invoices/$transferencia/collect" $estHeaders `
+    @{ payments = @(@{ method = 'Transfer'; amount = 500 }) } | Out-Null
+
+Pedir Post "/api/billing/invoices/$transferencia/transfers/confirm" $estHeaders $null | Out-Null
+Pedir Post "/api/billing/invoices/$transferencia/transfers/confirm" $adminHeaders $null | Out-Null
+```
+
+- Cobrar con transferencia: `200`, `state` `PendingVerification`.
+- Confirmar con el cajero: `403`.
+- Confirmar con el Administrador: `200`, `state` `Paid`.
+- Rechazar (`/transfers/reject` con `{"debtorName":"Luis Gomez"}`): `200`, `state`
+  `InDebt`, y la transferencia queda `Rejected`, así que no cuenta para el pagado.
+
+#### Delivery, edición e historial (RF-NEG-02)
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders @{ isDelivery = $true; items = $combo.items }
+$delivery = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Post "/api/billing/invoices/$delivery/not-delivered" $estHeaders $null | Out-Null
+
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$editable = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Put "/api/billing/invoices/$editable/items" $estHeaders `
+    @{ items = @(@{ name = 'Combo nuevo'; unitPrice = 700; quantity = 1 }) } | Out-Null
+
+Pedir Get "/api/billing/invoices/$editable/edits" $adminHeaders $null | Out-Null
+Pedir Get "/api/billing/invoices/$editable/edits" $estHeaders $null | Out-Null
+```
+
+- Marcar no entregada: `200`, `state` `NotDelivered`. Sobre una factura que no es
+  de delivery: `400`, `La factura no puede pasar de Paid a NotDelivered.`
+- Editar ítems: `200`, `state` `Issued` y `total` 700.
+- Historial de edición con el Administrador: `200` con una edición. Con el
+  cajero: `403`.
+
+#### Los rechazos que importan (RD-06, RD-07)
+
+- **Sin sesión**: `GET /api/billing/invoices` responde `401` con
+  `{"message":"Sesion no valida."}`.
+- **Rol insuficiente**: un Administrador emitiendo responde `403` con
+  `{"message":"No tiene permisos para esta operacion."}`, igual que un cajero
+  confirmando una transferencia.
+- **Factura inexistente**: `404` con `{"message":"La factura indicada no existe."}`.
+- **Transición prohibida**: `400` con el mensaje de la máquina de estados, sin
+  traza ni detalle interno.
+
+#### La salida real del recorrido completo
+
+Estas son las 28 llamadas del guion, tal como salieron contra la API:
+
+```
+Emitir (cajero)                        201  state=Issued | total=500
+Cobrar efectivo (cajero)               200  state=Paid | paidAmount=500 | balance=0.00
+Anular sin permiso (cajero)            403  message=Se envió una solicitud de permiso para anular esta factura. Un Administrador debe aprobarla.
+Estado tras el rechazo                 200  state=Paid
+Anular otra vez sin permiso            409  message=Ya se envió una solicitud de permiso para anular esta factura; espera la aprobación del Administrador.
+Pendientes (admin)                     200  permiso=CancelInvoice:af06bdde-c974-4631-922a-e4016ae7ef0c estado=Pending
+Aprobar la solicitud (admin)           204
+Anular con permiso (cajero)            200  state=Cancelled
+Anular una factura ya anulada          400  message=La factura no puede pasar de Cancelled a Cancelled.
+Dejar en deuda (cajero)                200  state=InDebt | debtorName=Ana Perez | balance=500.00
+Abono parcial (admin)                  200  state=InDebt | paidAmount=100 | balance=400.00
+Abono que cubre el total (admin)       200  state=Paid | paidAmount=500.00 | balance=0.00
+Abono con rol de cajero                403  message=No tiene permisos para esta operacion.
+Marcar no entregada (cajero)           200  state=NotDelivered
+No entregada sin delivery              400  message=La factura no puede pasar de Paid a NotDelivered.
+Editar items (cajero)                  200  state=Issued | total=700
+Historial de edicion (admin)             200  ediciones=1
+Historial de edicion (cajero)          403  message=No tiene permisos para esta operacion.
+Cobrar con transferencia (cajero)      200  state=PendingVerification
+Confirmar transferencia (cajero)       403  message=No tiene permisos para esta operacion.
+Confirmar transferencia (admin)        200  state=Paid
+Cobrar con transferencia (2)           200  state=PendingVerification
+Rechazar transferencia (admin)         200  state=InDebt | debtorName=Luis Gomez
+Emitir con rol de Administrador        403  message=No tiene permisos para esta operacion.
+Listar facturas (cajero)                 200  facturas=6
+Consultar una factura (admin)          200  state=Cancelled
+Consultar una factura inexistente      404  message=La factura indicada no existe.
+Listar sin sesion                      401  message=Sesion no valida.
+```
+
+Los mensajes `Sesion no valida.` y `No tiene permisos para esta operacion.` son
+los que hoy devuelve Control de acceso: están escritos sin tildes en el código.
+
+#### Las pruebas de esta fase
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
+dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj
+```
+
+Salida esperada: **134 pruebas** en Business y **109** en Control de acceso, 0 con
+error. Las familias se pueden correr por separado:
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDeCasosDeUso"
+dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj --filter "FullyQualifiedName~PruebasDelPuntoUnicoDeAcceso"
+```
+
+**Para ver que la suite puede fallar.** Quita la línea del `ConsumeAsync` de
+`CancelInvoice` (deja `var consumed = true;`) y vuelve a correr Business: las tres
+pruebas de anulación se ponen rojas, porque una factura pagada se anularía sin
+permiso. Es la verificación del defecto 4 del enunciado. Restaura la línea y
+vuelve a verde. Lo mismo con una ruta: quita el `.WithAccess(Operation.X)` de un
+endpoint de `MapBusiness()` y `TodaRutaDeclaraSuOperacion` se pone roja nombrando
+la ruta, por ejemplo `/api/billing/invoices/{id:guid}/not-delivered`.
+
+#### Qué NO incluye todavía
+
+- El aviso al Administrador cuando se edita una factura o llega una solicitud de
+  permiso: el puerto existe con una implementación vacía (RF-NEG-07, semana 10).
+- Los reportes de ventas del día, inversión y ganancia.
+- La prueba de las carreras (dos consumos o dos solicitudes simultáneas) contra
+  PostgreSQL.
+- Cualquier interfaz de usuario: esta entrega se consume como API.
 
 ---
 
@@ -1732,6 +2027,27 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `POST` | `/api/permissions/requests/{id}/approve` | Aprueba una solicitud pendiente. Aplica el permiso en la misma operación. Responde `204`. |
 | `POST` | `/api/permissions/requests/{id}/reject` | Rechaza con motivo escrito. Cuerpo `{"reason":"..."}`. Responde `204`. |
 | `GET` | `/api/permissions/sales-summary` | Ruta de demostración del sistema de permisos. Responde `200` con datos fijos (`date`, `totalInvoices`, `totalAmount`, `branch`). Exige el permiso `ViewSalesSummary` concedido. |
+
+### Endpoints del negocio (facturas)
+
+Estos endpoints llegaron con la fase 4 de la Práctica 3
+(`feature/business-operations`). La sección 3.12 explica cómo provocar cada
+criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/billing/invoices` | Emite una factura. Cuerpo `{"isDelivery":false,"items":[{"name":"Combo","unitPrice":500,"quantity":1}]}`. Responde `201` con la factura. |
+| `POST` | `/api/billing/invoices/{id}/collect` | Cobra la factura. Cuerpo `{"payments":[{"method":"Cash","amount":500,"receivedAmount":600}]}`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/debt` | Deja la factura en deuda. Cuerpo `{"debtorName":"Ana Perez","payments":[]}`. Responde `200`. |
+| `PUT` | `/api/billing/invoices/{id}/items` | Reemplaza los ítems de una factura emitida y guarda el historial. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/not-delivered` | Marca como no entregada una factura de delivery. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/cancel` | Anula. Desde `Issued` responde `200`; desde `Paid` o `InDebt` exige la concesión `CancelInvoice:<id>` y, si no la hay, responde `403` o `409` con el mensaje del permiso. |
+| `POST` | `/api/billing/invoices/{id}/transfers/confirm` | Confirma una transferencia en verificación pendiente. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"..."}`. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/payments` | Registra un abono de deuda. Cuerpo `{"amount":100}`. Exige `Administrator`. Responde `200`. |
+| `GET` | `/api/billing/invoices` | Lista las facturas con sus ítems y pagos. Cualquier sesión válida. Responde `200`. |
+| `GET` | `/api/billing/invoices/{id}` | Devuelve una factura. Cualquier sesión válida. Responde `200` o `404`. |
+| `GET` | `/api/billing/invoices/{id}/edits` | Historial de edición. Exige `Administrator`. Responde `200`. |
 
 ### Endpoints de administración
 
