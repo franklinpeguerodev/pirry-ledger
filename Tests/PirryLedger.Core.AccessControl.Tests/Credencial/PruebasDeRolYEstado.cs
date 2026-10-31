@@ -3,6 +3,7 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Core.Contracts.Auth;
 
 namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 
@@ -148,5 +149,21 @@ public sealed class PruebasDeRolYEstado
 
         await Assert.ThrowsAsync<InvalidSessionException>(
             () => scenario.Authenticate.ExecuteWithRoleAsync(token, Role.Administrator));
+    }
+
+    // RF-NEG-06: quien cobra es el cajero. El filtro pide a la tabla el rol de
+    // la operacion de mostrador (Standard) y Authenticate lo compara, asi que un
+    // Administrator recibe el mismo 403 que un cajero en una operacion suya.
+    [Fact]
+    public async Task UnAdministradorNoEjecutaUnaOperacionDeCajero()
+    {
+        var scenario = await EscenarioConRolAsync(Role.Administrator);
+        var token = await scenario.Login.ExecuteAsync("conrol@ejemplo.com", "abc12345");
+
+        var rolQueExigeLaOperacion = RoleRequirements.RequiredRole(Operation.CancelInvoice);
+
+        Assert.Equal(Role.Standard, rolQueExigeLaOperacion);
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => scenario.Authenticate.ExecuteWithRoleAsync(token, rolQueExigeLaOperacion));
     }
 }

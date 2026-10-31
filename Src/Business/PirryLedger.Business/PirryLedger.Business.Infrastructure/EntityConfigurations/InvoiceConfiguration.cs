@@ -12,7 +12,9 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.HasKey(invoice => invoice.Id);
 
-        builder.Property(invoice => invoice.Id).HasColumnName("id");
+        builder.Property(invoice => invoice.Id)
+            .HasColumnName("id")
+            .ValueGeneratedNever();
 
         builder.Property(invoice => invoice.State)
             .HasColumnName("state")

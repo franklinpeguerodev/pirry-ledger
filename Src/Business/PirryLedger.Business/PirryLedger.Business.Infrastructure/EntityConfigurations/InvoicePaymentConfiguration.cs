@@ -13,7 +13,9 @@ public sealed class InvoicePaymentConfiguration : IEntityTypeConfiguration<Invoi
 
         builder.HasKey(payment => payment.Id);
 
-        builder.Property(payment => payment.Id).HasColumnName("id");
+        builder.Property(payment => payment.Id)
+            .HasColumnName("id")
+            .ValueGeneratedNever();
 
         builder.Property(payment => payment.InvoiceId).HasColumnName("invoice_id");
 

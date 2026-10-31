@@ -388,6 +388,18 @@ public sealed class Invoice
         State = InvoiceStateMachine.Transition(State, InvoiceState.NotDelivered, context);
     }
 
+    // Issued, Paid o InDebt -> Cancelled. El permiso de anulacion no se consulta
+    // aqui: depende de la factura concreta y vive en una sola linea del caso de
+    // uso, que es justo la que elimina el defecto 4 del enunciado. La maquina
+    // solo decide si el par (desde, hacia) existe.
+    public void Cancel()
+    {
+        State = InvoiceStateMachine.Transition(
+            State,
+            InvoiceState.Cancelled,
+            new InvoiceTransitionContext());
+    }
+
     private static string NormalizeDebtorName(string debtorName)
     {
         if (string.IsNullOrWhiteSpace(debtorName))

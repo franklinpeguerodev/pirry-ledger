@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
+    <!-- WithAccess, TokenBearer y ErrorResponse siguen en AccessControl.Api por
+         la decision de PR #37: el modulo del negocio declara sus rutas en el
+         mismo punto unico de acceso, igual que hace Permissions.Api. -->
+    <ProjectReference Include="..\..\..\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
