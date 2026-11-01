@@ -28,8 +28,9 @@ en orden solo la primera vez; después, los pasos 5 a 8 son los que se repiten.
 
 ### Requisitos
 
-- .NET SDK `10.0.302`. La versión exacta la fija `global.json`, no hace falta
-  instalar nada más.
+- .NET SDK `10.0.400` (o una versión posterior de la misma banda, que
+  `global.json` admite con `rollForward: latestFeature`). Aquí está instalada la
+  `10.0.403` y `dotnet --version` la muestra.
 - PostgreSQL 18, con una base `pirry_ledger` y un role que sea dueño de ella.
 - Git.
 - La herramienta global `dotnet-ef` `10.0.12`, solo para aplicar las
@@ -62,7 +63,7 @@ El Host además usa el paquete `DotNetEnv` para leer el archivo `.env` del paso
 
 ### Paso 1: instalar las herramientas
 
-Instala .NET SDK `10.0.302`, PostgreSQL 18 y Git. Después instala la herramienta
+Instala .NET SDK `10.0.400` o superior, PostgreSQL 18 y Git. Después instala la herramienta
 de Entity Framework una sola vez por usuario de Windows:
 
 ```powershell
@@ -71,7 +72,7 @@ dotnet --version
 dotnet ef --version
 ```
 
-Debes obtener .NET `10.0.302` y Entity Framework `10.0.12`. Si `dotnet ef` ya
+Debes obtener una versión `10.0.4xx` (aquí `10.0.403`) y Entity Framework `10.0.12`. Si `dotnet ef` ya
 responde `10.0.12`, no vuelvas a ejecutar `dotnet tool install`; ejecuta solo
 las comprobaciones de versión. Los paquetes `Design` y `DotNetEnv` ya están
 declarados en los `.csproj` correspondientes; no ejecutes ningún otro
@@ -600,7 +601,7 @@ los módulos, lee la configuración obligatoria, fija la dirección de escucha c
 
 ```
 pirry-ledger/
-├── global.json                     Fija el SDK .NET 10.0.302
+├── global.json                     Fija el SDK .NET 10.0.400 (rollForward: latestFeature)
 ├── pirry-ledger.slnx               Solución con todos los proyectos
 ├── .env.example                    Plantilla de variables de entorno (el .env real no se sube)
 ├── docs/
@@ -617,18 +618,21 @@ pirry-ledger/
 │   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
 │   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
 │   ├── Business/
-│   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application
+│   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application, Infrastructure, Api
 │   └── Host/
 │       └── PirryLedger.Host/                    Composición + comando --send-mail
 └── Tests/
     ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
     ├── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
-    └── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
+    ├── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
+    └── PirryLedger.Integration.Tests/           Integración real Business ↔ Permissions (sección 3.13)
 ```
 
 Las pruebas usan dobles en memoria y un reloj falso: no necesitan base de datos
-ni servidor SMTP.
+ni servidor SMTP. La suite de integración es la excepción deliberada: no
+sustituye a Business ni a Permissions, solo ejecuta sus repositorios reales
+sobre EF Core en memoria.
 
 ### Mapa de requisitos de esta iteración
 
@@ -642,6 +646,7 @@ ni servidor SMTP.
 | Máquina de estados del negocio | RF-NEG-03, 04, 05, 09, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
 | **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
 | **Operaciones del negocio (facturas)** | **RF-NEG-02, RF-NEG-06**, RF-GP-01, RD-01, RD-02, RD-06 | **[3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)** |
+| **Integración Business ↔ Permissions** | **RF-NEG-06**, RF-GP-05, RD-03, RD-12 | **[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 
 > **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
@@ -657,8 +662,8 @@ ni servidor SMTP.
 > [3.10](#310-reglas-de-la-factura-y-persistencia-rf-neg-02-rd-07-rd-09),
 > [3.11](#311-consumo-de-una-concesión-de-permiso-rf-gp-05-rf-neg-06-adr-011) y
 > [3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)
-> son suyas. La integración de las dos piezas (paso 5) llega en el siguiente
-> pull request.
+> y [3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)
+> son suyas.
 
 ### Decisiones documentadas
 
@@ -747,13 +752,15 @@ estado y con el checklist de la rúbrica.
 dotnet test pirry-ledger.slnx
 ```
 
-Un solo comando, desde un clon limpio, ejecuta **las cuatro** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6),
-Permissions (26) y Business (62). Las tres primeras cubren la máquina de estados
-de la solicitud, los casos de uso, el repositorio de solicitudes y el de
-concesiones; Business cubre la máquina de estados de `Invoice` con una prueba por
-fila de sus tablas. Usan dobles en memoria, un contexto EF Core en memoria y un
-reloj falso (RD-12).
+Un solo comando, desde un clon limpio, ejecuta **las cinco** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (109), Notifications (6),
+Permissions (48), Business (134) e Integración (4). Son **301 pruebas** en total.
+Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
+uso, los repositorios y la máquina de estados de `Invoice` con una prueba por
+fila de sus tablas. La suite de integración (sección
+[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06))
+usa las piezas reales de Business y Permissions sobre EF Core en memoria y
+demuestra las dos caras de la anulación. Todas usan un reloj falso (RD-12).
 
 Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
 y la lectura de sus credenciales desde variables de entorno se verifican
@@ -1993,6 +2000,58 @@ la ruta, por ejemplo `/api/billing/invoices/{id:guid}/not-delivered`.
 - La prueba de las carreras (dos consumos o dos solicitudes simultáneas) contra
   PostgreSQL.
 - Cualquier interfaz de usuario: esta entrega se consume como API.
+
+---
+
+### 3.13 Integración real entre Business y Permissions (RF-NEG-06)
+
+La sección 1.4 del enunciado pide una prueba de integración entre las dos
+piezas, sin dobles que sustituyan a ninguna de ellas y sin levantar la
+aplicación. Vive en `Tests/PirryLedger.Integration.Tests/` y compone:
+
+- **Business real**: `CancelInvoice`, `IssueInvoice`, `CollectInvoicePayment`,
+  `InvoiceRepository` y `BusinessDbContext` sobre EF Core en memoria.
+- **Permissions real**: `PermissionRequestGateway`, `EfPermissionAuthority`,
+  `ApprovePermissionRequest`, `PermissionRequestRepository`,
+  `PermissionGrantRepository` y `PermissionsDbContext`, también en memoria.
+- **AccessControl**: `Login` y `Authenticate` reales, para que el token del
+  Administrator que aprueba salga del mismo caso de uso que en producción. Solo
+  se sustituyen sus dos puertos de persistencia (`IUserRepository`,
+  `ISessionRepository`) por clases en memoria, igual que hace la suite de
+  Permissions: AccessControl no es la pieza que se integra y sus 109 pruebas ya
+  cubren esa parte.
+
+Cada operación abre un `DbContext` nuevo, como el scope de una petición HTTP.
+No es un detalle de estilo: `CancelInvoice` cambia la factura a `Cancelled` en
+memoria, consume la concesión y solo después guarda; con un contexto compartido
+un rechazo podría dejar el cambio a medias y la prueba no distinguiría «no se
+guardó» de «se guardó y no lo leímos».
+
+```powershell
+dotnet test Tests\PirryLedger.Integration.Tests\PirryLedger.Integration.Tests.csproj
+```
+
+Salida esperada: **4 pruebas superadas**, 0 con error. Cada una prueba una cara:
+
+| Prueba | Qué demuestra |
+|---|---|
+| `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada` | Cara uno: sin concesión, la anulación se rechaza (`403`, `AlreadyPending = false`), la factura sigue `Paid` y queda una sola solicitud `Pending` con el nombre `CancelInvoice:<id>`. |
+| `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite` | Cara dos: tras la aprobación real de un Administrator hay una concesión, la anulación pasa y la concesión queda consumida (cero). |
+| `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` | El permiso es por factura: el de la primera no anula la segunda, que pide el suyo; el de la primera sigue sirviendo para la primera. |
+| `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente` | El primer intento crea la solicitud (`403`) y el segundo encuentra una pendiente (`409`); sigue habiendo una sola y la factura no cambia. |
+
+**Para ver que esta suite detecta el defecto 4.** En
+`Src/Business/PirryLedger.Business/PirryLedger.Business.Application/UseCases/CancelInvoice.cs`,
+sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`
+y corre el comando de arriba: las cuatro pruebas de integración se ponen rojas,
+porque una factura pagada se anularía sin permiso. Las tres pruebas de anulación
+de `PirryLedger.Business.Tests` también fallan. Restaura la línea y vuelve a
+verde.
+
+Esta suite no cubre las carreras (dos consumos simultáneos de la misma
+concesión) ni la persistencia contra PostgreSQL: eso se verifica en la sección
+[3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)
+con la API levantada.
 
 ---
 

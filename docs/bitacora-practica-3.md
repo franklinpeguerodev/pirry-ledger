@@ -298,6 +298,56 @@ Para probar por HTTP, la API levantada (pasos 1 a 7 del README), un usuario Est�
 
 Para abrir el pull request: rama `feature/business-operations`, base `develop`, título sugerido `Protect the business operations (RF-NEG-02, RF-NEG-06)`. Franklin hace el push, el PR y el merge.
 
+### Entrada 6 — La prueba de integración entre Business y Permissions (RF-NEG-06) (2026-11-01)
+
+**Qué se pidió.** Ejecutar la fase 5 del plan en la rama `feature/business-permission-integration`: un proyecto de pruebas nuevo que use las dos piezas reales, Business y Permissions, sin que ningún doble sustituya a ninguna de ellas, sin base de datos y sin levantar la aplicación. Tenía que mostrar las dos caras de la anulación (rechazada mientras la solicitud no está aprobada y permitida después de que un Administrator la apruebe), que el permiso de una factura no abre otra y que la concesión se consume. Además, el defecto 4 del enunciado tiene que hacer fallar esa prueba. Franklin eligió la opción A para los puertos de Access control y autorizó los cuatro casos de prueba.
+
+**Qué devolví.**
+
+1. **Commit `Add the integration test project and its scenario (RF-NEG-06)`**: `Tests/PirryLedger.Integration.Tests` con el `.csproj`, el escenario (`EscenarioDeIntegracion`), los dos dobles de Access control (`Dobles.cs`), la entrada en `pirry-ledger.slnx` y el segundo `InternalsVisibleTo` en `Permissions.Infrastructure`. Cero pruebas todavía: el andamiaje compila y la suite sigue en 297.
+2. **Commit `Prove the two faces of the cancellation between Business and Permissions (RF-NEG-06)`**: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada` y `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite`.
+3. **Commit `Prove the permission is scoped and the pending request is not duplicated (RF-NEG-06)`**: `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`.
+4. **Commit `Document the integration test between Business and Permissions (RF-NEG-06)`**: README §3.13, los recuentos de la sección `Pruebas` (301), el árbol del repositorio, el mapa de requisitos y el avance de `current-iteration.md`. En el mismo commit corregí dos errores viejos del README: decía SDK `10.0.302` en cuatro sitios cuando `global.json` fija `10.0.400` con `rollForward: latestFeature`, y el árbol seguía diciendo que Business solo tiene Domain y Application.
+5. **Commit `Record phase 5 in the logbook (RF-NEG-06)`**: esta entrada.
+
+**Dónde se equivocó el agente.**
+
+- **Presenté una decisión sin explicar qué se estaba decidiendo.** La primera versión del plan preguntaba «¿AccessControl en memoria o el AccessControl real?» sin decir qué se sustituía ni por qué, y mezclaba esa decisión con la regla del enunciado («sin dobles»), que habla de Business y Permissions, no de Access control. Franklin contestó «explica mejor» y no aprobó hasta entenderlo. La explicación que sirvió fue separar las tres piezas del test y decir qué rellena cada puerto: Business y Permissions reales; `Login` y `Authenticate` reales; solo `IUserRepository` e `ISessionRepository` en memoria. Con eso eligió A. Lección para el agente: una decisión se presenta con el costo de cada opción, no con dos etiquetas.
+- **El proyecto nuevo no compilaba a la primera.** Faltaba `using PirryLedger.Core.AccessControl.Application;` en `Dobles.cs` y el compilador dio dos `CS0246` sobre `IUserRepository` e `ISessionRepository`. Lo detectó `dotnet build`, no la lectura del archivo; se corrigió agregando la directiva.
+
+**Qué verifiqué.**
+
+- **Verde:** `dotnet test pirry-ledger.slnx` → **301 superadas, 0 con error**: Business 134, AccessControl 109, Permissions 48, Notifications 6, Integración 4. `dotnet build pirry-ledger.slnx` → 0 advertencias, 0 errores.
+- **Rojo primero, con la razón correcta.** En `CancelInvoice.cs` sustituí la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;` y corrí la solución completa: fallaron las cuatro pruebas de integración y las tres de anulación de `PirryLedger.Business.Tests`. La primera prueba de integración falla con `Assert.Throws() Failure: No exception was thrown`: sin consumo, una factura `Paid` se anula sin permiso. Restauré la línea y `git diff --stat` quedó vacío antes de commitear; volví a correr la suite y quedó en 301.
+- **Las dos caras, con los números reales.** La prueba 1 deja la factura en `Paid`, una solicitud `Pending` con el nombre `CancelInvoice:<id>` y cero concesiones. La prueba 2 comprueba una concesión después de la aprobación real y cero después de anular. La prueba 3 deja intacta la concesión de la primera factura y anula la primera al final. La prueba 4 deja una sola solicitud pendiente y `AlreadyPending` pasa de `false` a `true`.
+- **El comando que documenta el README funciona.** `dotnet test Tests\PirryLedger.Integration.Tests\PirryLedger.Integration.Tests.csproj` → 4 superadas, 0 con error, ejecutado tal cual tras escribir la sección.
+- **La versión de SDK que documenté es la que devuelve el comando.** `dotnet --version` → `10.0.403`, no `10.0.302`.
+
+**Lo que decidí yo (con la aprobación de Franklin en lo que la necesitaba).**
+
+1. **Opción A para la decisión 2.** Se sustituyen solo los dos puertos de persistencia de Access control; las dos piezas que se integran no se tocan. El argumento que quedó en el README y en el comentario del código es que Access control no es el sujeto de esta prueba y sus 109 pruebas ya cubren esa parte.
+2. **Un `DbContext` nuevo por operación.** Es lo que distingue «no se guardó» de «se guardó y no lo leímos», porque `CancelInvoice` muta la factura antes de consumir y lanza sin guardar.
+3. **El proyecto nuevo referencia también `Permissions.Domain`.** No hacía falta para compilar por transitividad, pero la prueba lee `PermissionRequestState` y el `DbSet` directamente, y una referencia explícita dice de dónde sale cada tipo.
+4. **La prueba 3 termina anulando la primera factura.** Así demuestra las dos mitades: el permiso de la primera no sirve para la segunda y sigue sirviendo para la primera.
+5. **Corregir en este PR los dos errores viejos del README.** Estaban en el alcance de la documentación que este PR toca y habrían quedado como contradicción con `global.json` y con el árbol real.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet build pirry-ledger.slnx
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 0 advertencias, 0 errores y **301 superadas, 0 con error**. Solo la suite nueva:
+
+```powershell
+dotnet test Tests\PirryLedger.Integration.Tests\PirryLedger.Integration.Tests.csproj
+```
+
+Debe decir 4. Después, en `CancelInvoice.cs`, cambiar la llamada a `ConsumeAsync` por `var consumed = true;` y repetir el primer comando: se ponen en rojo las cuatro pruebas de integración y las tres de anulación de Business. Restaurar la línea y volver a verde.
+
+Para abrir el pull request: rama `feature/business-permission-integration`, base `develop`, título sugerido `Add the integration test between Business and Permissions (RF-NEG-06)`. Franklin hace el push, el PR y el merge.
+
 
 
 
