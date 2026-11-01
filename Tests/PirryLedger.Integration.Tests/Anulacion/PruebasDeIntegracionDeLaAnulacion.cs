@@ -56,4 +56,63 @@ public sealed class PruebasDeIntegracionDeLaAnulacion
         Assert.Equal(InvoiceState.Cancelled, await escenario.EstadoDeLaFacturaAsync(facturaId));
         Assert.Equal(0, await escenario.ConcesionesDelCajeroAsync());
     }
+
+    [Fact]
+    public async Task ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra()
+    {
+        // Arrange: dos facturas pagadas. Solo la primera tiene permiso aprobado.
+        var escenario = new EscenarioDeIntegracion();
+        var primera = await escenario.EmitirFacturaPagadaAsync(500m);
+        var segunda = await escenario.EmitirFacturaPagadaAsync(300m);
+
+        await Assert.ThrowsAsync<CancellationPermissionRequiredException>(
+            () => escenario.AnularAsync(primera));
+        await escenario.AprobarSolicitudDeAnulacionAsync(primera);
+
+        var solicitudDeLaPrimera = Assert.Single(await escenario.SolicitudesAsync(primera));
+        Assert.Equal(PermissionNames.CancelInvoice(primera), solicitudDeLaPrimera.RequestedPermission);
+        Assert.Equal(PermissionRequestState.Applied, solicitudDeLaPrimera.State);
+
+        // Act: se intenta anular la segunda factura.
+        var rechazo = await Assert.ThrowsAsync<CancellationPermissionRequiredException>(
+            () => escenario.AnularAsync(segunda));
+
+        // Assert: la segunda sigue pagada y pide su propio permiso, con el
+        // nombre de la segunda factura; el permiso de la primera no se toco.
+        Assert.False(rechazo.AlreadyPending);
+        Assert.Equal(InvoiceState.Paid, await escenario.EstadoDeLaFacturaAsync(segunda));
+
+        var solicitudDeLaSegunda = Assert.Single(await escenario.SolicitudesAsync(segunda));
+        Assert.Equal(PermissionNames.CancelInvoice(segunda), solicitudDeLaSegunda.RequestedPermission);
+        Assert.Equal(PermissionRequestState.Pending, solicitudDeLaSegunda.State);
+
+        Assert.Equal(InvoiceState.Paid, await escenario.EstadoDeLaFacturaAsync(primera));
+        Assert.Equal(1, await escenario.ConcesionesDelCajeroAsync());
+
+        // El permiso de la primera sigue sirviendo para la primera.
+        var primeraAnulada = await escenario.AnularAsync(primera);
+        Assert.Equal(InvoiceState.Cancelled, primeraAnulada.State);
+    }
+
+    [Fact]
+    public async Task UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente()
+    {
+        // Arrange: una factura pagada, sin solicitud todavia.
+        var escenario = new EscenarioDeIntegracion();
+        var facturaId = await escenario.EmitirFacturaPagadaAsync(500m);
+
+        // Act: dos intentos seguidos, sin aprobacion entre ellos.
+        var primero = await Assert.ThrowsAsync<CancellationPermissionRequiredException>(
+            () => escenario.AnularAsync(facturaId));
+        var segundo = await Assert.ThrowsAsync<CancellationPermissionRequiredException>(
+            () => escenario.AnularAsync(facturaId));
+
+        // Assert: el primero crea la solicitud (403) y el segundo encuentra una
+        // pendiente (409); sigue habiendo una sola y la factura no cambio.
+        Assert.False(primero.AlreadyPending);
+        Assert.True(segundo.AlreadyPending);
+        Assert.Equal(1, await escenario.SolicitudesPendientesAsync(facturaId));
+        Assert.Single(await escenario.SolicitudesAsync(facturaId));
+        Assert.Equal(InvoiceState.Paid, await escenario.EstadoDeLaFacturaAsync(facturaId));
+    }
 }
