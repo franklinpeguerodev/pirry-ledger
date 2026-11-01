@@ -837,8 +837,8 @@ $adminHeaders = @{ Authorization = "Bearer $($sesion.token)" }
 #### RF-CA-01 — el registro acepta un email libre y rechaza el duplicado
 
 Registra un email cualquiera. Después repite con el mismo email, también en
-mayúsculas, y comprueba que la segunda vez responde `409` con el mismo mensaje
-que un email nuevo.
+mayúsculas: la primera vez responde `202` con `{"activated":false}` y el
+duplicado responde `409` con un mensaje genérico que no dice qué dato falla.
 
 ```sql
 SELECT email, active FROM ac_users ORDER BY email;
@@ -869,20 +869,13 @@ del alcance de esta práctica. La decisión y sus alternativas están en
 
 ```powershell
 # Menos de 8 caracteres -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
 # Solo letras -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
 
-
-
-
-
-
-
-
-
-
+Ambas respuestas son `400` con un mensaje en español; en ningún caso se crea la
+cuenta ni se encola un email.
 
 #### RF-CA-15 — la cuenta nace inactiva y el enlace es de un solo uso
 
@@ -1034,7 +1027,7 @@ El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una
 sesión no cierra las demás del mismo usuario: un empleado puede tener el móvil y
 el portátil abiertos a la vez.
 
-#### RF-CA-19 — cinco attempts fallidos bloquean la cuenta quince minutos
+#### RF-CA-19 — cinco intentos fallidos bloquean la cuenta quince minutos
 
 ```powershell
 1..5 | ForEach-Object {
@@ -1050,7 +1043,7 @@ Ahora la contraseña correcta se sigue rechazando:
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
-Resultado esperado: `401` con **el mismo mensaje** que los attempts fallidos
+Resultado esperado: `401` con **el mismo mensaje** que los intentos fallidos
 (`Email o contrasena incorrectos.`). Un mensaje propio confirmaría que ese
 email existe. Pasados quince minutos el bloqueo se levanta solo y entra con la
 contraseña correcta. Ese inicio correcto reinicia el contador:
@@ -1084,7 +1077,7 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
 Ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
-$restablecer = @{ codigo = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
+$restablecer = @{ code = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
@@ -1124,14 +1117,17 @@ encola. El usuario completa el cambio mediante
 #### RF-CA-22 — cambio autenticado
 
 ```powershell
-$cambio = @{ passwordActual = 'abc12345'; nuevapassword = 'nueva12345' } | ConvertTo-Json
+$cambio = @{ currentPassword = 'abc12345'; newPassword = 'nueva12345' } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/change-password `
   -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" } `
   -Body $cambio -ContentType 'application/json'
 ```
 
-Una contraseña actual incorrecta produce un rechazo Controlado. El cambio aplica
-la misma política mínima de RF-CA-14 e invalida las sesiones previas.
+Si falta uno de los dos campos la respuesta es `400` con
+`{"message":"La contrasena es obligatoria."}`; si la contraseña actual no
+coincide es `400` con `{"message":"La contrasena actual no es correcta."}` y la
+contraseña no cambia. El cambio aplica la misma política mínima de RF-CA-14 e
+invalida las sesiones previas.
 
 ### 3.4 Administración de usuarios
 
@@ -2328,7 +2324,7 @@ todavía no se escribe: llega en la semana 11.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
   `docs/adr/001-session-credential.md`.
-- **Reattempts automáticos, status fallido y escritura de `last_error`** en el
+- **Reintentos automáticos, estado fallido y escritura de `last_error`** en el
   envío de email. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.
 - **Registros de auditoría** de las operaciones administrativas (RF-CA-08, 13,
