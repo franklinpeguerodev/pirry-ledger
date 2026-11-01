@@ -36,22 +36,30 @@ once:
 | `Issued` | `InDebt` | Quien cobra | Exige el nombre de la persona. |
 | `Issued` | `Cancelled` | Quien cobra | Sin permiso: la factura todavía no se cobró. |
 | `Issued` | `NotDelivered` | Quien cobra | La factura es de delivery. |
-| `PendingVerification` | `Paid` | Administrador | La transferencia llegó. |
+| `PendingVerification` | `Paid` | Administrador | Los pagos cubren el total. |
 | `PendingVerification` | `InDebt` | Administrador | Transferencia rechazada. Exige el nombre de la persona. |
 | `InDebt` | `Paid` | Administrador | Los abonos cubren el total de la deuda. |
 | `Paid` | `Cancelled` | Quien solicitó el permiso | Existe un permiso aprobado para esa factura; se consume al anular. |
 | `InDebt` | `Cancelled` | Quien solicitó el permiso | Igual que la anterior. |
 
-Las condiciones de las filas viven en la propia máquina, una comprobación por
-fila y aislada en su método: si una se quita, la prueba de esa fila se pone roja.
-La máquina recibe los hechos de la tentativa en `InvoiceTransitionContext`
-(cantidad de ítems, si es delivery, nombre del deudor, total, pagos acumulados y
-si hay transferencia); no lee colecciones ni base de datos, así que se prueba sin
+Siete de las once filas comprueban su condición en la propia máquina, una
+comprobación por fila y aislada en su método: si una se quita, la prueba de esa
+fila se pone roja. La fila `PendingVerification -> Paid` es la excepción: su
+condición la comprueba `Invoice.ConfirmTransfer` antes de pedir la transición,
+porque es el agregado quien conoce los pagos acumulados, y la cubre
+`ConfirmarUnaTransferenciaQueNoCubreElTotalSeRechaza`, no una prueba de la tabla.
+Las dos filas de anulación no tienen condición de tabla: exigen el permiso y eso
+lo resuelve el caso de uso. `Issued -> Cancelled` no lleva condición. La máquina
+recibe los hechos de la tentativa en `InvoiceTransitionContext` (cantidad de
+ítems, si es delivery, nombre del deudor, total, pagos acumulados y si hay
+transferencia); no lee colecciones ni base de datos, así que se prueba sin
 levantar la aplicación (RD-12).
 
 La consulta del permiso de anulación **no** es una condición de la tabla: depende
-de la factura concreta y la resuelve el caso de uso con una sola línea antes de
-pedir la transición. La máquina no conoce la pieza de permisos (RF-NEG-09).
+de la factura concreta y la resuelve el caso de uso. El orden es el del ADR 011:
+la transición se resuelve en memoria, se consume la concesión y solo entonces se
+guarda la factura; si el consumo falla, la factura no se guarda. La máquina no
+conoce la pieza de permisos (RF-NEG-09).
 
 ### Transiciones prohibidas
 
@@ -90,7 +98,11 @@ Es la máquina de la pieza de permisos. La entidad central es
 `PermissionRequest` y sus estados están declarados en `PermissionRequestState`.
 Todas las transiciones se resuelven en un único componente:
 `PermissionRequestStateMachine`, cuya tabla `AllowedTransitions` es la única
-fuente de verdad. Ningún caso de uso ni endpoint valida el estado por su cuenta.
+fuente de verdad. Los dos casos de uso que resuelven una solicitud comprueban
+antes que esté en `Pending`, y lo hacen para poder rechazarla con un mensaje que
+nombra la operación (`Solo se pueden aprobar solicitudes en estado Pendiente.`);
+la transición, en cambio, solo la decide esta clase: un par que no esté en la
+tabla lanza `InvalidPermissionRequestTransitionException`.
 
 | desde | hacia | quién la ejecuta | condición |
 |---|---|---|---|
@@ -126,6 +138,10 @@ proyectos distintos y se compilan por separado: `InvoiceState` y
 `InvoiceStateMachine` en el módulo de negocio, `PermissionRequestState` y
 `PermissionRequestStateMachine` en la pieza de permisos, cada una con su propia
 excepción de transición inválida. Si una gana un estado, la otra no se entera, y
-al revés. Dos pruebas lo comprueban, una en cada suite: el módulo de negocio no
-referencia ningún ensamblado de permisos ni de control de acceso, y la máquina de
-permisos no vive en un ensamblado de negocio.
+al revés. Dos pruebas lo comprueban, una en cada suite: el dominio del módulo de
+negocio (`PirryLedger.Business.Domain`) no referencia ningún ensamblado de
+permisos ni de control de acceso, y la máquina de permisos no vive en un
+ensamblado de negocio. `PirryLedger.Business.Api` sí referencia
+`PirryLedger.Core.AccessControl.Api`, y es deliberado: ahí vive `.WithAccess`, el
+punto único donde cada ruta declara su operación (RF-CA-05). Es un enlace de la
+capa Api, no del dominio ni de la aplicación.

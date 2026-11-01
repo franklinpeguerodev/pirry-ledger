@@ -1788,6 +1788,13 @@ que `Administrator`, también rechaza a un Administrador. Lo demuestra
 que hace con las de acceso y permisos: si una ruta se queda sin declarar, la
 suite se pone roja y el mensaje nombra la ruta.
 
+Las dos rutas de lectura declaran `AnySession` (RF-NEG-06). No son rutas sin
+comprobación: el conjunto de roles del sistema es cerrado —`Administrator` y
+`Standard`—, así que `AnySession` significa «cualquiera de los dos» y el conjunto
+de roles admitidos es el conjunto completo de roles que existen. Exigir un rol
+concreto dejaría fuera al otro y rompería el uso real: el cajero y el
+Administrador leen las mismas facturas.
+
 #### Preparación
 
 Necesitas un usuario **Estándar** activado (paso 8) y el token del Administrador

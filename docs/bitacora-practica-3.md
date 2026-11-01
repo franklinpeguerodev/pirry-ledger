@@ -432,3 +432,56 @@ dotnet test pirry-ledger.slnx
 Debe decir 0 advertencias, 0 errores y **301 superadas, 0 con error**. Para los cinco frentes: levantar la API (paso 7), registrar una cuenta propia siguiendo §3.1, activarla con el enlace de la cola, y repetir las peticiones de la tabla de arriba en el orden del README; las secciones §3.1, §3.2, §3.3 y §3.8 son las que se usaron. Para los defectos, la tabla de la sección `Defectos` del README dice el archivo, la línea y la prueba; hasta que existan los tags, se reproducen plantando el cambio a mano.
 
 Para abrir el pull request: rama `docs/practica-3-closing`, base `develop`, título sugerido `Close Practice 3: defects, evidence and accumulated review (RF-NEG-03, RF-NEG-04, RF-NEG-05, RF-NEG-06)`. Franklin hace el push, el PR y el merge.
+
+### Entrada 8 — Auditoría de `docs/` contra el código y alineación de la documentación (2026-11-01)
+
+**Qué se pidió.** Antes de pasar a `main`, comparar todo `docs/` con el código real y presentar cada desviación en una tabla, con la razón exacta cuando una conducta documentada no está en el código. Nada se corrige sin que Franklin decida. Después de ver la tabla, Franklin decidió cinco cosas: solo se tocan documentos; la rama es nueva porque `docs/practica-3-closing` ya está mergeada; los ADR aceptados no se reescriben, se les añade una nota de estado actual; RD-04 se documenta y no se refactoriza; el acceso de las dos rutas de lectura se documenta; y los dos comentarios obsoletos entran en el alcance.
+
+**Qué encontré.** Diez desviaciones. Ninguna es un fallo de comportamiento del negocio: lo que no coincidía era el texto de `docs/` con un código que hace algo más preciso o distinto de lo que el documento afirma.
+
+| # | Documento | Lo que decía | Lo que hace el código | Qué se hizo |
+|---|---|---|---|---|
+| 1 | `maquina-de-estados.md:93` | «Ningún caso de uso ni endpoint valida el estado por su cuenta» | Aprobar y rechazar comprueban `State != Pending` antes de llamar a la máquina | Se describe la comprobación real y para qué existe |
+| 2 | `maquina-de-estados.md:45-46` | «las condiciones de las filas viven en la propia máquina» | La de `PendingVerification -> Paid` la comprueba `Invoice.ConfirmTransfer` | Se documenta la excepción y qué prueba la cubre |
+| 3 | `maquina-de-estados.md:39` | Condición: «La transferencia llegó» | Exige que los pagos cubran el total | Corregida la condición |
+| 4 | `maquina-de-estados.md:52-54` | El permiso se resuelve «antes de pedir la transición» | Transición en memoria, luego `ConsumeAsync`, luego guardar (ADR 011) | Corregido el orden |
+| 5 | RD-04 | «no hay validaciones de estado repetidas» | Siete comprobaciones fuera de la tabla, cuatro imprescindibles | Se documentan las dos capas; no se toca el código |
+| 6 | `current-iteration.md:88` | Las ediciones se registran «con el nombre» y «notifica al Administrador» | Guarda el `Guid` del usuario y el notificador es `NoOpInvoiceEditedNotifier` | Corregida la afirmación |
+| 7 | `adr/README.md:14` | Índice de los ADR | Un `\n` literal y la entrada 012 ausente | Índice arreglado y completo |
+| 8 | `adr/003` y `adr/004` | Nombres en español y la migración `20261003142652_UnificarNombresDeColumnas` | `ac_users`, `password_hash`, `20261018191406_InitialSchema` | Nota de estado actual al final; cuerpo intacto |
+| 9 | `maquina-de-estados.md:131`, `current-iteration.md:134` | El negocio no referencia ensamblados de acceso ni de permisos | `Business.Api` referencia `Core.AccessControl.Api` | Corregido: es la capa Api, para declarar sus rutas |
+| 10 | `AccessFilter.cs:265`, `PermissionRequest.cs:83` | `{"mensaje": "..."}` y el caso de uso `ApplyPermissionRequest` | `{"message": "..."}` y `ApprovePermissionRequest` | Comentarios corregidos |
+
+En el camino cambió un veredicto: RD-04 se había marcado como incumplido al contar siete guardas de estado fuera de la tabla. Al leerlas una por una, cuatro resultaron imprescindibles (sin ellas una operación alcanza un par legal que pertenece a otra: un `Issued` podría pasar a `Paid` por el camino del abono, o a `InDebt` rechazando una transferencia que no existe), dos solo producen un mensaje que nombra la operación y una decide si hace falta permiso. La tabla valida pares; las guardas deciden qué operación puede intentar cada par. Con esa lectura RD-04 se cumple y lo que había que corregir era la frase del documento, no el código.
+
+**Qué devolví.** Siete commits en `docs/align-docs-with-code`, uno por cambio:
+
+1. `a2acb40` — `Correct the state machine document against the code (RD-04)`.
+2. `6117ed8` — `Correct the edit traceability claim of the iteration (RF-NEG-02)`.
+3. `b6fbeb4` — `Fix the ADR index and record the current schema names (RD-09)`.
+4. `9400889` — `Correct the permissions suite status in the requirements index (RF-GP-01)`.
+5. `a942c6c` — `Correct two comments that name text and a use case that no longer exist (RD-07)`.
+6. `6ea4e1e` — `Document the access level of the two read routes (RF-NEG-06)`: un párrafo en README §3.12 y el comentario de la tabla de `RoleRequirements`.
+7. Esta entrada.
+
+Los nombres de la nota del ADR 004 no se escribieron de memoria: salieron de `UserConfiguration`, de `EmailQueueItemConfiguration` y de las tres migraciones que existen.
+
+**Lo que se dejó a propósito.** RD-04 no se refactoriza: mover las guardas a la máquina obligaría a añadir `Issued -> Issued` a la tabla y a rehacer los 38 pares prohibidos, las pruebas y las cuentas del README. Los cuerpos de los ADR 003 y 004 no se tocan: son el registro de la decisión. `docs/requirements/business-module.md:8` sigue diciendo «entre 3 y 5 estados» porque ese texto es del profesor; la resolución vive en el enunciado y en la decisión 2. Los cuatro defectos y sus tags siguen pendientes: necesitan `practica-3` en `main`.
+
+**Dónde me equivoqué.**
+
+- **Di RD-04 por incumplido antes de leer las siete guardas.** La primera pasada fue `Select-String "State !="` y contar siete resultados; el veredicto correcto necesitaba abrir cada una y preguntar qué pasaría sin ella. Cuatro son imprescindibles y el requisito se cumple. La tabla que presenté lo decía mal y hubo que corregirla delante de Franklin.
+- **Falló la primera inserción del párrafo en README §3.12.** Escribí `la suite se pone roja...` como si la línea empezara ahí; la `la` estaba al final de la línea anterior. La herramienta rechazó la sustitución y el ancla correcta fue `suite se pone roja...`. Otra vez la lección de la entrada 7: anclar en el texto real y releer la zona después.
+
+**Qué no verifiqué en esta entrada.** La cobertura requisito por requisito se revisó leyendo el código y las pruebas, no repitiendo la corrida HTTP de la entrada 7. Tampoco se probó la carrera de concurrencia del ADR 011 contra PostgreSQL real ni el envío por SMTP: siguen como estaban.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet build pirry-ledger.slnx
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 0 advertencias, 0 errores y **301 superadas, 0 con error** (109 de AccessControl, 134 de Business, 48 de Permissions, 6 de Notifications y 4 de Integración). Los cambios de esta rama son texto y dos comentarios: si el número se mueve, algo más se tocó.
+
+Para abrir el pull request: rama `docs/align-docs-with-code`, base `develop`, título sugerido `Align the documentation with the delivered code (RD-04, RF-NEG-06)`. Franklin hace el push, el PR y el merge.

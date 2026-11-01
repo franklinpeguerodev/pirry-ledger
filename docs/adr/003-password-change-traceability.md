@@ -125,3 +125,17 @@ motivo, IP, dispositivo, valores anteriores, notificaciones ni un endpoint
 administrativo para consultar credenciales. Tampoco cambia la duración de las
 sesiones, la política de contraseñas, los códigos de recuperación ni la
 invalidación por `CredencialVersion`.
+
+## Nota de auditoría (2026-11-01): estado actual
+
+El cuerpo de arriba es el registro de la decisión tal como se tomó y no se
+reescribe. Los nombres que cita quedaron en español; el código de hoy dice:
+
+- la entidad es `User` y la propiedad es `PasswordChangedAtUtc`, no `Usuario` ni
+  `ContrasenaCambiadaUtc`;
+- la operación de dominio es `User.ChangePassword`, no `CambiarContrasena`;
+- la tabla es `ac_users`, no `ac_usuarios`, según la migración
+  `20261018191406_InitialSchema`.
+
+La decisión no cambia: la trazabilidad sigue siendo un `timestamp with time zone`
+nullable en UTC, escrito desde la operación de dominio.
