@@ -80,7 +80,7 @@ public sealed class PermissionRequest
     }
 
     // RF-GP-05: aplicar el permiso, en la misma operacion que la aprobacion.
-    // Lo llama el caso de uso ApplyPermissionRequest, sin intermediarios.
+    // Lo llama el caso de uso ApprovePermissionRequest, sin intermediarios.
     public void MarkApplied(DateTime utcNow)
     {
         State = PermissionRequestStateMachine.Transition(State, PermissionRequestState.Applied);
