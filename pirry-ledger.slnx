@@ -34,5 +34,6 @@
     <Project Path="Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.Permissions.Tests/PirryLedger.Core.Permissions.Tests.csproj" />
+    <Project Path="Tests/PirryLedger.Integration.Tests/PirryLedger.Integration.Tests.csproj" />
   </Folder>
 </Solution>
