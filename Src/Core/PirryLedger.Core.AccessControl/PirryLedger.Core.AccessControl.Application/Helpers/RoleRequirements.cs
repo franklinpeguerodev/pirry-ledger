@@ -108,8 +108,10 @@ public static class RoleRequirements
         [Operation.RegisterDebtPayment] = new(AccessLevel.Administrator),
         [Operation.ListInvoiceEdits] = new(AccessLevel.Administrator),
 
-        // Consultar facturas: cualquier Session valida, porque tanto el cajero
-        // como el Administrator necesitan verlas.
+        // Consultar facturas (RF-NEG-06): las dos rutas declaran AnySession porque
+        // el conjunto de roles es cerrado (Administrator y Standard) y los dos
+        // leen las mismas facturas. AnySession admite todo role existente, asi
+        // que la tabla sigue diciendo a quien admite cada ruta.
         [Operation.ListInvoices] = new(AccessLevel.AnySession),
         [Operation.GetInvoice] = new(AccessLevel.AnySession),
     };
