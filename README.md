@@ -768,8 +768,33 @@ manualmente con `--send-mail`, más abajo.
 
 ### Defectos
 
-La suite se mide por si falla cuando el código tiene un defecto. Los seis
-defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
+La suite se mide por si falla cuando el código tiene un defecto. Cada defecto se
+planta en un commit que cuelga del tag de su práctica, se etiqueta
+`practica-N-defecto-M` y no toca ningún archivo de pruebas. Con el defecto
+plantado, `dotnet test pirry-ledger.slnx` falla en las pruebas que indica la
+tabla; sobre el tag de la práctica todas pasan.
+
+#### Práctica 3 (`practica-3`)
+
+Los cuatro defectos del enunciado (`docs/assignments/practica-3.md`, sección
+1.3). Los nombres de las pruebas de esta tabla se obtuvieron plantando cada
+defecto y corriendo la suite, no leyendo el código.
+
+| Defecto | Qué se planta | Pruebas que lo detectan | Qué comprueban |
+|---|---|---|---|
+| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 11 de los 49 pares. |
+| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
+| 3 (RF-NEG-03) | `InvoiceStateMachine.cs:62`: elimina la llamada a `EnsureHasAtLeastOneItem` en `Draft -> Issued`, así que se puede emitir una factura sin ítems. | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | Que emitir sin ítems se rechace, no cambie el estado y no guarde nada. |
+| 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
+
+Para ver un defecto: `git checkout practica-3-defecto-N`, correr
+`dotnet test pirry-ledger.slnx` y comprobar que falla al menos una de las pruebas
+de su fila. `git diff practica-3 practica-3-defecto-N --stat` muestra que el
+commit solo toca código de Business y ningún archivo de pruebas.
+
+#### Práctica 2 (`practica-2`)
+
+Los seis defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
 uno por uno en un commit que cuelga de `practica-2`, se etiqueta
 `practica-2-defecto-N` y no toca ningún archivo de pruebas. Con el defecto
 plantado, el comando de arriba falla en la prueba que se indica; sobre
@@ -812,8 +837,8 @@ $adminHeaders = @{ Authorization = "Bearer $($sesion.token)" }
 #### RF-CA-01 — el registro acepta un email libre y rechaza el duplicado
 
 Registra un email cualquiera. Después repite con el mismo email, también en
-mayúsculas, y comprueba que la segunda vez responde `409` con el mismo mensaje
-que un email nuevo.
+mayúsculas: la primera vez responde `202` con `{"activated":false}` y el
+duplicado responde `409` con un mensaje genérico que no dice qué dato falla.
 
 ```sql
 SELECT email, active FROM ac_users ORDER BY email;
@@ -844,20 +869,13 @@ del alcance de esta práctica. La decisión y sus alternativas están en
 
 ```powershell
 # Menos de 8 caracteres -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
 # Solo letras -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
 
-
-
-
-
-
-
-
-
-
+Ambas respuestas son `400` con un mensaje en español; en ningún caso se crea la
+cuenta ni se encola un email.
 
 #### RF-CA-15 — la cuenta nace inactiva y el enlace es de un solo uso
 
@@ -1009,7 +1027,7 @@ El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una
 sesión no cierra las demás del mismo usuario: un empleado puede tener el móvil y
 el portátil abiertos a la vez.
 
-#### RF-CA-19 — cinco attempts fallidos bloquean la cuenta quince minutos
+#### RF-CA-19 — cinco intentos fallidos bloquean la cuenta quince minutos
 
 ```powershell
 1..5 | ForEach-Object {
@@ -1025,7 +1043,7 @@ Ahora la contraseña correcta se sigue rechazando:
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
-Resultado esperado: `401` con **el mismo mensaje** que los attempts fallidos
+Resultado esperado: `401` con **el mismo mensaje** que los intentos fallidos
 (`Email o contrasena incorrectos.`). Un mensaje propio confirmaría que ese
 email existe. Pasados quince minutos el bloqueo se levanta solo y entra con la
 contraseña correcta. Ese inicio correcto reinicia el contador:
@@ -1059,7 +1077,7 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
 Ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
-$restablecer = @{ codigo = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
+$restablecer = @{ code = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
@@ -1099,14 +1117,17 @@ encola. El usuario completa el cambio mediante
 #### RF-CA-22 — cambio autenticado
 
 ```powershell
-$cambio = @{ passwordActual = 'abc12345'; nuevapassword = 'nueva12345' } | ConvertTo-Json
+$cambio = @{ currentPassword = 'abc12345'; newPassword = 'nueva12345' } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/change-password `
   -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" } `
   -Body $cambio -ContentType 'application/json'
 ```
 
-Una contraseña actual incorrecta produce un rechazo Controlado. El cambio aplica
-la misma política mínima de RF-CA-14 e invalida las sesiones previas.
+Si falta uno de los dos campos la respuesta es `400` con
+`{"message":"La contrasena es obligatoria."}`; si la contraseña actual no
+coincide es `400` con `{"message":"La contrasena actual no es correcta."}` y la
+contraseña no cambia. El cambio aplica la misma política mínima de RF-CA-14 e
+invalida las sesiones previas.
 
 ### 3.4 Administración de usuarios
 
@@ -2303,7 +2324,7 @@ todavía no se escribe: llega en la semana 11.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
   `docs/adr/001-session-credential.md`.
-- **Reattempts automáticos, status fallido y escritura de `last_error`** en el
+- **Reintentos automáticos, estado fallido y escritura de `last_error`** en el
   envío de email. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.
 - **Registros de auditoría** de las operaciones administrativas (RF-CA-08, 13,

@@ -348,6 +348,87 @@ Debe decir 4. Después, en `CancelInvoice.cs`, cambiar la llamada a `ConsumeAsyn
 
 Para abrir el pull request: rama `feature/business-permission-integration`, base `develop`, título sugerido `Add the integration test between Business and Permissions (RF-NEG-06)`. Franklin hace el push, el PR y el merge.
 
+### Entrada 7 — Cierre de la Práctica 3: el README, los cinco frentes y los cuatro defectos (2026-11-01)
 
+**Qué se pidió.** Ejecutar el paso 6 del plan en la rama `docs/practica-3-closing`: las secciones `Pruebas` y `Defectos` del README, la documentación revisada contra el código y los cinco frentes de la sección 1.5 recorridos siguiendo el README al pie de la letra. Después, con autorización aparte, el merge a `main`, el tag `practica-3` y los cuatro defectos. Franklin decidió dos cosas antes de arrancar: que los defectos se plantaran primero y que el README se escribiera con la salida observada y no con lo que el agente leyera del código, y el orden de entrega: este PR contra `develop`, `develop` evaluado para `main`, y los tags ya sobre `main`.
 
+**Qué devolví.**
 
+1. **Commit `Document the four defects of Practice 3 (RF-NEG-03, RF-NEG-04, RF-NEG-05, RF-NEG-06)`**: la sección `Defectos` separada por práctica (`#### Práctica 3` y `#### Práctica 2`) y una fila por defecto con el archivo y la línea que se tocan, las pruebas que fallaron de verdad al plantarlo y qué comprueba cada una. Ningún nombre de prueba se escribió leyendo el código: los cuatro se obtuvieron plantando el defecto y corriendo la suite.
+2. **Commit `Fix the README steps proven wrong by the accumulated review (RF-CA-01, RF-CA-09, RF-CA-14, RF-CA-22)`**: los tres cuerpos de petición que no coincidían con la API, la descripción del registro duplicado, dos palabras en inglés que quedaban en la prosa (`attempts`, `Reattempts`) y once líneas en blanco que rompían el formato de §3.1.
+3. **Commit `Record step 6 of the iteration (RF-NEG-03, RF-NEG-04, RF-NEG-05, RF-NEG-06)`**: el avance del paso 6 en `docs/current-iteration.md`.
+4. **Commit `Record phase 6 in the logbook (RF-NEG-03, RF-NEG-04, RF-NEG-05, RF-NEG-06)`**: esta entrada.
+
+**Los cuatro defectos, con la salida real.** Cada uno se plantó a mano, se corrió la suite, se anotó qué falló y se revirtió con `git checkout --` antes del siguiente; la historia no se ensució. Los commits y los tags reales se crean después del tag `practica-3`, como pide el enunciado.
+
+| Defecto | Qué se cambió | Pruebas en rojo | Salida |
+|---|---|---|---|
+| 1 | `InvoiceStateMachine.cs:20`: `(InvoiceState.Issued, InvoiceState.Draft)` añadido a `AllowedTransitions` | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)` y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | `Con error: 2, Superado: 132, Total: 134` |
+| 2 | `InvoiceStateMachine.cs:30`: `(InvoiceState.Cancelled, InvoiceState.Issued)` | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Cancelled, hacia: Issued)`, `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | `Con error: 3, Superado: 131, Total: 134` |
+| 3 | `InvoiceStateMachine.cs:62`: se elimina `EnsureHasAtLeastOneItem(from, to, context)` del caso `Draft -> Issued` | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | `Con error: 3, Superado: 131, Total: 134` |
+| 4 | `CancelInvoice.cs:44`: la llamada a `_permissions.ConsumeAsync(...)` se sustituye por `var consumed = true;` | Las cuatro de `PirryLedger.Integration.Tests` más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` | `Con error: 3, Superado: 131, Total: 134` en Business y `Con error: 4, Superado: 0, Total: 4` en Integración |
+
+**Los cinco frentes de la sección 1.5, corriendo el README tal cual.** Todo se ejecutó por HTTP contra la API en `http://localhost:5243` y PostgreSQL 18, con una cuenta desechable `cierre143045@ejemplo.com` que se borró al terminar, junto con sus filas de sesiones, tokens, cola y permisos. Los cuerpos son los que el README publica, no los que el agente recuerda.
+
+| Frente | Petición | Resultado |
+|---|---|---|
+| Registro y activación | `POST /api/auth/register` con contraseña de 5 caracteres | `400` `La contrasena debe tener al menos 8 caracteres.` |
+| | `POST /api/auth/register` con solo letras | `400` `La contrasena debe tener letras y numeros.` |
+| | `POST /api/auth/register` válido | `202` `{"activated":false}` |
+| | mismo email en mayúsculas | `409` `No pudimos completar el registro con esos datos.` |
+| | `POST /api/auth/login` sin activar | `401` `La cuenta no esta activada.` |
+| | `GET /activate?token=<64 hex>` | `200` `{"activated":true}` |
+| | el mismo enlace otra vez | `400` `El enlace de activacion no es valido o ya caduco.` |
+| | `POST /api/auth/login` tras activar | `200` con token de 43 caracteres |
+| | inactiva con contraseña equivocada (frase que el README afirma) | `401` `Email o contrasena incorrectos.` |
+| Sesión | `GET /me` con `Bearer` | `200` `{"name":"Cierre","email":"cierre143045@ejemplo.com","role":"Standard"}` |
+| | `GET /me` sin cabecera | `401` `Sesion no valida.` |
+| | `POST /api/auth/logout` | `204` |
+| | `GET /me` con el token cerrado | `401` `Sesion no valida.` |
+| Rechazo por rol | Standard en `GET /api/permissions/requests/pending` | `403` `No tiene permisos para esta operacion.` |
+| | sin sesión en la misma ruta | `401` `Sesion no valida.` |
+| | Administrator en `POST /api/billing/invoices` | `403` `No tiene permisos para esta operacion.` |
+| | Administrator en su propia ruta | `200` con la lista de pendientes |
+| Recuperación y cambio | `POST /api/auth/recovery` con email existente | `202` `{"sent":true}` |
+| | con email inexistente | `202` `{"sent":true}` |
+| | `POST /api/auth/reset-password` con `code` leído de la cola | `204` |
+| | el mismo código otra vez | `400` `El codigo de recuperacion no es valido.` |
+| | login con la contraseña anterior | `401` `Email o contrasena incorrectos.` |
+| | login con la nueva | `200` |
+| | `POST /api/auth/change-password` | `204` |
+| | `GET /me` con el token anterior al cambio | `401` `Sesion no valida.` |
+| | cambio con la contraseña actual equivocada | `400` `La contrasena actual no es correcta.` |
+| Solicitudes de permiso | `POST /api/permissions/requests` con `ViewSalesSummary` | `202` con el `id` |
+| | `GET /api/permissions/sales-summary` sin concesión | `403` `No tiene el permiso necesario para esta operacion.` |
+| | `GET /api/permissions/requests/pending` del Administrator | `200` y la solicitud aparece |
+| | `POST /api/permissions/requests/{id}/approve` | `204` |
+| | `GET /api/permissions/sales-summary` con la concesión | `200` con el resumen |
+| | aprobar otra vez | `400` `Solo se pueden aprobar solicitudes en estado Pendiente.` |
+| | rechazar sin motivo | `400` `El motivo del rechazo es obligatorio.` |
+| | rechazar con motivo | `204`, y la fila queda `Rejected` con el motivo escrito |
+| | aprobar una rechazada | `400` y sigue en `Rejected` |
+| | volver a pedir la misma rechazada | `202`, permitido (ADR 012) |
+
+**Dónde se equivocó el agente.**
+
+- **La primera consulta del correo en cola filtraba por la columna equivocada.** El guion del frente 1 buscaba `body LIKE '%correo%'` y la columna que identifica al destinatario es `recipient`; la consulta volvió vacía y la corrida se detuvo con `NO se encontro token de activacion en la cola`. Se vio al leer `information_schema.columns`, no adivinando. Se corrigió la consulta, se borró el usuario a medio registrar con sus filas y se repitió la corrida completa.
+- **Escribí una afirmación antes de comprobarla.** Al arreglar RF-CA-22 puse que una contraseña actual incorrecta devuelve `401`; al ejecutarla resultó `400` con `La contrasena actual no es correcta.`. Se corrigió antes del commit. Es exactamente lo que Franklin pidió evitar: el texto se escribe con la salida a la vista, no con la que uno supone.
+- **La edición del README duplicó un encabezado y dejó once líneas en blanco.** La herramienta respondió `Edited ... 1 replacement` y el archivo quedó con `#### RF-CA-15` dos veces. No lo detectó la herramienta sino releer el archivo y comparar los bytes de esa zona; se corrigió con una sustitución exacta sobre el texto real. Lección: después de cada edición se relee la zona, no se confía en el mensaje de éxito.
+
+**Lo que decidí yo.**
+
+1. **Probar los defectos sin commitearlos.** Primero se plantan, se corre la suite, se anota la salida y se revierte; los commits y los tags reales se crean sobre el tag `practica-3` ya publicado. Así la evidencia del README no depende de que la historia quede con ramas de más.
+2. **Corregir en este PR lo que la corrida desmintió.** Los tres cuerpos de petición y la frase del registro duplicado habrían hecho que la revisión del profesor fallara siguiendo el README al pie de la letra.
+3. **Corregir las dos palabras en inglés que quedaban en la prosa** (`attempts`, `Reattempts`) y las once líneas en blanco de §3.1, porque están en las secciones que este PR toca.
+4. **No tocar todavía ningún tag.** No existe `practica-3` ni `practica-3-defecto-N`; el merge a `main` y los cuatro tags esperan la autorización de Franklin, como él pidió.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+dotnet build pirry-ledger.slnx
+dotnet test pirry-ledger.slnx
+```
+
+Debe decir 0 advertencias, 0 errores y **301 superadas, 0 con error**. Para los cinco frentes: levantar la API (paso 7), registrar una cuenta propia siguiendo §3.1, activarla con el enlace de la cola, y repetir las peticiones de la tabla de arriba en el orden del README; las secciones §3.1, §3.2, §3.3 y §3.8 son las que se usaron. Para los defectos, la tabla de la sección `Defectos` del README dice el archivo, la línea y la prueba; hasta que existan los tags, se reproducen plantando el cambio a mano.
+
+Para abrir el pull request: rama `docs/practica-3-closing`, base `develop`, título sugerido `Close Practice 3: defects, evidence and accumulated review (RF-NEG-03, RF-NEG-04, RF-NEG-05, RF-NEG-06)`. Franklin hace el push, el PR y el merge.
