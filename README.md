@@ -768,8 +768,33 @@ manualmente con `--send-mail`, más abajo.
 
 ### Defectos
 
-La suite se mide por si falla cuando el código tiene un defecto. Los seis
-defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
+La suite se mide por si falla cuando el código tiene un defecto. Cada defecto se
+planta en un commit que cuelga del tag de su práctica, se etiqueta
+`practica-N-defecto-M` y no toca ningún archivo de pruebas. Con el defecto
+plantado, `dotnet test pirry-ledger.slnx` falla en las pruebas que indica la
+tabla; sobre el tag de la práctica todas pasan.
+
+#### Práctica 3 (`practica-3`)
+
+Los cuatro defectos del enunciado (`docs/assignments/practica-3.md`, sección
+1.3). Los nombres de las pruebas de esta tabla se obtuvieron plantando cada
+defecto y corriendo la suite, no leyendo el código.
+
+| Defecto | Qué se planta | Pruebas que lo detectan | Qué comprueban |
+|---|---|---|---|
+| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 11 de los 49 pares. |
+| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
+| 3 (RF-NEG-03) | `InvoiceStateMachine.cs:62`: elimina la llamada a `EnsureHasAtLeastOneItem` en `Draft -> Issued`, así que se puede emitir una factura sin ítems. | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | Que emitir sin ítems se rechace, no cambie el estado y no guarde nada. |
+| 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
+
+Para ver un defecto: `git checkout practica-3-defecto-N`, correr
+`dotnet test pirry-ledger.slnx` y comprobar que falla al menos una de las pruebas
+de su fila. `git diff practica-3 practica-3-defecto-N --stat` muestra que el
+commit solo toca código de Business y ningún archivo de pruebas.
+
+#### Práctica 2 (`practica-2`)
+
+Los seis defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
 uno por uno en un commit que cuelga de `practica-2`, se etiqueta
 `practica-2-defecto-N` y no toca ningún archivo de pruebas. Con el defecto
 plantado, el comando de arriba falla en la prueba que se indica; sobre
