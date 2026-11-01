@@ -132,3 +132,32 @@ Notifications ni su SQL crudo, no modifica entidades de dominio ni
 configuraciones de tipos. Tampoco introduce una convención
 global automática (paquete de naming conventions de EF): el mapeo es explícito
 y visible en cada archivo de configuración.
+
+## Nota de auditoría (2026-11-01): estado actual
+
+El cuerpo de arriba es el registro de la decisión tal como se tomó y no se
+reescribe. La decisión sigue en pie —todas las columnas en snake_case
+minúscula, con mapeo explícito—, pero los nombres que cita ya no existen:
+
+- las tablas son `ac_users`, `ac_sessions`, `ac_activation_tokens`,
+  `ac_recovery_codes`, `not_email_queue`, `per_permission_requests` y
+  `per_permission_grants`;
+- las columnas de AccessControl son `id`, `name`, `email`, `password_hash`,
+  `role`, `active`, `created_at_utc`, `password_changed_at_utc`,
+  `credential_version`, `failed_attempts` y `locked_until_utc`;
+- las clases de configuración están en inglés (`UserConfiguration`,
+  `SessionConfiguration`, `EmailQueueItemConfiguration`, …), igual que el
+  resto del código;
+- el índice único es `ix_ac_users_email`, no `ix_ac_usuarios_correo`;
+- no existe la migración `20261003142652_UnificarNombresDeColumnas`. El esquema
+  nace ya con estos nombres en `20261018191406_InitialSchema` (AccessControl),
+  `20261021024258_InitialSchema` (Permissions) y
+  `20261029150722_InitialBusinessSchema` (Business).
+
+La consulta de verificación de este ADR ya no corre; la vigente es:
+
+```sql
+SELECT name, email, active, left(password_hash, 25) FROM ac_users;
+```
+
+que devuelve las filas sin comillas dobles y con los hashes intactos.
