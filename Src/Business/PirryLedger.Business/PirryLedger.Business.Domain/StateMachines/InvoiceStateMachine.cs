@@ -27,6 +27,7 @@ public static class InvoiceStateMachine
             (InvoiceState.InDebt, InvoiceState.Paid),
             (InvoiceState.Paid, InvoiceState.Cancelled),
             (InvoiceState.InDebt, InvoiceState.Cancelled),
+            (InvoiceState.Cancelled, InvoiceState.Issued),
         };
 
     public static bool CanTransition(InvoiceState from, InvoiceState to) =>
