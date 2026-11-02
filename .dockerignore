@@ -1,0 +1,24 @@
+# Lo que el build de la imagen no necesita.
+#
+# bin/ y obj/ se excluyen siempre: son artefactos de Windows y no deben entrar en
+# una compilacion de Linux.
+**/bin/
+**/obj/
+**/TestResults/
+
+# Las pruebas no se publican ni se ejecutan dentro de la imagen.
+Tests/
+
+# Secretos (RD-10): el .env es de cada maquina y nunca entra en la imagen.
+.env
+.env.*
+
+# Historial, herramientas del editor y documentos del curso.
+.git/
+.gitignore
+.github/
+.vs/
+.vscode/
+.tmp/
+docs/
+*.user
