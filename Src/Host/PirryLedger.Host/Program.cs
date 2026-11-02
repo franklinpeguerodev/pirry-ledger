@@ -5,6 +5,8 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Permissions.Api;
 using PirryLedger.Core.Permissions.Infrastructure;
+using PirryLedger.Business.Infrastructure;
+using PirryLedger.Business.Api;
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
 // cada pieza expone los suyos (RD-01).
 using DotNetEnv;
@@ -63,6 +65,7 @@ builder.Services.AddNotifications(
     connection,
     EnvironmentConfiguration.ReadSmtp(builder.Configuration) ?? SmtpConfiguration.Empty);
 builder.Services.AddPermissions(connection);
+builder.Services.AddBusiness(connection);
 
 var app = builder.Build();
 
@@ -146,6 +149,7 @@ app.Use(PirryLedger.Core.AccessControl.Api.AccessFilter.RequireDeclaredOperation
 app.MapAccessControl();
 app.MapNotifications();
 app.MapPermissions();
+app.MapBusiness();
 
 app.Run();
 

@@ -43,7 +43,8 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
     }
 
     public bool IsKnown(string permissionName) =>
-        !string.IsNullOrWhiteSpace(permissionName) && _known.Contains(permissionName);
+        !string.IsNullOrWhiteSpace(permissionName)
+        && (_known.Contains(permissionName) || PermissionNames.IsCancelInvoice(permissionName));
 
     public Task<bool> UserHasPermissionAsync(
         Guid userId,
@@ -61,6 +62,27 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
     public void Revoke(Guid userId, string permissionName)
     {
         _granted[(userId, permissionName)] = false;
+    }
+
+    // RF-NEG-06: mismo contrato que la autoridad real. Una concesion se
+    // consume una sola vez; la segunda llamada devuelve false.
+    public Task<bool> ConsumeAsync(
+        Guid userId,
+        string permissionName,
+        CancellationToken cancellationToken = default)
+    {
+        var key = (userId, permissionName);
+
+        if (userId == Guid.Empty
+            || !IsKnown(permissionName)
+            || !_granted.TryGetValue(key, out var granted)
+            || !granted)
+        {
+            return Task.FromResult(false);
+        }
+
+        _granted.Remove(key);
+        return Task.FromResult(true);
     }
 }
 
@@ -98,6 +120,15 @@ internal sealed class FakePermissionRequestRepository : IPermissionRequestReposi
         Task.FromResult<IReadOnlyList<PermissionRequest>>(
             _requests.Values.Where(r => r.RequesterId == requesterId).ToList());
 
+    public Task<bool> ExistsPendingAsync(
+        Guid requesterId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_requests.Values.Any(r =>
+            r.RequesterId == requesterId
+            && r.RequestedPermission == permissionName
+            && r.State == PermissionRequestState.Pending));
+
     public Task SaveAsync(PermissionRequest request, CancellationToken cancellationToken = default)
     {
         _requests[request.Id] = request;
@@ -126,4 +157,12 @@ internal sealed class FakePermissionGrantRepository : IPermissionGrantRepository
         string permissionName,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_grants.ContainsKey((userId, permissionName)));
+
+    // RF-NEG-06: el doble borra la entrada; una segunda llamada devuelve
+    // false, igual que el repositorio real.
+    public Task<bool> ConsumeAsync(
+        Guid userId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_grants.Remove((userId, permissionName)));
 }

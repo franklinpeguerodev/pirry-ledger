@@ -7,8 +7,8 @@ comando para enviar lo pendiente. La API expone el registro con activación, el
 inicio de sesión con su tabla de sesiones, la recuperación de contraseña y la
 administración de usuarios. El módulo Permissions expone la gestión de
 solicitudes de permiso con su máquina de estados y su suite de pruebas. El
-módulo Business contiene la estructura de la máquina de estados de `Invoice`;
-sus pruebas quedan para la semana 8.
+módulo Business tiene la máquina de estados de `Invoice` con siete estados, sus
+once transiciones permitidas y su suite de pruebas.
 
 Este README está ordenado como se usa:
 
@@ -28,8 +28,9 @@ en orden solo la primera vez; después, los pasos 5 a 8 son los que se repiten.
 
 ### Requisitos
 
-- .NET SDK `10.0.302`. La versión exacta la fija `global.json`, no hace falta
-  instalar nada más.
+- .NET SDK `10.0.400` (o una versión posterior de la misma banda, que
+  `global.json` admite con `rollForward: latestFeature`). Aquí está instalada la
+  `10.0.403` y `dotnet --version` la muestra.
 - PostgreSQL 18, con una base `pirry_ledger` y un role que sea dueño de ella.
 - Git.
 - La herramienta global `dotnet-ef` `10.0.12`, solo para aplicar las
@@ -62,7 +63,7 @@ El Host además usa el paquete `DotNetEnv` para leer el archivo `.env` del paso
 
 ### Paso 1: instalar las herramientas
 
-Instala .NET SDK `10.0.302`, PostgreSQL 18 y Git. Después instala la herramienta
+Instala .NET SDK `10.0.400` o superior, PostgreSQL 18 y Git. Después instala la herramienta
 de Entity Framework una sola vez por usuario de Windows:
 
 ```powershell
@@ -71,7 +72,7 @@ dotnet --version
 dotnet ef --version
 ```
 
-Debes obtener .NET `10.0.302` y Entity Framework `10.0.12`. Si `dotnet ef` ya
+Debes obtener una versión `10.0.4xx` (aquí `10.0.403`) y Entity Framework `10.0.12`. Si `dotnet ef` ya
 responde `10.0.12`, no vuelvas a ejecutar `dotnet tool install`; ejecuta solo
 las comprobaciones de versión. Los paquetes `Design` y `DotNetEnv` ya están
 declarados en los `.csproj` correspondientes; no ejecutes ningún otro
@@ -207,26 +208,29 @@ $env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_l
 
 Esa línea solo vive en la terminal abierta. En otra terminal hay que repetirla.
 
-Las tres piezas, en este orden:
+Las cuatro piezas, en este orden:
 
 ```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure
+dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedger.Business.Infrastructure
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
 `ac_activation_tokens` y `ac_sessions`), la cola de Notifications
-(`not_email_queue`) y las dos tablas de permisos (`per_permission_requests` y
+(`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`) en la misma base, manteniendo la
-propiedad de cada módulo.
+`ux_per_permission_grants_user_permission`) y las cuatro tablas de facturas del
+módulo Business (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments` y
+`bil_invoice_edits`), en la misma base y manteniendo la propiedad de cada módulo.
 
-El orden de los tres comandos da igual: las tablas de permisos no declaran
-claves foráneas hacia `ac_users`, así que ninguna depende de que la otra exista.
-Está comprobado también ejecutándolos en orden inverso.
+El orden de los cuatro comandos da igual: ninguna de esas tablas declara claves
+foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
+cuatro de `bil_` sí se referencian entre ellas, pero se crean en la misma
+migración. Está comprobado también ejecutándolos en orden inverso.
 
-Para comprobar que las tres se aplicaron:
+Para comprobar que las cuatro se aplicaron:
 
 ```sql
 SELECT table_name FROM information_schema.tables
@@ -234,9 +238,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son siete tablas de módulo: las cuatro de `ac_`, `not_email_queue` y las dos de
-`per_`. La tabla `__EFMigrationsHistory` que crea EF Core es la octava fila, pero
-no es de ninguna pieza.
+Son once tablas de módulo: las cuatro de `ac_`, `not_email_queue`, las dos de
+`per_` y las cuatro de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
+es la duodécima fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -255,7 +259,12 @@ Applying migration '20261021024258_InitialSchema'.
 Done.
 ```
 
-Tres mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
+```
+Applying migration '20261029150722_InitialBusinessSchema'.
+Done.
+```
+
+Cuatro mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
 las ejecuciones. Y en una base recién creada, EF Core va primero a preguntar por
 su tabla de migraciones, que todavía no existe, así que imprime un
 `Failed executing DbCommand` con el `SELECT ... FROM "__EFMigrationsHistory"`
@@ -329,7 +338,7 @@ En una segunda terminal, registra un usuario Estándar:
 
 ```powershell
 $cuenta = @{
-    nombre = 'Ana'
+    name = 'Ana'
     email = 'ana@ejemplo.com'
     password = 'abc12345'
 } | ConvertTo-Json
@@ -592,34 +601,38 @@ los módulos, lee la configuración obligatoria, fija la dirección de escucha c
 
 ```
 pirry-ledger/
-├── global.json                     Fija el SDK .NET 10.0.302
+├── global.json                     Fija el SDK .NET 10.0.400 (rollForward: latestFeature)
 ├── pirry-ledger.slnx               Solución con todos los proyectos
 ├── .env.example                    Plantilla de variables de entorno (el .env real no se sube)
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
 │   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
-│   ├── adr/                        Decisiones técnicas 001 a 010: nombre y título en inglés, contenido en español
+│   ├── adr/                        Decisiones técnicas 001 a 012: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
 │   ├── Core/
-│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority)
+│   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority, IPermissionRequestGateway)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
 │   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
 │   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
 │   ├── Business/
-│   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application
+│   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application, Infrastructure, Api
 │   └── Host/
 │       └── PirryLedger.Host/                    Composición + comando --send-mail
 └── Tests/
+    ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
     ├── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
-    └── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
+    ├── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
+    └── PirryLedger.Integration.Tests/           Integración real Business ↔ Permissions (sección 3.13)
 ```
 
 Las pruebas usan dobles en memoria y un reloj falso: no necesitan base de datos
-ni servidor SMTP.
+ni servidor SMTP. La suite de integración es la excepción deliberada: no
+sustituye a Business ni a Permissions, solo ejecuta sus repositorios reales
+sobre EF Core en memoria.
 
 ### Mapa de requisitos de esta iteración
 
@@ -630,8 +643,10 @@ ni servidor SMTP.
 | Contraseñas (recuperación, forzado, cambio) | RF-CA-09, 10, 11, 12, 13, 22 | [3.3](#33-contraseñas) |
 | rolees y administración de usuarios | RF-CA-04, 05, 06, 08, 20, 21 | [3.4](#34-administración-de-usuarios) |
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
-| Máquina de estados (estructura) | RF-NEG-03, 04, 05, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
+| Máquina de estados del negocio | RF-NEG-03, 04, 05, 09, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
 | **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
+| **Operaciones del negocio (facturas)** | **RF-NEG-02, RF-NEG-06**, RF-GP-01, RD-01, RD-02, RD-06 | **[3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)** |
+| **Integración Business ↔ Permissions** | **RF-NEG-06**, RF-GP-05, RD-03, RD-12 | **[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 
 > **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
@@ -640,6 +655,15 @@ ni servidor SMTP.
 > [3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07), donde está cómo provocar
 > cada criterio. La tabla de arriba y los enlaces a las secciones 3.x cubren
 > ambas.
+
+> **Práctica 3** — esta entrega añade el módulo Business completo (la máquina de
+> estados, las reglas de la factura y sus operaciones por HTTP) y el consumo de
+> una concesión de permiso al anular. Las secciones [3.6](#36-máquina-de-estados-del-negocio),
+> [3.10](#310-reglas-de-la-factura-y-persistencia-rf-neg-02-rd-07-rd-09),
+> [3.11](#311-consumo-de-una-concesión-de-permiso-rf-gp-05-rf-neg-06-adr-011) y
+> [3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)
+> y [3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)
+> son suyas.
 
 ### Decisiones documentadas
 
@@ -657,6 +681,8 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Concesiones de permisos viven en su propia tabla `per_permission_grants`, independiente de `per_permission_requests` | `docs/adr/008-permission-grants-table.md` |
 | Cambiar el role invalida las sesiones abiertas vía `CredentialVersion`, igual que cambiar la contraseña o desactivar | `docs/adr/009-role-changes-invalidate-sessions.md` |
 | El `role` de las respuestas viaja como texto, no como número | `docs/adr/010-role-as-text-in-responses.md` |
+| La anulación consume la concesión `CancelInvoice:<id>` antes de guardar, y sin concesión se rechaza | `docs/adr/011-consume-permission-grant.md` |
+| La operación de negocio pide el permiso por un contrato de `Core.Contracts`, y el `403`/`409` distingue "recién pedido" de "ya pendiente" | `docs/adr/012-request-permission-from-business.md` |
 
 ---
 
@@ -726,21 +752,49 @@ estado y con el checklist de la rúbrica.
 dotnet test pirry-ledger.slnx
 ```
 
-Un solo comando, desde un clon limpio, ejecuta **las tres** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (96), Notifications (6) y
-Permissions (26), que cubren la máquina de estados de la solicitud, los casos de
-uso, el repositorio de solicitudes y el de concesiones. Usan dobles en memoria,
-un contexto EF Core en memoria y un reloj falso (RD-12).
+Un solo comando, desde un clon limpio, ejecuta **las cinco** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (109), Notifications (6),
+Permissions (48), Business (134) e Integración (4). Son **301 pruebas** en total.
+Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
+uso, los repositorios y la máquina de estados de `Invoice` con una prueba por
+fila de sus tablas. La suite de integración (sección
+[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06))
+usa las piezas reales de Business y Permissions sobre EF Core en memoria y
+demuestra las dos caras de la anulación. Todas usan un reloj falso (RD-12).
 
 Termina con todas las pruebas superadas y ninguna con error. El envío SMTP real
 y la lectura de sus credenciales desde variables de entorno se verifican
-manualmente con `--send-mail`, más abajo. Las pruebas de la máquina de estados
-de `Invoice` llegan en la semana 8.
+manualmente con `--send-mail`, más abajo.
 
 ### Defectos
 
-La suite se mide por si falla cuando el código tiene un defecto. Los seis
-defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
+La suite se mide por si falla cuando el código tiene un defecto. Cada defecto se
+planta en un commit que cuelga del tag de su práctica, se etiqueta
+`practica-N-defecto-M` y no toca ningún archivo de pruebas. Con el defecto
+plantado, `dotnet test pirry-ledger.slnx` falla en las pruebas que indica la
+tabla; sobre el tag de la práctica todas pasan.
+
+#### Práctica 3 (`practica-3`)
+
+Los cuatro defectos del enunciado (`docs/assignments/practica-3.md`, sección
+1.3). Los nombres de las pruebas de esta tabla se obtuvieron plantando cada
+defecto y corriendo la suite, no leyendo el código.
+
+| Defecto | Qué se planta | Pruebas que lo detectan | Qué comprueban |
+|---|---|---|---|
+| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 11 de los 49 pares. |
+| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
+| 3 (RF-NEG-03) | `InvoiceStateMachine.cs:62`: elimina la llamada a `EnsureHasAtLeastOneItem` en `Draft -> Issued`, así que se puede emitir una factura sin ítems. | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | Que emitir sin ítems se rechace, no cambie el estado y no guarde nada. |
+| 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
+
+Para ver un defecto: `git checkout practica-3-defecto-N`, correr
+`dotnet test pirry-ledger.slnx` y comprobar que falla al menos una de las pruebas
+de su fila. `git diff practica-3 practica-3-defecto-N --stat` muestra que el
+commit solo toca código de Business y ningún archivo de pruebas.
+
+#### Práctica 2 (`practica-2`)
+
+Los seis defectos de la variante A (`docs/assignments/practica-2-defectos.md`) se plantan
 uno por uno en un commit que cuelga de `practica-2`, se etiqueta
 `practica-2-defecto-N` y no toca ningún archivo de pruebas. Con el defecto
 plantado, el comando de arriba falla en la prueba que se indica; sobre
@@ -783,8 +837,8 @@ $adminHeaders = @{ Authorization = "Bearer $($sesion.token)" }
 #### RF-CA-01 — el registro acepta un email libre y rechaza el duplicado
 
 Registra un email cualquiera. Después repite con el mismo email, también en
-mayúsculas, y comprueba que la segunda vez responde `409` con el mismo mensaje
-que un email nuevo.
+mayúsculas: la primera vez responde `202` con `{"activated":false}` y el
+duplicado responde `409` con un mensaje genérico que no dice qué dato falla.
 
 ```sql
 SELECT email, active FROM ac_users ORDER BY email;
@@ -815,20 +869,13 @@ del alcance de esta práctica. La decisión y sus alternativas están en
 
 ```powershell
 # Menos de 8 caracteres -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
 # Solo letras -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ nombre='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
 
-
-
-
-
-
-
-
-
-
+Ambas respuestas son `400` con un mensaje en español; en ningún caso se crea la
+cuenta ni se encola un email.
 
 #### RF-CA-15 — la cuenta nace inactiva y el enlace es de un solo uso
 
@@ -980,7 +1027,7 @@ El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una
 sesión no cierra las demás del mismo usuario: un empleado puede tener el móvil y
 el portátil abiertos a la vez.
 
-#### RF-CA-19 — cinco attempts fallidos bloquean la cuenta quince minutos
+#### RF-CA-19 — cinco intentos fallidos bloquean la cuenta quince minutos
 
 ```powershell
 1..5 | ForEach-Object {
@@ -996,7 +1043,7 @@ Ahora la contraseña correcta se sigue rechazando:
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
-Resultado esperado: `401` con **el mismo mensaje** que los attempts fallidos
+Resultado esperado: `401` con **el mismo mensaje** que los intentos fallidos
 (`Email o contrasena incorrectos.`). Un mensaje propio confirmaría que ese
 email existe. Pasados quince minutos el bloqueo se levanta solo y entra con la
 contraseña correcta. Ese inicio correcto reinicia el contador:
@@ -1030,7 +1077,7 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
 Ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
-$restablecer = @{ codigo = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
+$restablecer = @{ code = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
@@ -1070,14 +1117,17 @@ encola. El usuario completa el cambio mediante
 #### RF-CA-22 — cambio autenticado
 
 ```powershell
-$cambio = @{ passwordActual = 'abc12345'; nuevapassword = 'nueva12345' } | ConvertTo-Json
+$cambio = @{ currentPassword = 'abc12345'; newPassword = 'nueva12345' } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:5243/api/auth/change-password `
   -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" } `
   -Body $cambio -ContentType 'application/json'
 ```
 
-Una contraseña actual incorrecta produce un rechazo Controlado. El cambio aplica
-la misma política mínima de RF-CA-14 e invalida las sesiones previas.
+Si falta uno de los dos campos la respuesta es `400` con
+`{"message":"La contrasena es obligatoria."}`; si la contraseña actual no
+coincide es `400` con `{"message":"La contrasena actual no es correcta."}` y la
+contraseña no cambia. El cambio aplica la misma política mínima de RF-CA-14 e
+invalida las sesiones previas.
 
 ### 3.4 Administración de usuarios
 
@@ -1241,48 +1291,54 @@ Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
 
 ### 3.6 Máquina de estados del negocio
 
-Esta pieza se entrega **como estructura, sin pruebas automatizadas** (llegan en
-la semana 8). Lo que hay que comprobar ahora es que la máquina existe, está
-declarada en un solo lugar y cumple la tabla (RF-NEG-03, RF-NEG-04, RF-NEG-05,
-RD-04).
+La máquina de la factura tiene siete estados, once transiciones permitidas y
+treinta y ocho prohibidas, y cada fila de esas tablas tiene su prueba. Se
+verifica sin base de datos y sin levantar la aplicación (RF-NEG-03, RF-NEG-04,
+RF-NEG-05, RF-NEG-09, RD-04, RD-12).
 
-Documentación: `docs/maquina-de-estados.md`. Código: `InvoiceStateMachine.cs`
-con `Invoice.cs` e `InvoiceState.cs` en
-`Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/`.
+Documentación: `docs/maquina-de-estados.md`. Código: `InvoiceStateMachine.cs`,
+`InvoiceTransitionContext.cs` con `Invoice.cs` e `InvoiceState.cs` en
+`Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/`. Pruebas:
+`Tests/PirryLedger.Business.Tests/MaquinaDeEstados/`.
 
 Verifica en ese orden:
 
-1. **La entidad central tiene estados declarados en un solo lugar**
-   (RF-NEG-03): `InvoiceState` declara `Draft`, `Issued`, `Paid` y `Cancelled`
-   (3 a 5 estados, como exige la práctica).
+1. **La entidad central tiene sus siete estados declarados en un solo lugar**
+   (RF-NEG-03): `InvoiceState` declara `Draft`, `Issued`, `PendingVerification`,
+   `Paid`, `InDebt`, `Cancelled` y `NotDelivered`.
 2. **Las transiciones permitidas están declaradas en un solo sitio**
    (RF-NEG-04, RD-04): `InvoiceStateMachine` tiene una única lista
-   `AllowedTransitions` con `Draft→Issued`, `Draft→Cancelled`,
-   `Issued→Paid` e `Issued→Cancelled`. Ningún otro punto del código cambia el
-   status.
-3. **Hay al menos una transición explícitamente prohibida y estados
-   terminales** (RF-NEG-05): `Paid→Cancelled` está prohibida; `Cancelled` y
-   `Paid` no tienen transiciones salientes. Intentar una transición prohibida
-   lanza `InvalidInvoiceTransitionException` en lugar de cambiar el status.
-4. **La tabla existe y coincide con el código** (RF-NEG-03): compara la tabla
-   de `docs/maquina-de-estados.md` (from, to, quién la ejecuta, condición) con
-   `AllowedTransitions`.
+   `AllowedTransitions` con las once filas de la tabla de
+   `docs/maquina-de-estados.md`. Ningún otro punto del código cambia el estado.
+3. **Hay transiciones explícitamente prohibidas y dos estados terminales**
+   (RF-NEG-05): los otros treinta y ocho pares lanzan
+   `InvalidInvoiceTransitionException` sin cambiar el estado, y `Cancelled` y
+   `NotDelivered` no tienen ninguna salida.
+4. **Las condiciones de las filas se comprueban de verdad**: emitir sin ítems,
+   cobrar sin cubrir el total, cobrar con transferencia, dejar una deuda sin
+   nombre o marcar como no entregada una factura que no es de delivery se
+   rechazan con `InvoiceConditionNotMetException` y el estado no cambia.
 
 ```powershell
-Get-Content Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/StateMachines/InvoiceStateMachine.cs
-Get-Content docs/maquina-de-estados.md
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-También puedes comprobar el punto 3 por código, sin esperar a la semana 8:
+Salida esperada: **134 pruebas superadas**, 0 con error: las 62 de la máquina de
+esta sección y las 72 de las reglas, la persistencia y los casos de uso de las
+secciones 3.10 y 3.12. Los nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
+`UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)`,
+`AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`,
+`EmitirSinItemsSeRechazaYNoCambiaElEstado`, entre otras.
 
-```powershell
-dotnet build pirry-ledger.slnx --configuration Release
-```
+Para ver que la suite puede fallar, quita la línea
+`EnsureHasAtLeastOneItem(from, to, context);` del caso
+`(InvoiceState.Draft, InvoiceState.Issued)` de `InvoiceStateMachine` y vuelve a
+ejecutar el comando: `EmitirSinItemsSeRechazaYNoCambiaElEstado` se pone roja.
+Restaura la línea y vuelve a verde. Esa línea es la que elimina el defecto 3.
 
-La estructura compila dentro de la solución (`PirryLedger.Business.Domain` y
-`PirryLedger.Business.Application`), lo que confirma que la pieza existe y está
-declarada. No hay endpoint HTTP para la factura todavía: es una pieza interna
-del módulo Business.
+No hay endpoint HTTP para la máquina de estados: es una pieza interna del
+módulo Business. Los endpoints que la exponen están en la sección 3.12 y no
+deciden transiciones: llaman al agregado, que delega en la máquina.
 
 ### 3.7 Trazabilidad de reglas de diseño
 
@@ -1296,7 +1352,7 @@ del módulo Business.
 | RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. |
 | RD-10 | La conexión, el primer Administrador y SMTP se configuran mediante variables de entorno (sección 1, paso 4). |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
-| RD-12 | AccessControl, Notifications y Permissions tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
+| RD-12 | AccessControl, Notifications, Permissions y Business tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
 
 ### 3.8 Gestión de permisos (RF-GP-01 a RF-GP-07)
 
@@ -1526,6 +1582,505 @@ respuesta es el JSON de la tabla. El mismo comportamiento está cubierto por las
 pruebas de `Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeManejoDeErroresHttp.cs`,
 que corren sin levantar la API.
 
+### 3.10 Reglas de la factura y persistencia (RF-NEG-02, RD-07, RD-09)
+
+Las reglas del negocio viven en el agregado `Invoice`, en el dominio, y se
+verifican sin base de datos, sin SMTP y sin levantar la aplicación (RD-12).
+Aquí cada criterio se provoca con la suite; los endpoints que exponen estas
+reglas por HTTP están en la sección 3.12.
+
+Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities/`
+(`Invoice.cs`, `InvoiceItem.cs`, `InvoicePayment.cs`, `InvoiceEdit.cs`) y
+`PirryLedger.Business.Infrastructure/Persistence/`. Pruebas:
+`Tests/PirryLedger.Business.Tests/Reglas/` y `.../Persistencia/`.
+
+| Criterio | Qué hace el código | Prueba que lo demuestra |
+|---|---|---|
+| Emitir exige al menos un ítem y guarda el total | `Issue` rechaza la lista vacía y suma precio por cantidad | `EmitirGuardaLaFacturaConSusItemsYSuTotal`, `EmitirSinItemsSeRechazaYNoCreaNada` |
+| El delivery se marca al emitir | `Issue(..., isDelivery)` guarda la marca | `EmitirUnaFacturaDeDeliveryGuardaLaMarca` |
+| Cantidad positiva, precio no negativo y dos decimales exactos | `InvoiceItem.Create` valida; nunca redondea | `UnItemConCantidadCeroSeRechaza`, `UnItemConPrecioNegativoSeRechaza`, `UnPrecioConTresDecimalesSeRechaza` |
+| Cobro dividido en efectivo con recibido y cambio | `Collect` acepta varios pagos y calcula el cambio | `CobrarEnEfectivoGuardaElRecibidoYElCambio` |
+| El recibido no puede ser menor que el monto ni los pagos exceder el total | `Collect` rechaza ambos casos sin cambiar el estado | `CobrarConRecibidoMenorQueElMontoSeRechaza`, `CobrarConUnPagoQueExcedeElTotalSeRechaza` |
+| En delivery solo se guarda el monto | `Collect` rechaza recibido y cambio en delivery | `UnaFacturaDeDeliveryNoRegistraRecibidoNiCambio`, `CobrarUnaFacturaDeDeliveryEnEfectivoGuardaSoloElMonto` |
+| Cualquier transferencia manda la factura a verificación pendiente | `Collect` mira si algún pago es `Transfer` | `CobrarConTransferenciaPasaAVerificacionPendiente`, `CobrarConEfectivoYTransferenciaPasaAVerificacionPendiente` |
+| La deuda exige nombre, de 120 caracteres como máximo | `NormalizeDebtorName` recorta y valida | `DejarComoDeudaSinNombreSeRechaza`, `UnNombreDeDeudorDemasiadoLargoSeRechaza` |
+| Un abono solo se registra si la factura está en deuda y no pasa de lo que se debe | `RegisterDebtPayment` comprueba el estado y el saldo antes de agregar | `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza`, `AbonarUnaFacturaPagadaSeRechazaYNoRegistraElPago`, `UnAbonoMayorQueLoQueSeDebeSeRechaza` |
+| El abono no tiene método de pago ni recibido | `InvoicePayment.Debt` usa `PaymentMethod.None` | `UnAbonoDeDeudaNoTieneMetodo` |
+| El abono que cubre el total deja la factura pagada | `RegisterDebtPayment` transiciona antes de agregar el pago | `ElAbonoQueCubreElTotalPasaAPagada` |
+| Confirmar una transferencia exige verificación pendiente y que cubra el total | `ConfirmTransfer` valida estado y saldo | `ConfirmarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza`, `ConfirmarUnaTransferenciaQueNoCubreElTotalSeRechaza` |
+| Rechazar una transferencia deja el pago rechazado, no cuenta y pasa a deuda | `RejectTransfer` solo corre desde verificación pendiente | `RechazarLaTransferenciaDejaElPagoRechazadoYPasaADeuda`, `RechazarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza` |
+| Solo una factura de delivery puede quedar no entregada | `MarkAsNotDelivered` delega en la máquina | `MarcarNoEntregadaUnaFacturaQueNoEsDeliverySeRechaza`, `UnaFacturaEnVerificacionPendienteNoSeMarcaComoNoEntregada` |
+| Editar solo en `Issued`, con al menos un ítem, con historial y aviso al Administrador | `EditItems` valida, reemplaza los ítems, registra quién y cuándo y notifica | `EditarLosItemsDeUnaFacturaEmitidaGuardaElHistorial`, `EditarSinItemsSeRechazaYNoCambiaLaFactura`, `EditarLosItemsFueraDeIssuedSeRechaza`, `EditarAvisaAlAdministradorUnaVez` |
+| La factura se guarda y se recupera con sus ítems, pagos e historial | El repositorio y `BusinessDbContext` escriben las cuatro tablas `bil_` | `UnaFacturaGuardadaSeRecuperaConSusItemsYPagosYSuHistorial` |
+| El esquema usa snake_case y `numeric(12,2)` | Las configuraciones de EF fijan tabla, columna y tipo | `ElEsquemaUsaNombresEnSnakeCase` |
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
+```
+
+Salida esperada: **134 pruebas superadas**, 0 con error.
+
+Para ejecutar solo una familia, sin tocar el código:
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDeCobro"
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDeDeuda"
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDePersistencia"
+```
+
+**Para ver que la suite puede fallar.** Quita la guarda
+`if (State != InvoiceState.InDebt)` de `RegisterDebtPayment` en `Invoice.cs` y
+vuelve a ejecutar el comando: `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza` se pone
+roja y las otras 133 siguen verdes. Restaura la guarda y vuelve a verde. Lo mismo
+pasa con `if (items.Count < 1)` en `EditItems`: sin ella falla
+`EditarSinItemsSeRechazaYNoCambiaLaFactura`.
+
+**La persistencia.** La factura se guarda en cuatro tablas propias
+(`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments` y
+`bil_invoice_edits`), con la migración `20261029150722_InitialBusinessSchema`
+que se aplica con el cuarto comando del paso 6. Las columnas siguen
+`docs/adr/004-snake-case-column-naming.md`: `debtor_name`, `unit_price`,
+`received_amount`, `registered_by_user_id`, `edited_by_user_id`. La prueba de
+ida y vuelta usa EF InMemory y comprueba que la factura vuelve con su estado,
+sus ítems, sus pagos y su historial; la prueba de esquema construye el modelo de
+Npgsql **sin abrir conexión** y comprueba los nombres de tabla y columna y el
+tipo `numeric(12,2)`. El guardado real contra PostgreSQL se ejercita en la
+sección 3.12.
+
+**Un defecto que apareció al probar por HTTP.** Las cuatro entidades tienen la
+clave `Guid` generada por el dominio, pero el modelo no lo declaraba: por
+convención EF marca las claves `Guid` como generadas por la base
+(`ValueGeneratedOnAdd`). Con esa convención, una fila hija nueva que se agrega a
+una factura ya cargada se tomaba por una fila existente y se guardaba con
+`UPDATE ... WHERE id = <guid nuevo>`; contra PostgreSQL eso afecta cero filas y
+responde `DbUpdateConcurrencyException`, es decir un `500`. EF InMemory no lo
+detecta porque su `UPDATE` de una fila inexistente no falla. Las cuatro
+configuraciones declaran ahora `ValueGeneratedNever()`, y
+`PruebasDePersistencia` lo fija con `UnPagoNuevoDeUnaFacturaCargadaSeGuardaComoFilaNueva`
+y `LasClavesLasGeneraElDominioYNoLaBase`. No hay migración: el esquema no
+cambia, solo cómo interpreta EF la clave.
+
+**Qué NO incluye todavía.** No hay interfaz: la factura se opera por HTTP. El
+aviso al Administrador cuando se edita una factura es un puerto con
+implementación vacía (RF-NEG-07, semana 10), y los reportes de ventas del día y
+de ganancia son de una entrega posterior.
+
+---
+
+### 3.11 Consumo de una concesión de permiso (RF-GP-05, RF-NEG-06, ADR 011)
+
+Esta sección cubre la pieza de Permissions que la anulación consume. El consumo
+se prueba aquí desde la suite; el flujo HTTP completo, con el `403` y el `409`
+que piden el permiso, está en la sección 3.12.
+
+Código: `Src/Core/PirryLedger.Core.Contracts/Permissions/PermissionNames.cs`
+(construye y valida el nombre), `Src/Core/PirryLedger.Core.Permissions/.../Domain/PermissionCatalog.cs`
+(catálogo), `.../Application/Ports/IPermissionGrantRepository.cs`,
+`.../Infrastructure/Persistence/PermissionGrantRepository.cs` y
+`.../Infrastructure/Security/EfPermissionAuthority.cs`. Pruebas:
+`Tests/PirryLedger.Core.Permissions.Tests/Catalogo/PruebasDelCatalogoDePermisos.cs`
+y `.../Concesiones/PruebasDeConsumoDeConcesion.cs`.
+
+#### Convención del nombre
+
+El permiso de anular una factura se llama `CancelInvoice:<id de la factura>`,
+con el GUID en formato `D` y en minúsculas. Son 50 caracteres y caben en el
+`varchar(64)` de `permission_name` (ADR 008). La forma es canónica: mayúsculas,
+llaves o espacios se rechazan, para que una factura tenga un solo nombre.
+
+```powershell
+# En código (Core.Contracts):
+PermissionNames.CancelInvoice(Guid.Parse("11111111-1111-1111-1111-111111111111"))
+# => "CancelInvoice:11111111-1111-1111-1111-111111111111"
+```
+
+#### El catálogo
+
+`PermissionCatalog` acepta dos clases de nombre: los fijos (`ViewSalesSummary`)
+y los que cumplen la regla `CancelInvoice:<guid canónico>`. Cualquier otro
+nombre se rechaza con `400` al crear la solicitud. La convención está
+implementada dos veces a propósito (`PermissionNames` en Contracts y
+`PermissionCatalog` en el dominio), para no crear la referencia
+`Permissions.Domain -> Core.Contracts`; la prueba
+`PruebasDelCatalogoDePermisos` ata las dos.
+
+#### El consumo
+
+`IPermissionAuthority` gana `ConsumeAsync(userId, permissionName)`:
+
+- borra el par `(user_id, permission_name)` y devuelve `true` si había una fila,
+  `false` si no;
+- no lanza cuando no hay concesión: \"no tenía el permiso\" es un resultado
+  normal, y el mensaje lo decide el caso de uso de la anulación;
+- con usuario vacío o nombre vacío devuelve `false` sin tocar la base;
+- solo borra el par del usuario que llama.
+
+El orden en la anulación es: resolver la transición a `Cancelled` en memoria,
+consumir la concesión, guardar la factura. Si el consumo devuelve `false`, se
+rechaza antes de guardar y se pide el permiso (ADR 012). Si el guardado falla
+después del consumo, la concesión se pierde (coste aceptado). Sin migración: la
+tabla y el índice único ya existen (ADR 008).
+
+#### Cómo probarlo
+
+```powershell
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj
+```
+
+Salida esperada: **48 pruebas superadas**, 0 con error (41 anteriores + 10 de
+catálogo + 7 de consumo, descontando solapamientos: el total del proyecto es 48).
+
+Para ejecutar solo una familia:
+
+```powershell
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj --filter "FullyQualifiedName~PruebasDelCatalogoDePermisos"
+dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj --filter "FullyQualifiedName~PruebasDeConsumoDeConcesion"
+```
+
+**Para ver que la suite puede fallar.** Comenta la línea
+`_context.PermissionGrants.Remove(grant)` en `PermissionGrantRepository.ConsumeAsync`
+y vuelve a ejecutar el comando: `ConsumirUnaConcesionLaBorraYDevuelveTrue` se pone
+roja (la fila sigue en la base) y las otras 47 siguen verdes. Restaura la línea
+y vuelve a verde. Lo mismo con la guarda `if (userId == Guid.Empty ...)` de
+`EfPermissionAuthority.ConsumeAsync`: sin ella, `LaAutoridadNoConsumeConUsuarioVacio`
+falla.
+
+#### Qué NO incluye todavía
+
+La prueba de la carrera de dos consumos simultáneos contra PostgreSQL sigue
+pendiente, y la carrera de dos solicitudes de permiso tampoco está cerrada con un
+índice único parcial (ADR 012). El aviso al Administrador cuando llega una
+solicitud nueva es de la semana 10 (RF-NEG-07).
+
+---
+
+### 3.12 Operaciones del negocio protegidas por acceso (RF-NEG-02, RF-NEG-06, RF-GP-01, RD-06)
+
+Todo lo de esta sección se ejecutó contra la API levantada con los pasos 1 a 7 y
+PostgreSQL local, y las salidas son reales. Las rutas viven en
+`Src/Business/PirryLedger.Business/PirryLedger.Business.Api/` (RD-01) y solo
+traducen HTTP a un caso de uso (RD-02). El acceso no se decide en el endpoint:
+cada ruta declara **qué operación es** con `WithAccess(Operation.X)` y el filtro
+consulta la tabla única de `RoleRequirements` (RF-CA-05), la misma de las
+secciones 3.4 y 3.8.
+
+#### Las doce rutas y su acceso
+
+| Método | Ruta | Operación | Acceso |
+|---|---|---|---|
+| `POST` | `/api/billing/invoices` | `IssueInvoice` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/collect` | `CollectInvoicePayment` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/debt` | `LeaveInvoiceAsDebt` | `Standard` |
+| `PUT` | `/api/billing/invoices/{id}/items` | `EditInvoiceItems` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/not-delivered` | `MarkInvoiceAsNotDelivered` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/cancel` | `CancelInvoice` | `Standard` |
+| `POST` | `/api/billing/invoices/{id}/transfers/confirm` | `ConfirmInvoiceTransfer` | `Administrator` |
+| `POST` | `/api/billing/invoices/{id}/transfers/reject` | `RejectInvoiceTransfer` | `Administrator` |
+| `POST` | `/api/billing/invoices/{id}/payments` | `RegisterDebtPayment` | `Administrator` |
+| `GET` | `/api/billing/invoices` | `ListInvoices` | `AnySession` |
+| `GET` | `/api/billing/invoices/{id}` | `GetInvoice` | `AnySession` |
+| `GET` | `/api/billing/invoices/{id}/edits` | `ListInvoiceEdits` | `Administrator` |
+
+`AccessLevel.Standard` es nuevo en esta fase: exige el rol de cajero y, al revés
+que `Administrator`, también rechaza a un Administrador. Lo demuestra
+`UnAdministradorNoEjecutaUnaOperacionDeCajero`. La prueba
+`TodaRutaDeclaraSuOperacion` recorre las rutas reales de `MapBusiness()` igual
+que hace con las de acceso y permisos: si una ruta se queda sin declarar, la
+suite se pone roja y el mensaje nombra la ruta.
+
+Las dos rutas de lectura declaran `AnySession` (RF-NEG-06). No son rutas sin
+comprobación: el conjunto de roles del sistema es cerrado —`Administrator` y
+`Standard`—, así que `AnySession` significa «cualquiera de los dos» y el conjunto
+de roles admitidos es el conjunto completo de roles que existen. Exigir un rol
+concreto dejaría fuera al otro y rompería el uso real: el cajero y el
+Administrador leen las mismas facturas.
+
+#### Preparación
+
+Necesitas un usuario **Estándar** activado (paso 8) y el token del Administrador
+de la semilla ([El primer Administrador](#el-primer-administrador)). El cajero es
+un usuario normal: con el Administrador no se puede emitir ni cobrar, porque esas
+operaciones son de mostrador.
+
+Para no repetir `try/catch` en cada llamada, define un ayudante que devuelva el
+código y el cuerpo también cuando la respuesta es un rechazo:
+
+```powershell
+$base = 'http://localhost:5243'
+
+function Pedir([string]$metodo, [string]$ruta, $cabeceras, $cuerpo) {
+    $peticion = @{ Uri = "$base$ruta"; Method = $metodo; Headers = $cabeceras }
+    if ($null -ne $cuerpo) {
+        $peticion.ContentType = 'application/json'
+        $peticion.Body = ($cuerpo | ConvertTo-Json -Depth 8)
+    }
+    try {
+        $r = Invoke-WebRequest @peticion
+        [pscustomobject]@{ Codigo = [int]$r.StatusCode; Cuerpo = $r.Content }
+    }
+    catch {
+        $respuesta = $_.Exception.Response
+        $texto = (New-Object System.IO.StreamReader($respuesta.GetResponseStream())).ReadToEnd()
+        [pscustomobject]@{ Codigo = [int]$respuesta.StatusCode; Cuerpo = $texto }
+    }
+}
+
+$estHeaders = @{ Authorization = "Bearer $tokenDelEstandar" }
+$adminHeaders = @{ Authorization = "Bearer $tokenDelAdministrador" }
+$combo = @{ isDelivery = $false; items = @(@{ name = 'Combo'; unitPrice = 500; quantity = 1 }) }
+```
+
+#### Emitir, cobrar y anular con permiso (RF-NEG-02, RF-NEG-06, RF-GP-01)
+
+El recorrido completo del permiso son cinco llamadas: cobrar, intentar anular,
+volver a intentarlo, aprobar y anular.
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$factura = ($r.Cuerpo | ConvertFrom-Json).id
+
+Pedir Post "/api/billing/invoices/$factura/collect" $estHeaders `
+    @{ payments = @(@{ method = 'Cash'; amount = 500; receivedAmount = 500 }) } | Out-Null
+
+Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+
+$pendientes = Invoke-RestMethod -Uri "$base/api/permissions/requests/pending" -Headers $adminHeaders
+$solicitud = $pendientes | Where-Object { $_.requestedPermission -eq "CancelInvoice:$factura" }
+Invoke-RestMethod -Uri "$base/api/permissions/requests/$($solicitud.id)/approve" -Method Post -Headers $adminHeaders
+
+Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+```
+
+Lo que devuelve cada llamada:
+
+| Llamada | Código | Cuerpo |
+|---|---|---|
+| Emitir | `201` | La factura completa, en estado `Issued` y con `total` 500.00 |
+| Cobrar en efectivo | `200` | `state` `Paid`, `paidAmount` 500.00, `balance` 0.00 |
+| Anular sin permiso | `403` | `{"message":"Se envió una solicitud de permiso para anular esta factura. Un Administrador debe aprobarla."}` |
+| Consultar tras el rechazo | `200` | La factura **sigue** en `Paid`: el rechazo no cambió nada |
+| Anular otra vez | `409` | `{"message":"Ya se envió una solicitud de permiso para anular esta factura; espera la aprobación del Administrador."}` |
+| Aprobar la solicitud | `204` | Sin cuerpo |
+| Anular con la concesión | `200` | `state` `Cancelled`, y la concesión queda consumida |
+
+El `403` y el `409` no son un capricho: el primero dice "acabo de pedirlo" y el
+segundo "ya lo habías pedido, no hace falta repetirlo". Solo una solicitud
+`Pending` bloquea; una `Rejected` deja volver a pedir el permiso (ADR 012). La
+factura no cambia en ninguno de los dos rechazos porque el caso de uso consume la
+concesión y pide el permiso **antes** de guardar (ADR 011).
+
+Así se ve una factura anulada por este camino:
+
+```json
+{"id":"af06bdde-c974-4631-922a-e4016ae7ef0c","state":"Cancelled","isDelivery":false,"issuedAtUtc":"2026-10-31T13:13:43.829192Z","total":500.00,"paidAmount":500.00,"balance":0.00,"debtorName":null,"items":[{"id":"28ce00f9-84f6-4d68-b517-453c87e9e6aa","name":"Combo","unitPrice":500.00,"quantity":1,"lineTotal":500.00}],"payments":[{"id":"dd1af380-45bd-4956-939c-4889240ddc97","kind":"Sale","method":"Cash","status":"Confirmed","amount":500.00,"receivedAmount":500.00,"changeAmount":0.00,"registeredAtUtc":"2026-10-31T13:13:43.9692Z","registeredByUserId":"e3f24770-4944-45b7-961e-37511dcb3394"}]}
+```
+
+Y así se comprueba en la base que la solicitud quedó aprobada y que la concesión
+no sobrevive al uso:
+
+```sql
+SELECT requested_permission, state FROM per_permission_requests WHERE requested_permission LIKE 'CancelInvoice:%';
+SELECT count(*) FROM per_permission_grants WHERE permission_name LIKE 'CancelInvoice:%';
+```
+
+```
+ CancelInvoice:af06bdde-c974-4631-922a-e4016ae7ef0c | Applied
+ concesiones_restantes = 0
+```
+
+#### Deuda, abonos y transferencias (RF-NEG-02)
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$deuda = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Post "/api/billing/invoices/$deuda/debt" $estHeaders @{ debtorName = 'Ana Perez' } | Out-Null
+
+Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 100 } | Out-Null
+Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 400 } | Out-Null
+Pedir Post "/api/billing/invoices/$deuda/payments" $estHeaders  @{ amount = 10 }  | Out-Null
+```
+
+- Dejar en deuda: `200`, `state` `InDebt`, `debtorName` `Ana Perez`, `balance` 500.00.
+- Abono de 100: `200`, sigue `InDebt` con `paidAmount` 100 y `balance` 400.
+- Abono de 400: `200`, pasa a `Paid` porque el abono cubre el total.
+- El mismo abono con el cajero: `403`, porque `RegisterDebtPayment` es del
+  Administrador.
+
+Una transferencia nace en verificación pendiente y solo el Administrador la
+resuelve:
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$transferencia = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Post "/api/billing/invoices/$transferencia/collect" $estHeaders `
+    @{ payments = @(@{ method = 'Transfer'; amount = 500 }) } | Out-Null
+
+Pedir Post "/api/billing/invoices/$transferencia/transfers/confirm" $estHeaders $null | Out-Null
+Pedir Post "/api/billing/invoices/$transferencia/transfers/confirm" $adminHeaders $null | Out-Null
+```
+
+- Cobrar con transferencia: `200`, `state` `PendingVerification`.
+- Confirmar con el cajero: `403`.
+- Confirmar con el Administrador: `200`, `state` `Paid`.
+- Rechazar (`/transfers/reject` con `{"debtorName":"Luis Gomez"}`): `200`, `state`
+  `InDebt`, y la transferencia queda `Rejected`, así que no cuenta para el pagado.
+
+#### Delivery, edición e historial (RF-NEG-02)
+
+```powershell
+$r = Pedir Post '/api/billing/invoices' $estHeaders @{ isDelivery = $true; items = $combo.items }
+$delivery = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Post "/api/billing/invoices/$delivery/not-delivered" $estHeaders $null | Out-Null
+
+$r = Pedir Post '/api/billing/invoices' $estHeaders $combo
+$editable = ($r.Cuerpo | ConvertFrom-Json).id
+Pedir Put "/api/billing/invoices/$editable/items" $estHeaders `
+    @{ items = @(@{ name = 'Combo nuevo'; unitPrice = 700; quantity = 1 }) } | Out-Null
+
+Pedir Get "/api/billing/invoices/$editable/edits" $adminHeaders $null | Out-Null
+Pedir Get "/api/billing/invoices/$editable/edits" $estHeaders $null | Out-Null
+```
+
+- Marcar no entregada: `200`, `state` `NotDelivered`. Sobre una factura que no es
+  de delivery: `400`, `La factura no puede pasar de Paid a NotDelivered.`
+- Editar ítems: `200`, `state` `Issued` y `total` 700.
+- Historial de edición con el Administrador: `200` con una edición. Con el
+  cajero: `403`.
+
+#### Los rechazos que importan (RD-06, RD-07)
+
+- **Sin sesión**: `GET /api/billing/invoices` responde `401` con
+  `{"message":"Sesion no valida."}`.
+- **Rol insuficiente**: un Administrador emitiendo responde `403` con
+  `{"message":"No tiene permisos para esta operacion."}`, igual que un cajero
+  confirmando una transferencia.
+- **Factura inexistente**: `404` con `{"message":"La factura indicada no existe."}`.
+- **Transición prohibida**: `400` con el mensaje de la máquina de estados, sin
+  traza ni detalle interno.
+
+#### La salida real del recorrido completo
+
+Estas son las 28 llamadas del guion, tal como salieron contra la API:
+
+```
+Emitir (cajero)                        201  state=Issued | total=500
+Cobrar efectivo (cajero)               200  state=Paid | paidAmount=500 | balance=0.00
+Anular sin permiso (cajero)            403  message=Se envió una solicitud de permiso para anular esta factura. Un Administrador debe aprobarla.
+Estado tras el rechazo                 200  state=Paid
+Anular otra vez sin permiso            409  message=Ya se envió una solicitud de permiso para anular esta factura; espera la aprobación del Administrador.
+Pendientes (admin)                     200  permiso=CancelInvoice:af06bdde-c974-4631-922a-e4016ae7ef0c estado=Pending
+Aprobar la solicitud (admin)           204
+Anular con permiso (cajero)            200  state=Cancelled
+Anular una factura ya anulada          400  message=La factura no puede pasar de Cancelled a Cancelled.
+Dejar en deuda (cajero)                200  state=InDebt | debtorName=Ana Perez | balance=500.00
+Abono parcial (admin)                  200  state=InDebt | paidAmount=100 | balance=400.00
+Abono que cubre el total (admin)       200  state=Paid | paidAmount=500.00 | balance=0.00
+Abono con rol de cajero                403  message=No tiene permisos para esta operacion.
+Marcar no entregada (cajero)           200  state=NotDelivered
+No entregada sin delivery              400  message=La factura no puede pasar de Paid a NotDelivered.
+Editar items (cajero)                  200  state=Issued | total=700
+Historial de edicion (admin)             200  ediciones=1
+Historial de edicion (cajero)          403  message=No tiene permisos para esta operacion.
+Cobrar con transferencia (cajero)      200  state=PendingVerification
+Confirmar transferencia (cajero)       403  message=No tiene permisos para esta operacion.
+Confirmar transferencia (admin)        200  state=Paid
+Cobrar con transferencia (2)           200  state=PendingVerification
+Rechazar transferencia (admin)         200  state=InDebt | debtorName=Luis Gomez
+Emitir con rol de Administrador        403  message=No tiene permisos para esta operacion.
+Listar facturas (cajero)                 200  facturas=6
+Consultar una factura (admin)          200  state=Cancelled
+Consultar una factura inexistente      404  message=La factura indicada no existe.
+Listar sin sesion                      401  message=Sesion no valida.
+```
+
+Los mensajes `Sesion no valida.` y `No tiene permisos para esta operacion.` son
+los que hoy devuelve Control de acceso: están escritos sin tildes en el código.
+
+#### Las pruebas de esta fase
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
+dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj
+```
+
+Salida esperada: **134 pruebas** en Business y **109** en Control de acceso, 0 con
+error. Las familias se pueden correr por separado:
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~PruebasDeCasosDeUso"
+dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj --filter "FullyQualifiedName~PruebasDelPuntoUnicoDeAcceso"
+```
+
+**Para ver que la suite puede fallar.** Quita la línea del `ConsumeAsync` de
+`CancelInvoice` (deja `var consumed = true;`) y vuelve a correr Business: las tres
+pruebas de anulación se ponen rojas, porque una factura pagada se anularía sin
+permiso. Es la verificación del defecto 4 del enunciado. Restaura la línea y
+vuelve a verde. Lo mismo con una ruta: quita el `.WithAccess(Operation.X)` de un
+endpoint de `MapBusiness()` y `TodaRutaDeclaraSuOperacion` se pone roja nombrando
+la ruta, por ejemplo `/api/billing/invoices/{id:guid}/not-delivered`.
+
+#### Qué NO incluye todavía
+
+- El aviso al Administrador cuando se edita una factura o llega una solicitud de
+  permiso: el puerto existe con una implementación vacía (RF-NEG-07, semana 10).
+- Los reportes de ventas del día, inversión y ganancia.
+- La prueba de las carreras (dos consumos o dos solicitudes simultáneas) contra
+  PostgreSQL.
+- Cualquier interfaz de usuario: esta entrega se consume como API.
+
+---
+
+### 3.13 Integración real entre Business y Permissions (RF-NEG-06)
+
+La sección 1.4 del enunciado pide una prueba de integración entre las dos
+piezas, sin dobles que sustituyan a ninguna de ellas y sin levantar la
+aplicación. Vive en `Tests/PirryLedger.Integration.Tests/` y compone:
+
+- **Business real**: `CancelInvoice`, `IssueInvoice`, `CollectInvoicePayment`,
+  `InvoiceRepository` y `BusinessDbContext` sobre EF Core en memoria.
+- **Permissions real**: `PermissionRequestGateway`, `EfPermissionAuthority`,
+  `ApprovePermissionRequest`, `PermissionRequestRepository`,
+  `PermissionGrantRepository` y `PermissionsDbContext`, también en memoria.
+- **AccessControl**: `Login` y `Authenticate` reales, para que el token del
+  Administrator que aprueba salga del mismo caso de uso que en producción. Solo
+  se sustituyen sus dos puertos de persistencia (`IUserRepository`,
+  `ISessionRepository`) por clases en memoria, igual que hace la suite de
+  Permissions: AccessControl no es la pieza que se integra y sus 109 pruebas ya
+  cubren esa parte.
+
+Cada operación abre un `DbContext` nuevo, como el scope de una petición HTTP.
+No es un detalle de estilo: `CancelInvoice` cambia la factura a `Cancelled` en
+memoria, consume la concesión y solo después guarda; con un contexto compartido
+un rechazo podría dejar el cambio a medias y la prueba no distinguiría «no se
+guardó» de «se guardó y no lo leímos».
+
+```powershell
+dotnet test Tests\PirryLedger.Integration.Tests\PirryLedger.Integration.Tests.csproj
+```
+
+Salida esperada: **4 pruebas superadas**, 0 con error. Cada una prueba una cara:
+
+| Prueba | Qué demuestra |
+|---|---|
+| `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada` | Cara uno: sin concesión, la anulación se rechaza (`403`, `AlreadyPending = false`), la factura sigue `Paid` y queda una sola solicitud `Pending` con el nombre `CancelInvoice:<id>`. |
+| `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite` | Cara dos: tras la aprobación real de un Administrator hay una concesión, la anulación pasa y la concesión queda consumida (cero). |
+| `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` | El permiso es por factura: el de la primera no anula la segunda, que pide el suyo; el de la primera sigue sirviendo para la primera. |
+| `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente` | El primer intento crea la solicitud (`403`) y el segundo encuentra una pendiente (`409`); sigue habiendo una sola y la factura no cambia. |
+
+**Para ver que esta suite detecta el defecto 4.** En
+`Src/Business/PirryLedger.Business/PirryLedger.Business.Application/UseCases/CancelInvoice.cs`,
+sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`
+y corre el comando de arriba: las cuatro pruebas de integración se ponen rojas,
+porque una factura pagada se anularía sin permiso. Las tres pruebas de anulación
+de `PirryLedger.Business.Tests` también fallan. Restaura la línea y vuelve a
+verde.
+
+Esta suite no cubre las carreras (dos consumos simultáneos de la misma
+concesión) ni la persistencia contra PostgreSQL: eso se verifica en la sección
+[3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)
+con la API levantada.
+
 ---
 
 ## 4. Referencia
@@ -1560,6 +2115,27 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `POST` | `/api/permissions/requests/{id}/reject` | Rechaza con motivo escrito. Cuerpo `{"reason":"..."}`. Responde `204`. |
 | `GET` | `/api/permissions/sales-summary` | Ruta de demostración del sistema de permisos. Responde `200` con datos fijos (`date`, `totalInvoices`, `totalAmount`, `branch`). Exige el permiso `ViewSalesSummary` concedido. |
 
+### Endpoints del negocio (facturas)
+
+Estos endpoints llegaron con la fase 4 de la Práctica 3
+(`feature/business-operations`). La sección 3.12 explica cómo provocar cada
+criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/billing/invoices` | Emite una factura. Cuerpo `{"isDelivery":false,"items":[{"name":"Combo","unitPrice":500,"quantity":1}]}`. Responde `201` con la factura. |
+| `POST` | `/api/billing/invoices/{id}/collect` | Cobra la factura. Cuerpo `{"payments":[{"method":"Cash","amount":500,"receivedAmount":600}]}`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/debt` | Deja la factura en deuda. Cuerpo `{"debtorName":"Ana Perez","payments":[]}`. Responde `200`. |
+| `PUT` | `/api/billing/invoices/{id}/items` | Reemplaza los ítems de una factura emitida y guarda el historial. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/not-delivered` | Marca como no entregada una factura de delivery. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/cancel` | Anula. Desde `Issued` responde `200`; desde `Paid` o `InDebt` exige la concesión `CancelInvoice:<id>` y, si no la hay, responde `403` o `409` con el mensaje del permiso. |
+| `POST` | `/api/billing/invoices/{id}/transfers/confirm` | Confirma una transferencia en verificación pendiente. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"..."}`. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/payments` | Registra un abono de deuda. Cuerpo `{"amount":100}`. Exige `Administrator`. Responde `200`. |
+| `GET` | `/api/billing/invoices` | Lista las facturas con sus ítems y pagos. Cualquier sesión válida. Responde `200`. |
+| `GET` | `/api/billing/invoices/{id}` | Devuelve una factura. Cualquier sesión válida. Responde `200` o `404`. |
+| `GET` | `/api/billing/invoices/{id}/edits` | Historial de edición. Exige `Administrator`. Responde `200`. |
+
 ### Endpoints de administración
 
 | Método | Ruta | Qué hace |
@@ -1572,12 +2148,15 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 
 ### Esquema de la base de datos
 
-Las tres piezas comparten la misma base PostgreSQL, pero cada una es dueña de sus
-propias tablas. Las tres tablas de tokens y sesiones pertenecen a AccessControl;
-la cola pertenece a Notifications; las dos de solicitudes y concesiones
-pertenecen a Permissions. La cola de email no tiene una clave foránea
-hacia `ac_users`: el vínculo entre ambos módulos ocurre mediante la operación
-que encola el email, no mediante una relación directa entre tablas.
+Las cuatro piezas comparten la misma base PostgreSQL, pero cada una es dueña de
+sus propias tablas. Las tres tablas de tokens y sesiones pertenecen a
+AccessControl; la cola pertenece a Notifications; las dos de solicitudes y
+concesiones pertenecen a Permissions; las cuatro de facturas pertenecen a
+Business. La cola de email no tiene una clave foránea hacia `ac_users`: el
+vínculo entre ambos módulos ocurre mediante la operación que encola el email, no
+mediante una relación directa entre tablas. Lo mismo pasa con las facturas: no
+hay clave foránea hacia `ac_users`, porque el negocio no puede depender de las
+tablas de otra pieza (RD-03).
 
 ```mermaid
 erDiagram
@@ -1656,15 +2235,62 @@ erDiagram
         uuid granted_by_user_id "nullable"
     }
 
+    bil_invoices {
+        uuid id PK
+        int state
+        datetime issued_at_utc
+        boolean is_delivery
+        string debtor_name "nullable"
+    }
+
+    bil_invoice_items {
+        uuid id PK
+        uuid invoice_id FK
+        string name
+        numeric unit_price
+        int quantity
+    }
+
+    bil_invoice_payments {
+        uuid id PK
+        uuid invoice_id FK
+        int kind
+        int method
+        int status
+        numeric amount
+        numeric received_amount "nullable"
+        numeric change_amount "nullable"
+        datetime registered_at_utc
+        uuid registered_by_user_id
+    }
+
+    bil_invoice_edits {
+        uuid id PK
+        uuid invoice_id FK
+        datetime edited_at_utc
+        uuid edited_by_user_id
+        int item_count
+    }
+
     ac_users ||--o{ ac_recovery_codes : "tiene"
     ac_users ||--o{ ac_activation_tokens : "tiene"
     ac_users ||--o{ ac_sessions : "tiene"
+    bil_invoices ||--o{ bil_invoice_items : "tiene"
+    bil_invoices ||--o{ bil_invoice_payments : "tiene"
+    bil_invoices ||--o{ bil_invoice_edits : "tiene"
 ```
 
 `password_hash`, `code_hash` y `token_hash` almacenan hashes, no
 valores secretos en claro. `status` de `not_email_queue` usa `0 = Pending`,
 `1 = Processing` y `2 = Sent`. `state` de `per_permission_requests` usa
 `Pending`, `Approved`, `Applied` y `Rejected`.
+
+En las tablas de facturas, `state` de `bil_invoices` guarda el ordinal de
+`InvoiceState` y `kind`, `method` y `status` de `bil_invoice_payments` los de
+sus enums: `0 = Sale, 1 = Debt`; `0 = Cash, 1 = Transfer, 2 = None`;
+`0 = Registered, 1 = Confirmed, 2 = Rejected`. Los cuatro montos
+(`unit_price`, `amount`, `received_amount` y `change_amount`) son
+`numeric(12,2)`: dos decimales exactos, nunca redondeados.
 
 Las cuatro columnas que apuntan a un usuario (`requester_id`, `approver_id`,
 `user_id` y `granted_by_user_id`) **no tienen clave foránea** en la base: la
@@ -1705,13 +2331,11 @@ todavía no se escribe: llega en la semana 11.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
   `docs/adr/001-session-credential.md`.
-- **Reattempts automáticos, status fallido y escritura de `last_error`** en el
+- **Reintentos automáticos, estado fallido y escritura de `last_error`** en el
   envío de email. Llega en la semana 11.
 - **Vista de administración de la cola.** Llega en la semana 11.
 - **Registros de auditoría** de las operaciones administrativas (RF-CA-08, 13,
   20). Quedan para la semana 14; la protección de último Administrador active de
   RF-CA-20 es una regla de negocio de esta iteración, no un sustituto de la
   auditoría.
-- **Pruebas de la máquina de estados.** La estructura de `Invoice` está
-  declarada en `docs/maquina-de-estados.md`; sus pruebas llegan en la semana 8.
 - **Frontend.** Hasta que se decida, la aplicación se consume como API.

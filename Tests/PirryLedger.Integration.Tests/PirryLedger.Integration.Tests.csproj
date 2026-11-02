@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <!-- Proveedor en memoria de EF Core: la prueba ejercita los repositorios
+         reales de Business y de Permissions sin PostgreSQL (RD-12). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Seccion 1.4 del enunciado: las dos piezas que se integran son reales.
+         Business aporta la maquina y la anulacion; Permissions aporta la
+         solicitud, la aprobacion y la concesion. Ninguna se sustituye. -->
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure\PirryLedger.Business.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Domain\PirryLedger.Core.Permissions.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Application\PirryLedger.Core.Permissions.Application.csproj" />
+    <!-- Infrastructure de Permissions aporta el DbContext y los repositorios de
+         solicitudes y concesiones, que son internal y se ven por
+         InternalsVisibleTo (mismo criterio que las pruebas de la pieza). -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Infrastructure\PirryLedger.Core.Permissions.Infrastructure.csproj" />
+    <!-- AccessControl aporta Login y Authenticate reales: los tokens de la
+         prueba salen del mismo caso de uso que en produccion. Solo se
+         sustituyen sus dos puertos de persistencia (decision 2, opcion A). -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

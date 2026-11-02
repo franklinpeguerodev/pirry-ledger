@@ -35,6 +35,9 @@
     <!-- MapPermissions se llama desde RutasReales para incluir las nuevas
          rutas en la enumeracion que valida RF-CA-05. -->
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Permissions\PirryLedger.Core.Permissions.Api\PirryLedger.Core.Permissions.Api.csproj" />
+    <!-- MapBusiness se llama desde RutasReales para que las rutas del negocio
+         tambien tengan que declarar su Operation (RF-NEG-06). -->
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Api\PirryLedger.Business.Api.csproj" />
   </ItemGroup>
 
   <!-- MapAccessControl devuelve IEndpointRouteBuilder, asi que la prueba necesita el

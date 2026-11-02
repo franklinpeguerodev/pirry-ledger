@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Dominio para las reglas y la maquina de estados (RD-12). La
+         infraestructura solo la usa la prueba de persistencia, que corre con
+         EF InMemory: sin base real y sin SMTP. Application para los casos de
+         uso y Core.Contracts para los contratos que reciben. -->
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure\PirryLedger.Business.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

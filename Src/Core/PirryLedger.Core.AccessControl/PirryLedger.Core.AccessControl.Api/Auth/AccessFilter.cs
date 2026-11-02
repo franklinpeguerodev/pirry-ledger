@@ -98,8 +98,9 @@ public static class AccessFilter
             return permissionRejection ?? await next(context);
         }
 
-        // Administrator. Authenticate distingue el 401 del 403: primero comprueba la
-        // sesion y despues el role (RF-CA-06).
+        // Standard o Administrator. Authenticate distingue el 401 del 403: primero
+        // comprueba la sesion y despues el role (RF-CA-06). El role concreto sale
+        // de la tabla, nunca se escribe aqui.
         var roleRejection = await ValidateRoleAsync(
             context,
             authenticate,
@@ -261,7 +262,7 @@ public static class AccessFilter
     private static IResult InvalidSession() => AccessDenied("Sesion no valida.", isRoleShortage: false);
 
     // El 401 y el 403 salen de aqui y no del caso de uso, porque el filtro corre
-    // antes. El cuerpo es el mismo que usaba el endpoint: {"mensaje": "..."}.
+    // antes. El cuerpo es el mismo que usaba el endpoint: {"message": "..."}.
     private static IResult AccessDenied(string message, bool isRoleShortage) =>
         Results.Json(
             new ErrorResponse(message),

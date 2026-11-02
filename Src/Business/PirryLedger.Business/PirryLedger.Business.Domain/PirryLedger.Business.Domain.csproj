@@ -6,4 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Las pruebas del dominio comprueban la tabla de transiciones fila por
+         fila con un InvoiceTransitionContext a mano. Fuera del dominio el
+         contexto y Transition(estado, contexto) son internal: en produccion el
+         unico camino es Invoice.TransitionTo(estado). -->
+    <InternalsVisibleTo Include="PirryLedger.Business.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -8,27 +8,89 @@ cambia (RD-04).
 
 ## Máquina de estados de la factura
 
-Es la máquina de estados propia del módulo de negocio. Su estructura se entregó
-con la Práctica 1; las pruebas de la máquina llegan en la semana 8.
+Es la máquina de estados propia del módulo de negocio. La entidad central es
+`Invoice` y sus estados están declarados en `InvoiceState`. Todas las
+transiciones se resuelven en un único componente: `InvoiceStateMachine`, cuya
+tabla `AllowedTransitions` es la única fuente de verdad.
 
-La entidad central es `Invoice` y sus estados están declarados en
-`InvoiceState`. Todas las transiciones se resuelven en un único componente:
-`InvoiceStateMachine`.
+Siete estados (RF-NEG-03): `Draft`, `Issued`, `PendingVerification`, `Paid`,
+`InDebt`, `Cancelled` y `NotDelivered`. `Issued` se le muestra al usuario como
+"pendiente".
+
+`Draft` es el estado inicial del agregado en memoria, pero **no se persiste**:
+el borrador vive solo en el cliente, porque guardarlo costaría una escritura por
+cada ítem tocado y dejaría filas que nadie cierra. El servidor recibe la factura
+completa y la guarda ya emitida, así que la fila nace en `Issued` y la
+transición `Draft -> Issued` ocurre en la misma operación que la emisión.
+
+### Transiciones permitidas
+
+De los 49 pares posibles entre los siete estados, la tabla permite exactamente
+once:
 
 | desde | hacia | quién la ejecuta | condición |
 |---|---|---|---|
-| `Draft` | `Issued` | Administrador | La factura fue revisada y está lista para entregarse al cliente. |
-| `Draft` | `Cancelled` | Administrador | La factura fue creada por error y todavía no fue emitida. |
-| `Issued` | `Paid` | Administrador | El cliente realizó el pago. |
-| `Issued` | `Cancelled` | Administrador | La factura emitida debe anularse conforme a la operación del negocio. |
+| `Draft` | `Issued` | Quien cobra | Tiene al menos un ítem. Aquí se marca si es delivery. |
+| `Issued` | `Paid` | Quien cobra | Los pagos cubren el total y ninguno es transferencia. |
+| `Issued` | `PendingVerification` | Quien cobra | Algún pago es transferencia. |
+| `Issued` | `InDebt` | Quien cobra | Exige el nombre de la persona. |
+| `Issued` | `Cancelled` | Quien cobra | Sin permiso: la factura todavía no se cobró. |
+| `Issued` | `NotDelivered` | Quien cobra | La factura es de delivery. |
+| `PendingVerification` | `Paid` | Administrador | Los pagos cubren el total. |
+| `PendingVerification` | `InDebt` | Administrador | Transferencia rechazada. Exige el nombre de la persona. |
+| `InDebt` | `Paid` | Administrador | Los abonos cubren el total de la deuda. |
+| `Paid` | `Cancelled` | Quien solicitó el permiso | Existe un permiso aprobado para esa factura; se consume al anular. |
+| `InDebt` | `Cancelled` | Quien solicitó el permiso | Igual que la anterior. |
 
-### Transiciones prohibidas y terminales
+Siete de las once filas comprueban su condición en la propia máquina, una
+comprobación por fila y aislada en su método: si una se quita, la prueba de esa
+fila se pone roja. La fila `PendingVerification -> Paid` es la excepción: su
+condición la comprueba `Invoice.ConfirmTransfer` antes de pedir la transición,
+porque es el agregado quien conoce los pagos acumulados, y la cubre
+`ConfirmarUnaTransferenciaQueNoCubreElTotalSeRechaza`, no una prueba de la tabla.
+Las dos filas de anulación no tienen condición de tabla: exigen el permiso y eso
+lo resuelve el caso de uso. `Issued -> Cancelled` no lleva condición. La máquina
+recibe los hechos de la tentativa en `InvoiceTransitionContext` (cantidad de
+ítems, si es delivery, nombre del deudor, total, pagos acumulados y si hay
+transferencia); no lee colecciones ni base de datos, así que se prueba sin
+levantar la aplicación (RD-12).
 
-- `Paid -> Cancelled` está prohibida explícitamente: una factura pagada no vuelve
-  a un estado anterior.
-- `Cancelled -> Draft`, `Cancelled -> Issued` y `Cancelled -> Paid` están
-  prohibidas: `Cancelled` es un estado terminal.
-- `Paid` también es terminal porque no tiene transiciones salientes declaradas.
+La consulta del permiso de anulación **no** es una condición de la tabla: depende
+de la factura concreta y la resuelve el caso de uso. El orden es el del ADR 011:
+la transición se resuelve en memoria, se consume la concesión y solo entonces se
+guarda la factura; si el consumo falla, la factura no se guarda. La máquina no
+conoce la pieza de permisos (RF-NEG-09).
+
+### Transiciones prohibidas
+
+Los otros 38 pares se rechazan con `InvalidInvoiceTransitionException` y el
+estado no cambia (RF-NEG-04). Agrupados por su origen:
+
+- Desde `Draft` (6): hacia sí mismo, `PendingVerification`, `Paid`, `InDebt`,
+  `Cancelled` y `NotDelivered`. Un borrador solo se emite.
+- Desde `Issued` (2): hacia `Draft` y hacia sí mismo. Una factura emitida no
+  vuelve a borrador.
+- Desde `PendingVerification` (5): hacia `Draft`, `Issued`, sí mismo, `Cancelled`
+  y `NotDelivered`. Una transferencia pendiente se resuelve o no se toca.
+- Desde `Paid` (6): hacia `Draft`, `Issued`, `PendingVerification`, sí mismo,
+  `InDebt` y `NotDelivered`. Una factura pagada solo puede anularse con permiso.
+- Desde `InDebt` (5): hacia `Draft`, `Issued`, `PendingVerification`, sí mismo y
+  `NotDelivered`.
+- Desde `Cancelled` (7) y desde `NotDelivered` (7): todos. Son terminales.
+
+Están incluidas las siete transiciones que dejan el estado igual
+(`Draft -> Draft`, `Paid -> Paid`, …): la máquina no es idempotente y repetir una
+operación falla en lugar de "no hacer nada".
+
+`Paid -> Cancelled` era la transición prohibida de la Práctica 1. Ahora está
+permitida con un permiso aprobado para esa factura, y por eso `Paid` dejó de ser
+terminal.
+
+### Estados terminales
+
+`Cancelled` y `NotDelivered` son terminales (RF-NEG-05): no tienen ninguna
+transición saliente declarada. Si el cliente de una factura marcada como no
+entregada aparece después, se emite una factura nueva; la anterior no revive.
 
 ## Máquina de estados de la solicitud de permiso
 
@@ -36,7 +98,11 @@ Es la máquina de la pieza de permisos. La entidad central es
 `PermissionRequest` y sus estados están declarados en `PermissionRequestState`.
 Todas las transiciones se resuelven en un único componente:
 `PermissionRequestStateMachine`, cuya tabla `AllowedTransitions` es la única
-fuente de verdad. Ningún caso de uso ni endpoint valida el estado por su cuenta.
+fuente de verdad. Los dos casos de uso que resuelven una solicitud comprueban
+antes que esté en `Pending`, y lo hacen para poder rechazarla con un mensaje que
+nombra la operación (`Solo se pueden aprobar solicitudes en estado Pendiente.`);
+la transición, en cambio, solo la decide esta clase: un par que no esté en la
+tabla lanza `InvalidPermissionRequestTransitionException`.
 
 | desde | hacia | quién la ejecuta | condición |
 |---|---|---|---|
@@ -72,4 +138,10 @@ proyectos distintos y se compilan por separado: `InvoiceState` y
 `InvoiceStateMachine` en el módulo de negocio, `PermissionRequestState` y
 `PermissionRequestStateMachine` en la pieza de permisos, cada una con su propia
 excepción de transición inválida. Si una gana un estado, la otra no se entera, y
-al revés.
+al revés. Dos pruebas lo comprueban, una en cada suite: el dominio del módulo de
+negocio (`PirryLedger.Business.Domain`) no referencia ningún ensamblado de
+permisos ni de control de acceso, y la máquina de permisos no vive en un
+ensamblado de negocio. `PirryLedger.Business.Api` sí referencia
+`PirryLedger.Core.AccessControl.Api`, y es deliberado: ahí vive `.WithAccess`, el
+punto único donde cada ruta declara su operación (RF-CA-05). Es un enlace de la
+capa Api, no del dominio ni de la aplicación.
