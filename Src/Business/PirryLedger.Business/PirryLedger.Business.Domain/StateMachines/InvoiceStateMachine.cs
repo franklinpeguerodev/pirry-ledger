@@ -59,7 +59,6 @@ public static class InvoiceStateMachine
         switch (from, to)
         {
             case (InvoiceState.Draft, InvoiceState.Issued):
-                EnsureHasAtLeastOneItem(from, to, context);
                 break;
 
             case (InvoiceState.Issued, InvoiceState.Paid):
