@@ -17,6 +17,7 @@ public static class InvoiceStateMachine
         new HashSet<(InvoiceState From, InvoiceState To)>
         {
             (InvoiceState.Draft, InvoiceState.Issued),
+            (InvoiceState.Issued, InvoiceState.Draft),
             (InvoiceState.Issued, InvoiceState.Paid),
             (InvoiceState.Issued, InvoiceState.PendingVerification),
             (InvoiceState.Issued, InvoiceState.InDebt),
