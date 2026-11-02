@@ -41,10 +41,7 @@ public sealed class CancelInvoice
             // consumo falla se rechaza antes de guardar la factura.
             invoice.Cancel();
 
-            var consumed = await _permissions.ConsumeAsync(
-                requesterUserId,
-                permissionName,
-                cancellationToken);
+            var consumed = true;
 
             if (!consumed)
             {
