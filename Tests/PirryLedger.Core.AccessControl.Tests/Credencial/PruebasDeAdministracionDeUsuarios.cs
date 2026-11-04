@@ -90,6 +90,7 @@ public sealed class PruebasDeAdministracionDeUsuarios
         var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
         var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
         var unlock = new UnlockUser(scenario.Users, scenario.Authenticate);
+        var branch = Branch.Create("Sucursal Centro", "Calle Principal 1");
         var crear = new CreateUserByAdministrator(
             scenario.Users,
             new FakeActivationTokenRepository(),
@@ -97,7 +98,8 @@ public sealed class PruebasDeAdministracionDeUsuarios
             new InMemoryEmailQueue(),
             scenario.Authenticate,
             scenario.Clock,
-            "http://localhost:5243");
+            "http://localhost:5243",
+            new FakeBranchRepository(branch));
 
         var objetivo = scenario.Users.Create(
             "Objetivo", "objetivo@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true);
@@ -113,6 +115,7 @@ public sealed class PruebasDeAdministracionDeUsuarios
                 "Nuevo",
                 "nuevo@ejemplo.com",
                 "abc12345",
+                branch.Id,
                 TimeSpan.FromHours(24)));
 
         await Assert.ThrowsAsync<InsufficientRoleException>(
@@ -126,6 +129,30 @@ public sealed class PruebasDeAdministracionDeUsuarios
 
         // Y el alta rechazada no creo nada.
         Assert.Null(await scenario.Users.FindByEmailAsync("nuevo@ejemplo.com"));
+    }
+
+    private sealed class FakeBranchRepository : IBranchRepository
+    {
+        private readonly Branch _branch;
+
+        public FakeBranchRepository(Branch branch)
+        {
+            _branch = branch;
+        }
+
+        public Task<Branch?> FindByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Branch?>(id == _branch.Id ? _branch : null);
+
+        public Task<IReadOnlyList<Branch>> ListAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Branch>>(new[] { _branch });
+
+        public Task SaveAsync(
+            Branch branch,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     [Fact]

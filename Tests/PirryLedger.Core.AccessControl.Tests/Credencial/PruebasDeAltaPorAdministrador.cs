@@ -1,5 +1,6 @@
 using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
+using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using System.Text.Json;
@@ -37,6 +38,8 @@ public sealed class PruebasDeAltaPorAdministrador
 
         var tokens = new FakeActivationTokenRepository();
         var queue = new InMemoryEmailQueue();
+        var branch = Branch.Create("Sucursal Centro", "Calle Principal 1");
+        var branches = new FakeBranchRepository(branch);
 
         var caso = new CreateUserByAdministrator(
             scenario.Users,
@@ -45,9 +48,10 @@ public sealed class PruebasDeAltaPorAdministrador
             queue,
             scenario.Authenticate,
             scenario.Clock,
-            BaseUrl);
+            BaseUrl,
+            branches);
 
-        return new EscenarioDeAlta(scenario, tokenAdmin, tokens, queue, caso);
+        return new EscenarioDeAlta(scenario, tokenAdmin, tokens, queue, caso, branch.Id);
     }
 
     [Fact]
@@ -60,6 +64,7 @@ public sealed class PruebasDeAltaPorAdministrador
             "Maria Perez",
             "maria@ejemplo.com",
             "temporal123",
+            escenario.BranchId,
             ValidezDelEnlace);
 
         var creado = await escenario.Scenario.Users.FindByIdAsync(id);
@@ -88,6 +93,7 @@ public sealed class PruebasDeAltaPorAdministrador
             "Maria Perez",
             "maria@ejemplo.com",
             "temporal123",
+            escenario.BranchId,
             ValidezDelEnlace);
 
         // RF-NOT-08: el correo sale por la cola, no por SMTP dentro de la
@@ -116,6 +122,7 @@ public sealed class PruebasDeAltaPorAdministrador
             "Maria Perez",
             "maria@ejemplo.com",
             "temporal123",
+            escenario.BranchId,
             ValidezDelEnlace);
 
         // RF-CA-15: nace inactivo, y un inactivo no inicia Session.
@@ -155,11 +162,31 @@ public sealed class PruebasDeAltaPorAdministrador
             request!.Name,
             request.Email,
             request.Password,
+            escenario.BranchId,
             ValidezDelEnlace);
 
         var creado = await escenario.Scenario.Users.FindByIdAsync(id);
 
         Assert.Equal(Role.Standard, creado!.Role);
+    }
+
+    [Fact]
+    public async Task UnaSucursalVaciaSeRechazaSinCrearNada()
+    {
+        var escenario = await EscenarioAsync();
+
+        await Assert.ThrowsAsync<RegistrationRejectedException>(
+            () => escenario.Caso.ExecuteAsync(
+                escenario.TokenAdmin,
+                "Maria Perez",
+                "maria@ejemplo.com",
+                "temporal123",
+                Guid.Empty,
+                ValidezDelEnlace));
+
+        Assert.Null(await escenario.Scenario.Users.FindByEmailAsync("maria@ejemplo.com"));
+        Assert.Empty(escenario.Tokens.Saved);
+        Assert.Empty(escenario.Queue.Emails);
     }
 
     // RD-06: el rechazo ocurre en el servidor, con una peticion armada a mano. No
@@ -176,6 +203,7 @@ public sealed class PruebasDeAltaPorAdministrador
                 "Maria Perez",
                 "maria@ejemplo.com",
                 "temporal123",
+                escenario.BranchId,
                 ValidezDelEnlace));
 
         // Y nada cambio: ni el User, ni el token, ni el correo.
@@ -198,6 +226,7 @@ public sealed class PruebasDeAltaPorAdministrador
                 "Maria Perez",
                 "maria@ejemplo.com",
                 "temporal123",
+                escenario.BranchId,
                 ValidezDelEnlace));
 
         await Assert.ThrowsAsync<InvalidSessionException>(
@@ -206,6 +235,7 @@ public sealed class PruebasDeAltaPorAdministrador
                 "Maria Perez",
                 "maria@ejemplo.com",
                 "temporal123",
+                escenario.BranchId,
                 ValidezDelEnlace));
     }
 
@@ -219,6 +249,7 @@ public sealed class PruebasDeAltaPorAdministrador
             "Maria Perez",
             "maria@ejemplo.com",
             "temporal123",
+            escenario.BranchId,
             ValidezDelEnlace);
 
         // RF-CA-01: el correo es unico. El segundo alta no crea otra cuenta, ni
@@ -229,6 +260,7 @@ public sealed class PruebasDeAltaPorAdministrador
                 "Otra Maria",
                 "maria@ejemplo.com",
                 "temporal456",
+                escenario.BranchId,
                 ValidezDelEnlace));
 
         var users = await escenario.Scenario.Users.ListAsync();
@@ -252,6 +284,7 @@ public sealed class PruebasDeAltaPorAdministrador
                 nombre,
                 "maria@ejemplo.com",
                 "temporal123",
+                escenario.BranchId,
                 ValidezDelEnlace));
 
         Assert.Contains("150", error.Message);
@@ -265,5 +298,32 @@ public sealed class PruebasDeAltaPorAdministrador
         string TokenAdmin,
         FakeActivationTokenRepository Tokens,
         InMemoryEmailQueue Queue,
-        CreateUserByAdministrator Caso);
+        CreateUserByAdministrator Caso,
+        Guid BranchId);
+
+    private sealed class FakeBranchRepository : IBranchRepository
+    {
+        private readonly Branch _branch;
+
+        public FakeBranchRepository(Branch branch)
+        {
+            _branch = branch;
+        }
+
+        public Task<Branch?> FindByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Branch?>(id == _branch.Id ? _branch : null);
+
+        public Task<IReadOnlyList<Branch>> ListAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Branch>>(new[] { _branch });
+
+        public Task SaveAsync(
+            Branch branch,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
 }

@@ -74,22 +74,6 @@ public sealed class CreateUserByAdministrator
         _branches = branches;
     }
 
-    public Task<Guid> ExecuteAsync(
-        string plainToken,
-        string name,
-        string email,
-        string password,
-        TimeSpan validityDuration,
-        CancellationToken cancellationToken = default) =>
-        ExecuteAsync(
-            plainToken,
-            name,
-            email,
-            password,
-            new Guid("00000000-0000-0000-0000-000000000002"),
-            validityDuration,
-            cancellationToken);
-
     // Devuelve el Id del User creado: es lo unico que el cliente necesita para
     // el siguiente paso (listarlo, promoverlo o desbloquearlo).
     public async Task<Guid> ExecuteAsync(
