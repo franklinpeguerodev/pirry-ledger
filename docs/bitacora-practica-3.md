@@ -7,6 +7,23 @@
 
 La regla es la misma de las bitácoras anteriores: **lo que devuelve el agente es un borrador, no una verdad**. Nada se sube sin que yo lo lea y lo ejecute en mi máquina.
 
+### Entrada posterior — Alcance por sucursal (2026-11-04)
+
+**Qué se pidió.** Incorporar sucursales a la creación de usuarios y a las
+operaciones de facturación: el Administrador conserva acceso global, cada
+Estándar queda ligado a una sucursal y la factura conserva la sucursal y su
+dirección.
+
+**Qué devolví.** Se trabajó en `feature/branch-scope`, creada desde `develop`,
+con commits atómicos. Se agregó la sucursal especial `Todas`, el contrato
+público de alcance entre Core y Business, la asignación de sucursal al usuario,
+el filtrado de consultas de facturas, la captura histórica de nombre/dirección,
+endpoints administrativos de sucursales y migraciones con rechazo explícito de
+Estándar sin asignación.
+
+**Qué verifiqué.** `dotnet build pirry-ledger.slnx --no-restore` terminó con
+0 errores; `dotnet test pirry-ledger.slnx --no-build` pasó 350 pruebas.
+
 ---
 
 ### Entrada 1 — Auditoría de `docs/`, reconocimiento del código real y plan por fases (2026-10-29)

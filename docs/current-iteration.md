@@ -53,6 +53,24 @@ Branch `feature/admin-created-users`, from `develop`. Seven commits, one change 
 
 None. Both ADRs are accepted.
 
+## Branch scope extension (2026-11-04)
+
+This hardening also introduces branch scope across user administration and
+billing:
+
+- `Branch` is owned by Access Control. The Administrator creates and lists
+  physical branches; the protected special row `Todas` represents global
+  Administrator scope.
+- Every user stores exactly one branch reference. Standard users must reference
+  an active physical branch; Administrators reference `Todas`.
+- Standard users can operate and query invoices only in their branch.
+  Administrators have global access and choose the physical branch when issuing
+  an invoice.
+- An issued invoice stores the branch name and one free-text address (maximum
+  100 characters) as immutable historical snapshots.
+- The migration refuses to continue when an existing Standard user has no
+  branch assignment; it never silently chooses a default.
+
 ## Requirement files to read
 
 `docs/requirements/README.md` (index) first, then `business-module.md`, `design-rules.md` and `permissions.md`. Read `access-control.md` only to protect what is already delivered: section 1.5 of the brief re-verifies access control and permissions.

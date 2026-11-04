@@ -11,6 +11,12 @@ solicitudes de permiso con su máquina de estados y su suite de pruebas. El
 módulo Business tiene la máquina de estados de `Invoice` con siete estados, sus
 once transiciones permitidas y su suite de pruebas.
 
+La administración de usuarios y facturas está ligada a sucursales. El
+Administrador trabaja con alcance global mediante la sucursal especial
+`Todas`; cada usuario Estándar pertenece a una sucursal física y solo puede
+consultar u operar facturas de ella. Al emitir una factura se conserva el
+nombre y la dirección de la sucursal como información histórica.
+
 Este README está ordenado como se usa:
 
 | # | Sección | Para qué |
@@ -339,6 +345,8 @@ credencial.
 En una segunda terminal, entra como el Administrador de la semilla y crea un
 usuario Estándar con él. El alta ya no es pública: `POST /api/auth/register`
 devuelve `404` y la cuenta se crea desde `POST /api/admin/users` (ADR 013).
+Primero crea una sucursal física; la respuesta contiene el `id` que se usa al
+crear el usuario.
 
 ```powershell
 $credencialesAdmin = @{
@@ -352,10 +360,23 @@ $sesionAdmin = Invoke-RestMethod `
     -ContentType 'application/json' `
     -Body $credencialesAdmin
 
+$sucursal = @{
+    name = 'Sucursal Centro'
+    address = 'Calle Principal 100'
+} | ConvertTo-Json
+
+$branch = Invoke-RestMethod `
+    -Uri 'http://localhost:5243/api/admin/branches' `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body $sucursal
+
 $cuenta = @{
     name = 'Ana'
     email = 'ana@ejemplo.com'
     password = 'abc12345'
+    branchId = $branch.id
 } | ConvertTo-Json
 
 Invoke-RestMethod `
