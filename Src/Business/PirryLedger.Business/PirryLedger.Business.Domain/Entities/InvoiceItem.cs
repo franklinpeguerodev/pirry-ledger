@@ -14,9 +14,10 @@ public sealed class InvoiceItem
     {
     }
 
-    private InvoiceItem(Guid id, string name, decimal unitPrice, int quantity)
+    private InvoiceItem(Guid id, Guid? productId, string name, decimal unitPrice, int quantity)
     {
         Id = id;
+        ProductId = productId;
         Name = name;
         UnitPrice = unitPrice;
         Quantity = quantity;
@@ -25,6 +26,8 @@ public sealed class InvoiceItem
     public Guid Id { get; private set; }
 
     public Guid InvoiceId { get; private set; }
+
+    public Guid? ProductId { get; private set; }
 
     public string Name { get; private set; } = string.Empty;
 
@@ -67,7 +70,21 @@ public sealed class InvoiceItem
                 $"La cantidad del ítem debe estar entre 1 y {MaximumQuantity}.");
         }
 
-        return new InvoiceItem(Guid.NewGuid(), trimmed, unitPrice, quantity);
+        return new InvoiceItem(Guid.NewGuid(), null, trimmed, unitPrice, quantity);
+    }
+
+    public static InvoiceItem Create(Product product, int quantity)
+    {
+        ArgumentNullException.ThrowIfNull(product);
+
+        return Create(product.Id, product.Name, product.Price, quantity);
+    }
+
+    private static InvoiceItem Create(Guid productId, string name, decimal unitPrice, int quantity)
+    {
+        var item = Create(name, unitPrice, quantity);
+        item.ProductId = productId;
+        return item;
     }
 
     // La factura es la unica que asigna el duenio del item.

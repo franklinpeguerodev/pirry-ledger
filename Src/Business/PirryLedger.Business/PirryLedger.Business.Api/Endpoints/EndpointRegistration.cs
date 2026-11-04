@@ -21,6 +21,64 @@ public static class EndpointRegistration
 {
     public static IEndpointRouteBuilder MapBusiness(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapPost("/api/admin/products", (
+            ProductBody body,
+            CreateProduct useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var product = await useCase.ExecuteAsync(
+                    body.Name ?? string.Empty,
+                    body.Description,
+                    body.Price,
+                    cancellationToken);
+
+                return Results.Json(
+                    ProductResponse.From(product),
+                    statusCode: StatusCodes.Status201Created);
+            }))
+        .WithAccess(Operation.CreateProduct);
+
+        endpoints.MapPut("/api/admin/products/{id:guid}", (
+            Guid id,
+            ProductBody body,
+            UpdateProduct useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var product = await useCase.ExecuteAsync(
+                    id,
+                    body.Name ?? string.Empty,
+                    body.Description,
+                    body.Price,
+                    cancellationToken);
+
+                return Results.Ok(ProductResponse.From(product));
+            }))
+        .WithAccess(Operation.UpdateProduct);
+
+        endpoints.MapPost("/api/admin/products/{id:guid}/active", (
+            Guid id,
+            ProductActiveBody body,
+            SetProductActive useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var product = await useCase.ExecuteAsync(id, body.IsActive, cancellationToken);
+                return Results.Ok(ProductResponse.From(product));
+            }))
+        .WithAccess(Operation.SetProductActive);
+
+        endpoints.MapGet("/api/billing/products", (
+            ListProducts useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var products = await useCase.ExecuteAsync(cancellationToken);
+                return Results.Ok(products.Select(ProductResponse.From).ToList());
+            }))
+        .WithAccess(Operation.ListProducts);
+
         // RF-NEG-02: emitir una factura. El borrador vive solo en el cliente, asi
         // que se guarda ya emitida. Responde 201 con la factura creada.
         endpoints.MapPost("/api/billing/invoices", (
@@ -30,7 +88,7 @@ public static class EndpointRegistration
             RunAsync(async () =>
             {
                 var invoice = await useCase.ExecuteAsync(
-                    ToItems(body.Items),
+                    ToProductItems(body.Items),
                     body.IsDelivery,
                     cancellationToken);
 
@@ -109,7 +167,7 @@ public static class EndpointRegistration
 
                 var invoice = await useCase.ExecuteAsync(
                     id,
-                    ToItems(body.Items),
+                    ToProductItems(body.Items),
                     caller.Id,
                     cancellationToken);
 
@@ -260,6 +318,16 @@ public static class EndpointRegistration
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status404NotFound);
         }
+        catch (ProductNotFoundException error)
+        {
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (ProductInactiveException error)
+        {
+            return BadRequest(error.Message);
+        }
         catch (CancellationPermissionRequiredException error)
         {
             return Results.Json(
@@ -287,14 +355,11 @@ public static class EndpointRegistration
             new ErrorResponse(message),
             statusCode: StatusCodes.Status400BadRequest);
 
-    private static IReadOnlyCollection<InvoiceItemInput> ToItems(List<InvoiceItemBody>? items) =>
+    private static IReadOnlyCollection<ProductItemInput> ToProductItems(List<InvoiceItemBody>? items) =>
         items?
-            .Select(item => new InvoiceItemInput(
-                item.Name ?? string.Empty,
-                item.UnitPrice,
-                item.Quantity))
+            .Select(item => new ProductItemInput(item.ProductId, item.Quantity))
             .ToList()
-        ?? new List<InvoiceItemInput>();
+        ?? new List<ProductItemInput>();
 
     private static IReadOnlyCollection<InvoicePaymentInput> ToPayments(List<PaymentBody>? payments) =>
         payments?

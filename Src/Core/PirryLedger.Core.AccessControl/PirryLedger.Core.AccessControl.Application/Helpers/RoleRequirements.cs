@@ -127,6 +127,11 @@ public static class RoleRequirements
         // que la tabla sigue diciendo a quien admite cada ruta.
         [Operation.ListInvoices] = new(AccessLevel.AnySession),
         [Operation.GetInvoice] = new(AccessLevel.AnySession),
+
+        [Operation.CreateProduct] = new(AccessLevel.Administrator),
+        [Operation.UpdateProduct] = new(AccessLevel.Administrator),
+        [Operation.SetProductActive] = new(AccessLevel.Administrator),
+        [Operation.ListProducts] = new(AccessLevel.AnySession),
     };
 
     // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui

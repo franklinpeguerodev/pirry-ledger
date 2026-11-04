@@ -61,6 +61,10 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(PirryLedger.Business.Application.UseCases.ListInvoices),
         typeof(PirryLedger.Business.Application.UseCases.GetInvoice),
         typeof(PirryLedger.Business.Application.UseCases.ListInvoiceEdits),
+        typeof(PirryLedger.Business.Application.UseCases.CreateProduct),
+        typeof(PirryLedger.Business.Application.UseCases.UpdateProduct),
+        typeof(PirryLedger.Business.Application.UseCases.SetProductActive),
+        typeof(PirryLedger.Business.Application.UseCases.ListProducts),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de
@@ -261,6 +265,9 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.DeactivateUser)]
     [InlineData(Operation.ReactivateUser)]
     [InlineData(Operation.UnlockUser)]
+    [InlineData(Operation.CreateProduct)]
+    [InlineData(Operation.UpdateProduct)]
+    [InlineData(Operation.SetProductActive)]
     public void LasOperacionesDeAdministracionExigenElRolDeAdministrador(Operation operation)
     {
         Assert.Equal(AccessLevel.Administrator, RoleRequirements.RequiredLevel(operation));
@@ -271,13 +278,13 @@ public class PruebasDelPuntoUnicoDeAcceso
     // administracion declaradas, contadas desde las rutas reales. Si alguien
     // anade una septima y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteSieteRutasDeAdministrador()
+    public void HayExactamenteDiezRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(7, deAdministracion.Count);
+        Assert.Equal(10, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {
