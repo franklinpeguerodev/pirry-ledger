@@ -53,17 +53,6 @@ public sealed class PruebasDeRecuperacionDeContrasena
         await Assert.ThrowsAsync<RecoveryRejectedException>(() => caso.CompleteAsync(Code, "other123"));
     }
 
-    private sealed class InMemoryEmailQueue : IEmailQueue
-    {
-        public List<QueuedEmail> Emails { get; } = [];
-
-        public Task EnqueueAsync(QueuedEmail email, CancellationToken cancellationToken = default)
-        {
-            Emails.Add(email);
-            return Task.CompletedTask;
-        }
-    }
-
     private sealed class InMemoryRecoveryCodeRepository : IRecoveryCodeRepository
     {
         private readonly List<RecoveryCode> _codes = [];

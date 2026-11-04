@@ -22,48 +22,6 @@ public static class EndpointRegistration
 
     public static IEndpointRouteBuilder MapAccessControl(this IEndpointRouteBuilder endpoints)
     {
-        // RF-CA-01, RF-CA-15 y RF-NOT-08.
-        endpoints.MapPost("/api/auth/register", async (
-            RegisterRequest request,
-            RegisterUser register,
-            IClock clock,
-            CancellationToken cancellationToken) =>
-        {
-            // RD-07 y RD-08: todo rechazo sale como un message controlado. Ni una
-            // traza, ni una consulta SQL, ni el Email o la contrasena del
-            // User en la respuesta.
-            try
-            {
-                await register.ExecuteAsync(
-                    request.Name,
-                    request.Email,
-                    request.Password,
-                    TokenValidity,
-                    cancellationToken);
-            }
-            catch (DuplicateEmailException)
-            {
-                // 409 con el mismo cuerpo que un Email nuevo. El flujo no dice si
-                // ese Email ya estaba registrado.
-                return Results.Json(
-                    new ErrorResponse("No pudimos completar el registro con esos datos."),
-                    statusCode: StatusCodes.Status409Conflict);
-            }
-            catch (RegistrationRejectedException error)
-            {
-                return Results.Json(
-                    new ErrorResponse(error.Message),
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-
-            // 202: el Email sale por la cola, no ahora. La cuenta existe pero esta
-            // inactiva hasta que se abra el enlace.
-            return Results.Json(
-                new ActivatedResponse(Activated: false),
-                statusCode: StatusCodes.Status202Accepted);
-        })
-        .WithAccess(Operation.RegisterUser);
-
         // RF-CA-16: abrir el enlace activa la cuenta.
         endpoints.MapGet("/activate", async (
             string? token,
@@ -264,7 +222,7 @@ public static class EndpointRegistration
         return endpoints;
     }
 
-    // RF-CA-21, RF-CA-08 y RF-CA-20: las cuatro rutas de Administrator.
+    // RF-CA-01, RF-CA-21, RF-CA-08 y RF-CA-20: las cinco rutas de Administrator.
     //
     // RF-CA-05: aqui no se compara ningun role. Cada route se declara con
     // WithAccess(Operation.X) y el filtro de acceso consulta RoleRequirements, el
@@ -277,6 +235,62 @@ public static class EndpointRegistration
     // rubrica revisa.
     private static void MapUserAdministration(IEndpointRouteBuilder endpoints)
     {
+        // RF-CA-01, RF-CA-15 y docs/adr/013-admin-created-users.md: el alta de un
+        // User. Sustituye a la antigua ruta publica /api/auth/register, que ya no
+        // existe.
+        //
+        // 201 con el Id del recurso creado. La cuenta nace inactiva y el enlace de
+        // activacion sale por la cola, igual que antes: el alta no crea un User
+        // usable.
+        endpoints.MapPost("/api/admin/users", async (
+            CreateUserRequest request,
+            HttpRequest httpRequest,
+            CreateUserByAdministrator create,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var id = await create.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    request.Name,
+                    request.Email,
+                    request.Password,
+                    TokenValidity,
+                    cancellationToken);
+
+                return Results.Json(
+                    new CreatedUserResponse(id),
+                    statusCode: StatusCodes.Status201Created);
+            }
+            catch (InvalidSessionException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InsufficientRoleException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (DuplicateEmailException)
+            {
+                // 409 con un cuerpo generico: no dice si ese Email ya estaba
+                // registrado.
+                return Results.Json(
+                    new ErrorResponse("No pudimos completar el alta con esos datos."),
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+            catch (RegistrationRejectedException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+        .WithAccess(Operation.CreateUserByAdministrator);
+
         // RF-CA-21: listar usuarios con su role y su estado.
         endpoints.MapGet("/api/admin/users", async (
             HttpRequest httpRequest,

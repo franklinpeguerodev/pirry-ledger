@@ -29,7 +29,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     // parametros al construir la Route y falla si no encuentra el servicio.
     private static readonly Type[] ServiciosDeLasRutas =
     [
-        typeof(RegisterUser),
+        typeof(CreateUserByAdministrator),
         typeof(ActivateAccount),
         typeof(ResendActivationLink),
         typeof(Login),
@@ -251,9 +251,10 @@ public class PruebasDelPuntoUnicoDeAcceso
             RoleRequirements.ToleratesInvalidCredential(Operation.QueryOwnSession));
     }
 
-    // Las tres de administracion tienen que exigir el Role concreto, y ese Role se
-    // pide a la tabla, no se escribe en el endpoint.
+    // Las operaciones de administracion tienen que exigir el Role concreto, y ese
+    // Role se pide a la tabla, no se escribe en el endpoint.
     [Theory]
+    [InlineData(Operation.CreateUserByAdministrator)]
     [InlineData(Operation.ListUsers)]
     [InlineData(Operation.ChangeUserRole)]
     [InlineData(Operation.DeactivateUser)]
@@ -264,17 +265,17 @@ public class PruebasDelPuntoUnicoDeAcceso
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(operation));
     }
 
-    // El caso que mas se repite al releer RF-CA-05: las cinco rutas de
+    // El caso que mas se repite al releer RF-CA-05: las seis rutas de
     // administracion declaradas, contadas desde las rutas reales. Si alguien
-    // anade una quinta y la deja fuera de administracion, esto salta.
+    // anade una sexta y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteCincoRutasDeAdministrador()
+    public void HayExactamenteSeisRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(5, deAdministracion.Count);
+        Assert.Equal(6, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {

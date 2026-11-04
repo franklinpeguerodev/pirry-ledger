@@ -3,6 +3,7 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 
@@ -162,5 +163,47 @@ internal sealed class FakeSessionRepository : ISessionRepository
         session.Close(utcNow);
 
         return Task.FromResult(true);
+    }
+}
+
+// RF-CA-15 y RF-CA-16: el alta y el reenvio guardan un token de un solo uso.
+// Este doble lo deja en memoria; la pieza no necesita saber como se persiste.
+internal sealed class FakeActivationTokenRepository : IActivationTokenRepository
+{
+    private readonly List<ActivationToken> _tokens = [];
+
+    public IReadOnlyList<ActivationToken> Saved => _tokens;
+
+    public Task<ActivationToken?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tokens.FirstOrDefault(token => token.TokenHash == tokenHash));
+
+    public Task InvalidatePendingAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        _tokens.RemoveAll(token => token.UserId == userId && token.UsedAtUtc is null);
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAsync(ActivationToken token, CancellationToken cancellationToken = default)
+    {
+        _tokens.RemoveAll(existing => existing.Id == token.Id);
+        _tokens.Add(token);
+
+        return Task.CompletedTask;
+    }
+}
+
+// RF-NOT-08: la cola es el unico camino de salida del correo. Este doble guarda
+// lo que se encolaria, para poder afirmar que el enlace de activacion se encolo
+// y que el codigo en claro solo viaja dentro del cuerpo.
+internal sealed class InMemoryEmailQueue : IEmailQueue
+{
+    public List<QueuedEmail> Emails { get; } = [];
+
+    public Task EnqueueAsync(QueuedEmail email, CancellationToken cancellationToken = default)
+    {
+        Emails.Add(email);
+
+        return Task.CompletedTask;
     }
 }

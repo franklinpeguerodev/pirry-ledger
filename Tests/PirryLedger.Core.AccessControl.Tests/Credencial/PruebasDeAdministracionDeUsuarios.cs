@@ -64,8 +64,9 @@ public sealed class PruebasDeAdministracionDeUsuarios
     }
 
     [Fact]
-    public void LasCuatroOperacionesDeAdministracionExigenAdministrador()
+    public void LasCincoOperacionesDeAdministracionExigenAdministrador()
     {
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.CreateUserByAdministrator));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ListUsers));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ChangeUserRole));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.DeactivateUser));
@@ -80,27 +81,46 @@ public sealed class PruebasDeAdministracionDeUsuarios
     // --- RF-CA-06: el rechazo tiene que ocurrir con peticion a mano ---
 
     [Fact]
-    public async Task EstandarRecibe403EnLasTresOperaciones()
+    public async Task EstandarRecibe403EnLasCuatroOperaciones()
     {
         var (scenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
 
         var listar = new ListUsers(scenario.Users, scenario.Authenticate);
         var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
         var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var crear = new CreateUserByAdministrator(
+            scenario.Users,
+            new FakeActivationTokenRepository(),
+            scenario.Hasher,
+            new InMemoryEmailQueue(),
+            scenario.Authenticate,
+            scenario.Clock,
+            "http://localhost:5243");
 
         var objetivo = scenario.Users.Create(
             "Objetivo", "objetivo@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true);
 
-        // Los tres rechazos, del mismo Type y por la misma reason. Si uno de
+        // Los cuatro rechazos, del mismo Type y por la misma reason. Si uno de
         // ellos pasara, el Standard tendria una Operation abierta.
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => listar.ExecuteAsync(tokenEstandar));
+
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => crear.ExecuteAsync(
+                tokenEstandar,
+                "Nuevo",
+                "nuevo@ejemplo.com",
+                "abc12345",
+                TimeSpan.FromHours(24)));
 
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => ChangeRole.ExecuteAsync(tokenEstandar, objetivo.Id, "Standard"));
 
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => Deactivate.ExecuteAsync(tokenEstandar, objetivo.Id));
+
+        // Y el alta rechazada no creo nada.
+        Assert.Null(await scenario.Users.FindByEmailAsync("nuevo@ejemplo.com"));
     }
 
     [Fact]

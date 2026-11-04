@@ -38,11 +38,12 @@ public static class DependencyInjection
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
 
-        services.AddScoped<RegisterUser>(provider => new RegisterUser(
+        services.AddScoped<CreateUserByAdministrator>(provider => new CreateUserByAdministrator(
             provider.GetRequiredService<IUserRepository>(),
             provider.GetRequiredService<IActivationTokenRepository>(),
             provider.GetRequiredService<IPasswordHasher>(),
             provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<Authenticate>(),
             provider.GetRequiredService<IClock>(),
             baseUrl));
 
