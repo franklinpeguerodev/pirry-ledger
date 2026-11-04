@@ -39,12 +39,13 @@ public enum Operation
     // Consultar quien es. Cualquier Session valida.
     QueryOwnSession,
 
-    // Administracion de usuarios: RF-CA-01, 08, 20 y 21.
+    // Administracion de usuarios: RF-CA-01, 08, 19, 20 y 21.
     ListUsers,
     CreateUserByAdministrator,
     ChangeUserRole,
     DeactivateUser,
     ReactivateUser,
+    UnlockUser,
 
     RequestRecovery,
     ResetPassword,

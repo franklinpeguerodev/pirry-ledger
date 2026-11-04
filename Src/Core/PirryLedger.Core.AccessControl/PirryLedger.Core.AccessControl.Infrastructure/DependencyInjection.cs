@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<ListUsers>();
         services.AddScoped<ChangeUserRole>();
         services.AddScoped<DeactivateUser>();
+        services.AddScoped<UnlockUser>();
 
         // RF-CA-17. No necesita IPasswordHasher: el reenvio no toca la contrasena.
         services.AddScoped<ResendActivationLink>(provider => new ResendActivationLink(

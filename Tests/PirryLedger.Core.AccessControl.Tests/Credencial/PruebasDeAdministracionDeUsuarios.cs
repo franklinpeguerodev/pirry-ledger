@@ -64,13 +64,14 @@ public sealed class PruebasDeAdministracionDeUsuarios
     }
 
     [Fact]
-    public void LasCincoOperacionesDeAdministracionExigenAdministrador()
+    public void LasSeisOperacionesDeAdministracionExigenAdministrador()
     {
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.CreateUserByAdministrator));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ListUsers));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ChangeUserRole));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.DeactivateUser));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ReactivateUser));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.UnlockUser));
 
         // Y la tabla no tiene operaciones de mas: si alguien anade una al enum y
         // la declara, esta prueba falla y obliga a decidir si es de
@@ -81,13 +82,14 @@ public sealed class PruebasDeAdministracionDeUsuarios
     // --- RF-CA-06: el rechazo tiene que ocurrir con peticion a mano ---
 
     [Fact]
-    public async Task EstandarRecibe403EnLasCuatroOperaciones()
+    public async Task EstandarRecibe403EnLasCincoOperaciones()
     {
         var (scenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
 
         var listar = new ListUsers(scenario.Users, scenario.Authenticate);
         var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
         var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var unlock = new UnlockUser(scenario.Users, scenario.Authenticate);
         var crear = new CreateUserByAdministrator(
             scenario.Users,
             new FakeActivationTokenRepository(),
@@ -100,7 +102,7 @@ public sealed class PruebasDeAdministracionDeUsuarios
         var objetivo = scenario.Users.Create(
             "Objetivo", "objetivo@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true);
 
-        // Los cuatro rechazos, del mismo Type y por la misma reason. Si uno de
+        // Los cinco rechazos, del mismo Type y por la misma reason. Si uno de
         // ellos pasara, el Standard tendria una Operation abierta.
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => listar.ExecuteAsync(tokenEstandar));
@@ -118,6 +120,9 @@ public sealed class PruebasDeAdministracionDeUsuarios
 
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => Deactivate.ExecuteAsync(tokenEstandar, objetivo.Id));
+
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => unlock.ExecuteAsync(tokenEstandar, objetivo.Id));
 
         // Y el alta rechazada no creo nada.
         Assert.Null(await scenario.Users.FindByEmailAsync("nuevo@ejemplo.com"));

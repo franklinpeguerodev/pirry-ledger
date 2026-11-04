@@ -222,7 +222,8 @@ public static class EndpointRegistration
         return endpoints;
     }
 
-    // RF-CA-01, RF-CA-21, RF-CA-08 y RF-CA-20: las cinco rutas de Administrator.
+    // RF-CA-01, RF-CA-19, RF-CA-21, RF-CA-08 y RF-CA-20: las seis rutas de
+    // Administrator.
     //
     // RF-CA-05: aqui no se compara ningun role. Cada route se declara con
     // WithAccess(Operation.X) y el filtro de acceso consulta RoleRequirements, el
@@ -384,6 +385,47 @@ public static class EndpointRegistration
             return await ChangeStateAsync(httpRequest, deactivate, id, Operation.ReactivateUser, cancellationToken);
         })
         .WithAccess(Operation.ReactivateUser);
+
+        // RF-CA-19 y docs/adr/013-admin-created-users.md: desbloquear una cuenta.
+        //
+        // 204 siempre que el User exista, este bloqueado o no: es idempotente. Un
+        // segundo intento no es un error, porque el Administrator pidio un estado
+        // y el estado ya era el pedido.
+        endpoints.MapPost("/api/admin/users/{id:guid}/unlock", async (
+            Guid id,
+            HttpRequest httpRequest,
+            UnlockUser unlock,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await unlock.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    id,
+                    cancellationToken);
+
+                return Results.NoContent();
+            }
+            catch (InvalidSessionException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InsufficientRoleException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+        .WithAccess(Operation.UnlockUser);
 
         endpoints.MapPost("/api/admin/users/{id:guid}/force-reset", async (
             Guid id,

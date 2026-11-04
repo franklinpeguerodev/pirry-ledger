@@ -79,6 +79,11 @@ public static class RoleRequirements
         [Operation.DeactivateUser] = new(AccessLevel.Administrator),
         [Operation.ReactivateUser] = new(AccessLevel.Administrator),
 
+        // RF-CA-19 y docs/adr/013-admin-created-users.md: desbloquear una cuenta
+        // bloqueada por cinco intentos fallidos es de Administrator. Un Standard
+        // no puede saltarse el bloqueo por su cuenta.
+        [Operation.UnlockUser] = new(AccessLevel.Administrator),
+
         [Operation.RequestRecovery] = new(AccessLevel.Public),
         [Operation.ResetPassword] = new(AccessLevel.Public),
         [Operation.ChangeOwnPassword] = new(AccessLevel.AnySession),

@@ -38,6 +38,7 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(ListUsers),
         typeof(ChangeUserRole),
         typeof(DeactivateUser),
+        typeof(UnlockUser),
         typeof(PirryLedger.Core.Contracts.Time.IClock),
         // Casos de uso del modulo de Permissions que el filtro resuelve al
         // construir las Route de MapPermissions().
@@ -259,23 +260,24 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.ChangeUserRole)]
     [InlineData(Operation.DeactivateUser)]
     [InlineData(Operation.ReactivateUser)]
+    [InlineData(Operation.UnlockUser)]
     public void LasOperacionesDeAdministracionExigenElRolDeAdministrador(Operation operation)
     {
         Assert.Equal(AccessLevel.Administrator, RoleRequirements.RequiredLevel(operation));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(operation));
     }
 
-    // El caso que mas se repite al releer RF-CA-05: las seis rutas de
+    // El caso que mas se repite al releer RF-CA-05: las siete rutas de
     // administracion declaradas, contadas desde las rutas reales. Si alguien
-    // anade una sexta y la deja fuera de administracion, esto salta.
+    // anade una septima y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteSeisRutasDeAdministrador()
+    public void HayExactamenteSieteRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(6, deAdministracion.Count);
+        Assert.Equal(7, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {
