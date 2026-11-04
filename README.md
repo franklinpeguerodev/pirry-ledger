@@ -226,12 +226,12 @@ dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedge
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
-`ac_activation_tokens` y `ac_sessions`), la cola de Notifications
+`ac_activation_tokens`, `ac_sessions` y `ac_branches`), la cola de Notifications
 (`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`) y las cuatro tablas de facturas del
-módulo Business (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments` y
-`bil_invoice_edits`), en la misma base y manteniendo la propiedad de cada módulo.
+`ux_per_permission_grants_user_permission`) y las tablas del módulo Business
+(`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments`, `bil_invoice_edits`
+y `bil_products`), en la misma base y manteniendo la propiedad de cada módulo.
 
 El orden de los cuatro comandos da igual: ninguna de esas tablas declara claves
 foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
@@ -246,9 +246,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son once tablas de módulo: las cuatro de `ac_`, `not_email_queue`, las dos de
-`per_` y las cuatro de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
-es la duodécima fila, pero no es de ninguna pieza.
+Son trece tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
+`per_` y las cinco de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
+es la decimocuarta fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -272,7 +272,20 @@ Applying migration '20261029150722_InitialBusinessSchema'.
 Done.
 ```
 
-Cuatro mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
+En una base que ya tenía las migraciones iniciales, los últimos cambios se
+aplican así:
+
+```
+Applying migration '20261104162827_AddBranchesAndUserBranch'.
+Done.
+```
+
+```
+Applying migration '20261104162843_AddInvoiceBranchSnapshot'.
+Done.
+```
+
+Los mensajes anteriores no son errores. `Acquiring an exclusive lock...` sale en todas
 las ejecuciones. Y en una base recién creada, EF Core va primero a preguntar por
 su tabla de migraciones, que todavía no existe, así que imprime un
 `Failed executing DbCommand` con el `SELECT ... FROM "__EFMigrationsHistory"`
@@ -390,6 +403,36 @@ Invoke-RestMethod `
 El alta responde `201` con el `id` de la cuenta creada y la cuenta queda
 inactiva; el enlace de activación se encola en la cola de email. Si ese email
 ya estaba registrado, la respuesta es `409`: usa otro email y repite.
+
+El Administrador también puede listar y editar sucursales físicas:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:5243/api/admin/branches/$($branch.id)" `
+    -Method Put `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body (@{
+        name = 'Sucursal Centro'
+        address = 'Calle Principal 101'
+        active = $true
+    } | ConvertTo-Json)
+```
+
+Una sucursal no puede desactivarse mientras tenga usuarios activos. Para
+asignar una sucursal física a un usuario Estándar, el Administrador usa:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:5243/api/admin/users/$($cuenta.id)/branch" `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body (@{ branchId = $branch.id } | ConvertTo-Json)
+```
+
+El cambio de sucursal invalida las sesiones existentes del usuario; deberá
+iniciar sesión de nuevo.
 
 Para continuar necesitas el enlace de activación. Si configuraste [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail),
 llega por email. Sin SMTP puedes leerlo directamente de la cola:

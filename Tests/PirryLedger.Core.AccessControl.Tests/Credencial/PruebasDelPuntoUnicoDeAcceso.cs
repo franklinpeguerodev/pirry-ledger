@@ -40,6 +40,8 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(DeactivateUser),
         typeof(UnlockUser),
         typeof(CreateBranch),
+        typeof(UpdateBranch),
+        typeof(AssignUserBranch),
         typeof(ListBranches),
         typeof(IBranchDirectory),
         typeof(PirryLedger.Core.Contracts.Time.IClock),
@@ -281,13 +283,13 @@ public class PruebasDelPuntoUnicoDeAcceso
     // administracion declaradas, contadas desde las rutas reales. Si alguien
     // anade una septima y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteDoceRutasDeAdministrador()
+    public void HayExactamenteCatorceRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(12, deAdministracion.Count);
+        Assert.Equal(14, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {

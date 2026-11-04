@@ -16,6 +16,14 @@ internal sealed class BranchRepository : IBranchRepository
     public Task<Branch?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _context.Branches.FirstOrDefaultAsync(branch => branch.Id == id, cancellationToken);
 
+    public Task<Branch?> FindByNameAsync(
+        string name,
+        Guid? excludingId = null,
+        CancellationToken cancellationToken = default) =>
+        _context.Branches.FirstOrDefaultAsync(
+            branch => branch.Name == name.Trim() && (!excludingId.HasValue || branch.Id != excludingId.Value),
+            cancellationToken);
+
     public async Task<IReadOnlyList<Branch>> ListAsync(CancellationToken cancellationToken = default) =>
         await _context.Branches.OrderBy(branch => branch.Name).ToListAsync(cancellationToken);
 

@@ -61,6 +61,11 @@ billing:
 - `Branch` is owned by Access Control. The Administrator creates and lists
   physical branches; the protected special row `Todas` represents global
   Administrator scope.
+- The Administrator can edit a physical branch's name, address and active
+  status. Names are unique, `Todas` is protected, and a branch with active
+  users cannot be deactivated.
+- The Administrator assigns a physical branch to a Standard through a separate
+  operation; changing the assignment invalidates that user's sessions.
 - Every user stores exactly one branch reference. Standard users must reference
   an active physical branch; Administrators reference `Todas`.
 - Standard users can operate and query invoices only in their branch.
@@ -187,7 +192,7 @@ Work and decisions consciously left out of this iteration. Nothing here is waiti
 
 - **Do not run `dotnet ef migrations add` in the permissions module.** Its model declares no foreign keys to `ac_users`, and its migration snapshot was only generated on 2026-10-20. Until it is settled whether those keys belong in the model (declared by table name) or stay out of the database for good, any new migration would be generated from a model that contradicts how the tables were designed. The alternatives and their consequences are in the logbook of Práctica 2, Entry 8.
 - **The four foreign keys to `ac_users` are not in the database.** `requester_id`, `approver_id`, `user_id` and `granted_by_user_id` carry no referential constraint. Integrity comes from the application, which takes both identities from the authenticated session. It stays that way until the decision above is taken.
-- **Missing migration metadata is caught by hand, not by a test.** A migration committed without its `.Designer.cs` is ignored silently by EF Core. No automated check guards it yet.
+- **Migration metadata is now complete for the branch-scope changes.** EF Core discovers `AddBranchesAndUserBranch` and `AddInvoiceBranchSnapshot`, including their `.Designer.cs` files; the remaining limitation is that no automated check guards future missing metadata.
 - **The business module owns its tables.** Migrations for the tables of the invoicing module are part of this iteration; none touch the permissions module.
 - **Daily sales and pending delivery invoices.** Franklin wants delivery invoices that are still `Issued` to count in the daily sales. It is decided in week 10 with the reports.
 

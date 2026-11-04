@@ -84,6 +84,8 @@ public static class RoleRequirements
         // no puede saltarse el bloqueo por su cuenta.
         [Operation.UnlockUser] = new(AccessLevel.Administrator),
         [Operation.CreateBranch] = new(AccessLevel.Administrator),
+        [Operation.UpdateBranch] = new(AccessLevel.Administrator),
+        [Operation.AssignUserBranch] = new(AccessLevel.Administrator),
         [Operation.ListBranches] = new(AccessLevel.Administrator),
 
         [Operation.RequestRecovery] = new(AccessLevel.Public),

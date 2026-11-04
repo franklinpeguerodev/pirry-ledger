@@ -315,6 +315,13 @@ public sealed class PruebasDeAltaPorAdministrador
             CancellationToken cancellationToken = default) =>
             Task.FromResult<Branch?>(id == _branch.Id ? _branch : null);
 
+        public Task<Branch?> FindByNameAsync(
+            string name,
+            Guid? excludingId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Branch?>(
+                _branch.Name == name.Trim() && _branch.Id != excludingId ? _branch : null);
+
         public Task<IReadOnlyList<Branch>> ListAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<Branch>>(new[] { _branch });

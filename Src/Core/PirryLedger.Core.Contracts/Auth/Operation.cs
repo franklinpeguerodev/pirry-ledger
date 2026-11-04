@@ -47,6 +47,8 @@ public enum Operation
     ReactivateUser,
     UnlockUser,
     CreateBranch,
+    UpdateBranch,
+    AssignUserBranch,
     ListBranches,
 
     RequestRecovery,
