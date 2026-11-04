@@ -24,4 +24,7 @@ public sealed record CreateUserRequest(
     string Email,
 
     [property: Required(ErrorMessage = "La contrasena es obligatoria.")]
-    string Password);
+    string Password,
+
+    [property: Required(ErrorMessage = "La sucursal es obligatoria.")]
+    Guid BranchId);

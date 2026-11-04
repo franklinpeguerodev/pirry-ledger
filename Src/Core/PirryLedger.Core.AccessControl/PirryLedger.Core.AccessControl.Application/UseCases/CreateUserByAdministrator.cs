@@ -40,6 +40,7 @@ public sealed class CreateUserByAdministrator
     private readonly Authenticate _authenticate;
     private readonly IClock _clock;
     private readonly string _baseUrl;
+    private readonly IBranchRepository? _branches;
 
     public CreateUserByAdministrator(
         IUserRepository users,
@@ -59,6 +60,36 @@ public sealed class CreateUserByAdministrator
         _baseUrl = baseUrl;
     }
 
+    public CreateUserByAdministrator(
+        IUserRepository users,
+        IActivationTokenRepository tokens,
+        IPasswordHasher hasher,
+        IEmailQueue emailQueue,
+        Authenticate authenticate,
+        IClock clock,
+        string baseUrl,
+        IBranchRepository branches)
+        : this(users, tokens, hasher, emailQueue, authenticate, clock, baseUrl)
+    {
+        _branches = branches;
+    }
+
+    public Task<Guid> ExecuteAsync(
+        string plainToken,
+        string name,
+        string email,
+        string password,
+        TimeSpan validityDuration,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(
+            plainToken,
+            name,
+            email,
+            password,
+            Branch.AllId,
+            validityDuration,
+            cancellationToken);
+
     // Devuelve el Id del User creado: es lo unico que el cliente necesita para
     // el siguiente paso (listarlo, promoverlo o desbloquearlo).
     public async Task<Guid> ExecuteAsync(
@@ -66,6 +97,7 @@ public sealed class CreateUserByAdministrator
         string name,
         string email,
         string password,
+        Guid branchId,
         TimeSpan validityDuration,
         CancellationToken cancellationToken = default)
     {
@@ -104,6 +136,17 @@ public sealed class CreateUserByAdministrator
                 $"El nombre no puede tener mas de {MaximumNameLength} caracteres.");
         }
 
+        if (branchId == Guid.Empty || branchId == Branch.AllId)
+        {
+            throw new RegistrationRejectedException("Debe indicar una sucursal física.");
+        }
+
+        if (_branches is not null &&
+            (await _branches.FindByIdAsync(branchId, cancellationToken) is not { Active: true, IsAll: false }))
+        {
+            throw new RegistrationRejectedException("La sucursal indicada no está disponible.");
+        }
+
         var normalizedEmail = email.Trim();
 
         // RF-CA-01: el indice unico de la base es la garantia real. Esta
@@ -123,7 +166,7 @@ public sealed class CreateUserByAdministrator
         // entidad, no por parametros de este metodo. Que el alta sea de un
         // Administrator no cambia la regla: la cuenta no sirve hasta que se abra
         // el enlace del correo.
-        var user = User.Create(name, normalizedEmail, hash, _clock.UtcNow);
+        var user = User.Create(name, normalizedEmail, hash, _clock.UtcNow, branchId);
 
         await _users.SaveAsync(user, cancellationToken);
 

@@ -46,7 +46,8 @@ public static class DependencyInjection
             provider.GetRequiredService<IEmailQueue>(),
             provider.GetRequiredService<Authenticate>(),
             provider.GetRequiredService<IClock>(),
-            baseUrl));
+            baseUrl,
+            provider.GetRequiredService<IBranchRepository>()));
 
         services.AddScoped<ActivateAccount>();
 

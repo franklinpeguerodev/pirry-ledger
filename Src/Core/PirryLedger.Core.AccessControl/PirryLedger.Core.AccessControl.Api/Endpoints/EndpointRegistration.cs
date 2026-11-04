@@ -195,7 +195,7 @@ public static class EndpointRegistration
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            return Results.Json(new MeResponse(user.Name, user.Email, user.Role.ToString()));
+            return Results.Json(new MeResponse(user.Name, user.Email, user.Role.ToString(), user.BranchId));
         })
         .WithAccess(Operation.QueryOwnSession);
 
@@ -276,6 +276,7 @@ public static class EndpointRegistration
                     request.Name,
                     request.Email,
                     request.Password,
+                    request.BranchId,
                     TokenValidity,
                     cancellationToken);
 

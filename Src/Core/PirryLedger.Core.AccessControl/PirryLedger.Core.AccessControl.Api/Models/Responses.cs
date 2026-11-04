@@ -22,7 +22,7 @@ public sealed record TokenResponse(string Token);
 // RF-CA-07. Lo unico que se devuelve del User autenticado: Name, Email y
 // Role. Nunca el hash de la contrasena, nunca el token y nunca
 // CredentialVersion.
-public sealed record MeResponse(string Name, string Email, string Role);
+public sealed record MeResponse(string Name, string Email, string Role, Guid BranchId);
 
 // RF-CA-08. El role llega como texto, no como numero del enum: si llegara el
 // numero, un cliente con una version distinta del API interpretaria 0 y 1 de
