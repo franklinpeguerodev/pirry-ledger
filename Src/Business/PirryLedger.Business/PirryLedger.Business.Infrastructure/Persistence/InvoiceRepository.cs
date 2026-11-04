@@ -14,22 +14,36 @@ public sealed class InvoiceRepository : IInvoiceRepository
         _context = context;
     }
 
-    public async Task<Invoice?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<Invoice?> GetByIdAsync(Guid id, Guid? branchId = null, CancellationToken cancellationToken = default)
     {
-        return await _context.Invoices
+        var query = _context.Invoices
             .Include(invoice => invoice.Items)
             .Include(invoice => invoice.Payments)
             .Include(invoice => invoice.Edits)
-            .FirstOrDefaultAsync(invoice => invoice.Id == id, cancellationToken);
+            .Where(invoice => invoice.Id == id);
+
+        if (branchId is not null)
+        {
+            query = query.Where(invoice => invoice.BranchId == branchId);
+        }
+
+        return await query.FirstOrDefaultAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Invoice>> ListAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Invoice>> ListAsync(Guid? branchId = null, CancellationToken cancellationToken = default)
     {
-        return await _context.Invoices
+        var query = _context.Invoices
             .Include(invoice => invoice.Items)
             .Include(invoice => invoice.Payments)
             .Include(invoice => invoice.Edits)
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+
+        if (branchId is not null)
+        {
+            query = query.Where(invoice => invoice.BranchId == branchId);
+        }
+
+        return await query.ToListAsync(cancellationToken);
     }
 
     public async Task AddAsync(Invoice invoice, CancellationToken cancellationToken = default)

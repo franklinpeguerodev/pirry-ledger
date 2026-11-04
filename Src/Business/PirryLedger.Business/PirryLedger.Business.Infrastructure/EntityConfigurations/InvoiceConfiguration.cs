@@ -24,6 +24,10 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.Property(invoice => invoice.IsDelivery).HasColumnName("is_delivery");
 
+        builder.Property(invoice => invoice.BranchId).HasColumnName("branch_id").IsRequired();
+        builder.Property(invoice => invoice.BranchName).HasColumnName("branch_name").HasMaxLength(120).IsRequired();
+        builder.Property(invoice => invoice.BranchAddress).HasColumnName("branch_address").HasMaxLength(100).IsRequired();
+
         builder.Property(invoice => invoice.DebtorName).HasColumnName("debtor_name").HasMaxLength(120);
 
         builder.HasMany(invoice => invoice.Items)

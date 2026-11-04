@@ -15,6 +15,7 @@ public sealed class ListInvoices
     }
 
     public Task<IReadOnlyList<Invoice>> ExecuteAsync(
+        Guid? branchId = null,
         CancellationToken cancellationToken = default) =>
-        _invoices.ListAsync(cancellationToken);
+        _invoices.ListAsync(branchId, cancellationToken);
 }
