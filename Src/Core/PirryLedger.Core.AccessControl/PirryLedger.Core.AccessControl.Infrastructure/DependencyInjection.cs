@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IBranchRepository, BranchRepository>();
         services.AddScoped<IBranchDirectory, BranchDirectory>();
+        services.AddScoped<IBranchScopeAccessor, BranchScopeAccessor>();
         services.AddScoped<IActivationTokenRepository, ActivationTokenRepository>();
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
