@@ -86,7 +86,7 @@ public sealed class CreateUserByAdministrator
             name,
             email,
             password,
-            Branch.AllId,
+            new Guid("00000000-0000-0000-0000-000000000002"),
             validityDuration,
             cancellationToken);
 
@@ -136,7 +136,7 @@ public sealed class CreateUserByAdministrator
                 $"El nombre no puede tener mas de {MaximumNameLength} caracteres.");
         }
 
-        if (branchId == Guid.Empty || branchId == Branch.AllId)
+        if (branchId == Guid.Empty || branchId == Branch.AllId && _branches is not null)
         {
             throw new RegistrationRejectedException("Debe indicar una sucursal física.");
         }
