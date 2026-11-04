@@ -66,7 +66,10 @@ public static class EndpointRegistration
                 new SentResponse(Sent: true),
                 statusCode: StatusCodes.Status202Accepted);
         })
-        .WithAccess(Operation.ResendActivation);
+        .WithAccess(Operation.ResendActivation)
+        // RF-CA-09: este endpoint manda un correo a una direccion que elige el
+        // cliente. Sin limite, se puede usar para inundar un buzon.
+        .RequireRequestRateLimit(RequestRateLimit.ActivationResend);
 
         endpoints.MapPost("/api/auth/recovery", async (
             PasswordRecoveryRequest request,
@@ -75,7 +78,11 @@ public static class EndpointRegistration
         {
             await recovery.RequestAsync(request.Email, cancellationToken);
             return Results.Json(new SentResponse(true), statusCode: StatusCodes.Status202Accepted);
-        }).WithAccess(Operation.RequestRecovery);
+        })
+        .WithAccess(Operation.RequestRecovery)
+        // RF-CA-09: mismo motivo que el reenvio, y ademas cada solicitud de un
+        // Standard crea una solicitud de permiso pendiente.
+        .RequireRequestRateLimit(RequestRateLimit.PasswordRecovery);
 
         endpoints.MapPost("/api/auth/reset-password", async (
             ResetPasswordRequest request,
