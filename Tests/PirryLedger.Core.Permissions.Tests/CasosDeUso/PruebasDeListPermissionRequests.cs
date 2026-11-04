@@ -43,7 +43,8 @@ public sealed class PruebasDeListPermissionRequests
         var requests = new FakePermissionRequestRepository();
         var grants = new FakePermissionGrantRepository();
         var crear = new CreatePermissionRequest(requests, escenario.Authority, escenario.Authenticate, escenario.Clock);
-        var aprobar = new ApprovePermissionRequest(requests, grants, escenario.Authenticate, escenario.Clock);
+        var aprobar = new ApprovePermissionRequest(
+            requests, grants, escenario.Authenticate, new FakePasswordResetIssuer(), escenario.Clock);
 
         var primera = await crear.ExecuteAsync(standardToken, PermissionName, CancellationToken.None);
         await crear.ExecuteAsync(standardToken, PermissionName, CancellationToken.None);

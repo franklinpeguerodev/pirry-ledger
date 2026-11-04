@@ -23,17 +23,20 @@ public sealed class ApprovePermissionRequest
     private readonly IPermissionRequestRepository _requests;
     private readonly IPermissionGrantRepository _grants;
     private readonly Authenticate _authenticate;
+    private readonly IPasswordResetIssuer _passwordResetIssuer;
     private readonly IClock _clock;
 
     public ApprovePermissionRequest(
         IPermissionRequestRepository requests,
         IPermissionGrantRepository grants,
         Authenticate authenticate,
+        IPasswordResetIssuer passwordResetIssuer,
         IClock clock)
     {
         _requests = requests;
         _grants = grants;
         _authenticate = authenticate;
+        _passwordResetIssuer = passwordResetIssuer;
         _clock = clock;
     }
 
@@ -95,5 +98,17 @@ public sealed class ApprovePermissionRequest
 
         await _grants.SaveAsync(grant, cancellationToken);
         await _requests.SaveAsync(request, cancellationToken);
+
+        // ADR 014: aprobar un ResetPassword es lo que dispara el codigo de
+        // recuperacion. Hasta aqui no se emitio nada, asi que "codigo valido"
+        // implica "aprobacion concedida" y RF-CA-11 se sigue cumpliendo.
+        //
+        // Va despues de guardar la concesion a proposito: si el envio falla, la
+        // concesion ya existe y el Administrador puede reintentar con
+        // force-reset (ADR 014, consecuencias).
+        if (request.RequestedPermission == PermissionNames.ResetPassword)
+        {
+            await _passwordResetIssuer.IssueAsync(request.RequesterId, cancellationToken);
+        }
     }
 }

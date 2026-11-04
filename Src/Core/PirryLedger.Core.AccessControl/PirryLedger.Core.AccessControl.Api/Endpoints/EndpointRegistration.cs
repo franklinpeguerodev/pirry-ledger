@@ -213,6 +213,19 @@ public static class EndpointRegistration
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
             }
+            catch (PasswordChangeApprovalRequiredException error)
+            {
+                // ADR 014: el Standard no tenia concesion, se creo la solicitud
+                // y el cambio queda a la espera de un Administrator. 403: la
+                // sesion vale, el permiso no.
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (PasswordChangeApprovalPendingException error)
+            {
+                // Ya habia una solicitud pendiente: no se creo otra. 409: el
+                // estado actual impide repetir la operacion.
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status409Conflict);
+            }
             catch (RegistrationRejectedException error)
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);

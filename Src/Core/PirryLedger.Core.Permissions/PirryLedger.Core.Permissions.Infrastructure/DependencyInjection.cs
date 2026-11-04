@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Core.AccessControl.Application;
+using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Permissions.Application.Ports;
@@ -59,6 +60,9 @@ public static class DependencyInjection
             provider.GetRequiredService<IPermissionRequestRepository>(),
             provider.GetRequiredService<IPermissionGrantRepository>(),
             provider.GetRequiredService<Authenticate>(),
+            // ADR 014: AccessControl registra la implementacion de este contrato.
+            // Permissions solo lo pide; no conoce PasswordResetIssuer.
+            provider.GetRequiredService<IPasswordResetIssuer>(),
             provider.GetRequiredService<IClock>()));
 
         services.AddScoped<RejectPermissionRequest>(provider => new RejectPermissionRequest(

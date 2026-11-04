@@ -1,5 +1,6 @@
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
+using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Permissions.Application.Ports;
@@ -84,6 +85,24 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
         _granted.Remove(key);
         return Task.FromResult(true);
     }
+
+    // ADR 014: concesion directa. Mismo contrato que la autoridad real: el
+    // llamante ya es la aprobacion, asi que no hay solicitud que resolver.
+    public Task GrantAsync(
+        Guid userId,
+        string permissionName,
+        Guid grantedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (userId == Guid.Empty || !IsKnown(permissionName))
+        {
+            return Task.CompletedTask;
+        }
+
+        _granted[(userId, permissionName)] = true;
+
+        return Task.CompletedTask;
+    }
 }
 
 // Repositorio en memoria para PermissionRequest. La entidad es mutable: las
@@ -165,4 +184,20 @@ internal sealed class FakePermissionGrantRepository : IPermissionGrantRepository
         string permissionName,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_grants.Remove((userId, permissionName)));
+}
+
+// ADR 014: la pieza de Permissions no emite codigos, solo pide que se emitan al
+// aprobar un ResetPassword. Este doble registra a quien se le pidio, para poder
+// afirmar que la aprobacion disparo la emision y que aprobar otro permiso no la
+// dispara.
+internal sealed class FakePasswordResetIssuer : IPasswordResetIssuer
+{
+    public List<Guid> IssuedFor { get; } = [];
+
+    public Task IssueAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        IssuedFor.Add(userId);
+
+        return Task.CompletedTask;
+    }
 }
