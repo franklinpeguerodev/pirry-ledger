@@ -404,6 +404,36 @@ El alta responde `201` con el `id` de la cuenta creada y la cuenta queda
 inactiva; el enlace de activación se encola en la cola de email. Si ese email
 ya estaba registrado, la respuesta es `409`: usa otro email y repite.
 
+El Administrador también puede listar y editar sucursales físicas:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:5243/api/admin/branches/$($branch.id)" `
+    -Method Put `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body (@{
+        name = 'Sucursal Centro'
+        address = 'Calle Principal 101'
+        active = $true
+    } | ConvertTo-Json)
+```
+
+Una sucursal no puede desactivarse mientras tenga usuarios activos. Para
+asignar una sucursal física a un usuario Estándar, el Administrador usa:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:5243/api/admin/users/$($cuenta.id)/branch" `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body (@{ branchId = $branch.id } | ConvertTo-Json)
+```
+
+El cambio de sucursal invalida las sesiones existentes del usuario; deberá
+iniciar sesión de nuevo.
+
 Para continuar necesitas el enlace de activación. Si configuraste [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail),
 llega por email. Sin SMTP puedes leerlo directamente de la cola:
 

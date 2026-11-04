@@ -61,6 +61,11 @@ billing:
 - `Branch` is owned by Access Control. The Administrator creates and lists
   physical branches; the protected special row `Todas` represents global
   Administrator scope.
+- The Administrator can edit a physical branch's name, address and active
+  status. Names are unique, `Todas` is protected, and a branch with active
+  users cannot be deactivated.
+- The Administrator assigns a physical branch to a Standard through a separate
+  operation; changing the assignment invalidates that user's sessions.
 - Every user stores exactly one branch reference. Standard users must reference
   an active physical branch; Administrators reference `Todas`.
 - Standard users can operate and query invoices only in their branch.
