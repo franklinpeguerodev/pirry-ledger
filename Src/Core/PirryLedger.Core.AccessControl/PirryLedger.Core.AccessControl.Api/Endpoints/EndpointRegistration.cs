@@ -270,7 +270,38 @@ public static class EndpointRegistration
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
             }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
         }).WithAccess(Operation.CreateBranch);
+
+        endpoints.MapPut("/api/admin/branches/{id:guid}", async (
+            Guid id,
+            UpdateBranchRequest request,
+            UpdateBranch update,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var branch = await update.ExecuteAsync(
+                    id,
+                    request.Name,
+                    request.Address,
+                    request.Active,
+                    cancellationToken);
+
+                return Results.Ok(BranchResponse.From(branch));
+            }
+            catch (ArgumentException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithAccess(Operation.UpdateBranch);
 
         endpoints.MapGet("/api/admin/branches", async (
             ListBranches list,
@@ -279,6 +310,37 @@ public static class EndpointRegistration
             var branches = await list.ExecuteAsync(cancellationToken);
             return Results.Ok(branches.Select(BranchResponse.From).ToList());
         }).WithAccess(Operation.ListBranches);
+
+        endpoints.MapPost("/api/admin/users/{id:guid}/branch", async (
+            Guid id,
+            AssignUserBranchRequest request,
+            HttpRequest httpRequest,
+            AssignUserBranch assign,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await assign.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    id,
+                    request.BranchId,
+                    cancellationToken);
+
+                return Results.NoContent();
+            }
+            catch (InvalidSessionException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InsufficientRoleException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithAccess(Operation.AssignUserBranch);
 
         // RF-CA-01, RF-CA-15 y docs/adr/013-admin-created-users.md: el alta de un
         // User. Sustituye a la antigua ruta publica /api/auth/register, que ya no

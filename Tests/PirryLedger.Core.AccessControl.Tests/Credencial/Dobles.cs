@@ -62,6 +62,9 @@ internal sealed class FakeUserRepository : IUserRepository
     public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(user => user.Id == userId));
 
+    public Task<int> CountActiveByBranchAsync(Guid branchId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Count(user => user.BranchId == branchId && user.Active));
+
     public Task SaveAsync(User user, CancellationToken cancellationToken = default)
     {
         // El doble guarda la misma instancia, asi que las mutaciones de la entidad

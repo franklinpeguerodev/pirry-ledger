@@ -178,6 +178,7 @@ public sealed class User
         }
 
         BranchId = branchId;
+        CredentialVersion++;
     }
 
     // RF-CA-16: abrir el enlace de activacion activa la cuenta. Solo desde

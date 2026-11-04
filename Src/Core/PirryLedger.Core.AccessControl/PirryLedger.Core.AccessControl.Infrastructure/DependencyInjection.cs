@@ -92,6 +92,8 @@ public static class DependencyInjection
         services.AddScoped<SeedFirstAdministrator>();
         services.AddScoped<EnsureGlobalBranch>();
         services.AddScoped<CreateBranch>();
+        services.AddScoped<UpdateBranch>();
+        services.AddScoped<AssignUserBranch>();
         services.AddScoped<ListBranches>();
 
         services.AddScoped<PasswordResetIssuer>(provider => new PasswordResetIssuer(

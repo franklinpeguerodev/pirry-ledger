@@ -6,6 +6,8 @@ public interface IBranchRepository
 {
     Task<Branch?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<Branch?> FindByNameAsync(string name, Guid? excludingId = null, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Branch>> ListAsync(CancellationToken cancellationToken = default);
 
     Task SaveAsync(Branch branch, CancellationToken cancellationToken = default);

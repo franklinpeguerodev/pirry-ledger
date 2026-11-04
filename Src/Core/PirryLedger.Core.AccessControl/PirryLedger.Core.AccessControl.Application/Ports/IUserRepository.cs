@@ -34,6 +34,8 @@ public interface IUserRepository
     // no "este User es uno de ellos".
     Task<int> CountActiveAdministratorsAsync(CancellationToken cancellationToken = default);
 
+    Task<int> CountActiveByBranchAsync(Guid branchId, CancellationToken cancellationToken = default);
+
     // Lo necesita el seed del primer Administrator para ser idempotente: si ya
     // hay uno, no se crea otro. Es un metodo propio y no un filtro de
     // FindByEmailAsync porque la pregunta es "existe alguno", no "este".

@@ -57,6 +57,13 @@ internal sealed class UserRepository : IUserRepository
             .CountAsync(user => user.Role == Role.Administrator && user.Active, cancellationToken);
     }
 
+    public Task<int> CountActiveByBranchAsync(
+        Guid branchId,
+        CancellationToken cancellationToken = default) =>
+        _context.Users.CountAsync(
+            user => user.BranchId == branchId && user.Active,
+            cancellationToken);
+
     // La entidad normaliza el Email al crearse, asi que aqui no hay que
     // reescribirlo. El repositorio solo decide si la fila es nueva o existente.
     public async Task SaveAsync(User user, CancellationToken cancellationToken = default)

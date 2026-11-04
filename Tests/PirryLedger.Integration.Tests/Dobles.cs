@@ -58,6 +58,9 @@ internal sealed class InMemoryUserRepository : IUserRepository
     public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == userId));
 
+    public Task<int> CountActiveByBranchAsync(Guid branchId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Count(user => user.BranchId == branchId && user.Active));
+
     public Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<User>>(_users.OrderBy(u => u.Email).ToList());
 
