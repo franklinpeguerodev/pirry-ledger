@@ -19,6 +19,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString));
 
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
 
         // Hoy la notificacion al Administrador es vacia: se encola y un proceso
         // aparte la manda (regla de seguridad). La implementacion real llega en
@@ -30,6 +31,10 @@ public static class DependencyInjection
         // repositorio; el reloj, la autoridad de permisos y el gateway de
         // solicitudes (ADR 012) los aportan sus propias piezas.
         services.AddScoped<IssueInvoice>();
+        services.AddScoped<CreateProduct>();
+        services.AddScoped<UpdateProduct>();
+        services.AddScoped<SetProductActive>();
+        services.AddScoped<ListProducts>();
         services.AddScoped<CollectInvoicePayment>();
         services.AddScoped<LeaveInvoiceAsDebt>();
         services.AddScoped<EditInvoiceItems>();
