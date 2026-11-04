@@ -90,6 +90,8 @@ public static class DependencyInjection
         // dispararlo: no es una operation de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();
         services.AddScoped<EnsureGlobalBranch>();
+        services.AddScoped<CreateBranch>();
+        services.AddScoped<ListBranches>();
 
         services.AddScoped<PasswordResetIssuer>(provider => new PasswordResetIssuer(
             provider.GetRequiredService<IUserRepository>(),

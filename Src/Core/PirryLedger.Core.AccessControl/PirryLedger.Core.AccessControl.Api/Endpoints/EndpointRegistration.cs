@@ -256,6 +256,30 @@ public static class EndpointRegistration
     // rubrica revisa.
     private static void MapUserAdministration(IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapPost("/api/admin/branches", async (
+            BranchRequest request,
+            CreateBranch create,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var branch = await create.ExecuteAsync(request.Name, request.Address, cancellationToken);
+                return Results.Json(BranchResponse.From(branch), statusCode: StatusCodes.Status201Created);
+            }
+            catch (ArgumentException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithAccess(Operation.CreateBranch);
+
+        endpoints.MapGet("/api/admin/branches", async (
+            ListBranches list,
+            CancellationToken cancellationToken) =>
+        {
+            var branches = await list.ExecuteAsync(cancellationToken);
+            return Results.Ok(branches.Select(BranchResponse.From).ToList());
+        }).WithAccess(Operation.ListBranches);
+
         // RF-CA-01, RF-CA-15 y docs/adr/013-admin-created-users.md: el alta de un
         // User. Sustituye a la antigua ruta publica /api/auth/register, que ya no
         // existe.

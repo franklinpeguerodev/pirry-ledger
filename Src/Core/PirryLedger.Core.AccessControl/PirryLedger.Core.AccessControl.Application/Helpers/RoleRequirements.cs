@@ -83,6 +83,8 @@ public static class RoleRequirements
         // bloqueada por cinco intentos fallidos es de Administrator. Un Standard
         // no puede saltarse el bloqueo por su cuenta.
         [Operation.UnlockUser] = new(AccessLevel.Administrator),
+        [Operation.CreateBranch] = new(AccessLevel.Administrator),
+        [Operation.ListBranches] = new(AccessLevel.Administrator),
 
         [Operation.RequestRecovery] = new(AccessLevel.Public),
         [Operation.ResetPassword] = new(AccessLevel.Public),
