@@ -63,6 +63,40 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                     b.ToTable("ac_activation_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("PirryLedger.Core.AccessControl.Domain.Entities.Branch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("address");
+
+                    b.Property<bool>("IsAll")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_all");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ac_branches", (string)null);
+                });
+
             modelBuilder.Entity("PirryLedger.Core.AccessControl.Domain.Entities.RecoveryCode", b =>
                 {
                     b.Property<Guid>("Id")
@@ -163,6 +197,10 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("active");
 
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
@@ -209,6 +247,8 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BranchId");
+
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasDatabaseName("ix_ac_users_email");
@@ -240,6 +280,15 @@ namespace PirryLedger.Core.AccessControl.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.AccessControl.Domain.Entities.User", b =>
+                {
+                    b.HasOne("PirryLedger.Core.AccessControl.Domain.Entities.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618
