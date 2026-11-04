@@ -18,6 +18,13 @@ public sealed class InvoiceItemConfiguration : IEntityTypeConfiguration<InvoiceI
 
         builder.Property(item => item.InvoiceId).HasColumnName("invoice_id");
 
+        builder.Property(item => item.ProductId).HasColumnName("product_id");
+
+        builder.HasOne<Product>()
+            .WithMany()
+            .HasForeignKey(item => item.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(item => item.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
 
         builder.Property(item => item.UnitPrice).HasColumnName("unit_price").HasColumnType("numeric(12,2)");

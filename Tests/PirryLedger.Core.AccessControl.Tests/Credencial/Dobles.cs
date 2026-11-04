@@ -3,6 +3,7 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 
@@ -61,6 +62,9 @@ internal sealed class FakeUserRepository : IUserRepository
     public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(user => user.Id == userId));
 
+    public Task<int> CountActiveByBranchAsync(Guid branchId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Count(user => user.BranchId == branchId && user.Active));
+
     public Task SaveAsync(User user, CancellationToken cancellationToken = default)
     {
         // El doble guarda la misma instancia, asi que las mutaciones de la entidad
@@ -98,12 +102,18 @@ internal sealed class FakeUserRepository : IUserRepository
         Task.FromResult(_users.Where(user => user.Role == Role.Administrator).ToList());
 }
 
-// RF-GP-05: doble de IPermissionAuthority para las pruebas de AccessControl que
-// no son del modulo de Permissions. Por defecto nadie tiene permisos; los
-// nombres de permisos conocidos se declaran en el constructor.
+// RF-GP-05 y ADR 014: doble de IPermissionAuthority para las pruebas de
+// AccessControl que no son del modulo de Permissions. Por defecto nadie tiene
+// permisos; los nombres conocidos se declaran en el constructor y las
+// concesiones se llevan en memoria.
+//
+// Desde ADR 014 este doble tiene que recordar concesiones de verdad: el cambio
+// de contrasena y la recuperacion las consumen, y una prueba que no pueda
+// concederlas no podria distinguir "sin aprobacion" de "aprobacion usada".
 internal sealed class FakePermissionAuthority : IPermissionAuthority
 {
     private readonly HashSet<string> _known;
+    private readonly HashSet<(Guid UserId, string Permission)> _granted = [];
 
     public FakePermissionAuthority(params string[] known)
     {
@@ -117,16 +127,33 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
         Guid userId,
         string permissionName,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult(IsKnown(permissionName) && userId != Guid.Empty);
+        Task.FromResult(_granted.Contains((userId, permissionName)));
 
-    // RF-NEG-06: este doble no guarda concesiones (UserHasPermissionAsync
-    // responde solo por el catalogo), asi que no hay nada que consumir. La
-    // suite de AccessControl no ejerce el consumo; la de Permissions si.
+    // RF-NEG-06: una concesion se consume una sola vez.
     public Task<bool> ConsumeAsync(
         Guid userId,
         string permissionName,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult(false);
+        Task.FromResult(_granted.Remove((userId, permissionName)));
+
+    // ADR 014: concesion directa, la que hace ForcePasswordReset. El doble no
+    // valida el catalogo aqui a proposito: igual que la implementacion real,
+    // GrantAsync no decide si el nombre es valido, solo registra la concesion.
+    public Task GrantAsync(
+        Guid userId,
+        string permissionName,
+        Guid grantedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        _granted.Add((userId, permissionName));
+
+        return Task.CompletedTask;
+    }
+
+    // Solo para pruebas: simula una aprobacion previa sin pasar por el caso de
+    // uso de Permissions.
+    public void Grant(Guid userId, string permissionName) =>
+        _granted.Add((userId, permissionName));
 }
 
 internal sealed class FakeSessionRepository : ISessionRepository
@@ -162,5 +189,114 @@ internal sealed class FakeSessionRepository : ISessionRepository
         session.Close(utcNow);
 
         return Task.FromResult(true);
+    }
+}
+
+// RF-CA-15 y RF-CA-16: el alta y el reenvio guardan un token de un solo uso.
+// Este doble lo deja en memoria; la pieza no necesita saber como se persiste.
+internal sealed class FakeActivationTokenRepository : IActivationTokenRepository
+{
+    private readonly List<ActivationToken> _tokens = [];
+
+    public IReadOnlyList<ActivationToken> Saved => _tokens;
+
+    public Task<ActivationToken?> FindByHashAsync(string tokenHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tokens.FirstOrDefault(token => token.TokenHash == tokenHash));
+
+    public Task InvalidatePendingAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        _tokens.RemoveAll(token => token.UserId == userId && token.UsedAtUtc is null);
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAsync(ActivationToken token, CancellationToken cancellationToken = default)
+    {
+        _tokens.RemoveAll(existing => existing.Id == token.Id);
+        _tokens.Add(token);
+
+        return Task.CompletedTask;
+    }
+}
+
+// RF-NOT-08: la cola es el unico camino de salida del correo. Este doble guarda
+// lo que se encolaria, para poder afirmar que el enlace de activacion se encolo
+// y que el codigo en claro solo viaja dentro del cuerpo.
+internal sealed class InMemoryEmailQueue : IEmailQueue
+{
+    public List<QueuedEmail> Emails { get; } = [];
+
+    public Task EnqueueAsync(QueuedEmail email, CancellationToken cancellationToken = default)
+    {
+        Emails.Add(email);
+
+        return Task.CompletedTask;
+    }
+}
+
+// RF-CA-09 y ADR 014: los codigos de recuperacion se guardan en memoria. El
+// doble conserva tambien los usados, para poder afirmar que un codigo no se
+// reutiliza.
+internal sealed class InMemoryRecoveryCodeRepository : IRecoveryCodeRepository
+{
+    private readonly List<RecoveryCode> _codes = [];
+
+    public IReadOnlyList<RecoveryCode> Saved => _codes;
+
+    public Task<RecoveryCode?> FindByHashAsync(string codeHash, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_codes.FirstOrDefault(code => code.CodeHash == codeHash));
+
+    public Task InvalidatePendingAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        _codes.RemoveAll(code => code.UserId == userId && !code.IsUsed);
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveAsync(RecoveryCode code, CancellationToken cancellationToken = default)
+    {
+        _codes.RemoveAll(existing => existing.Id == code.Id);
+        _codes.Add(code);
+
+        return Task.CompletedTask;
+    }
+}
+
+// Hash determinista y barato. Las pruebas de contrasena comprueban reglas de
+// negocio, no el algoritmo: el Argon2id real se ejercita en las pruebas de
+// Session y del hasher.
+internal sealed class FakePasswordHasher : IPasswordHasher
+{
+    public string Hash(string password) => $"hash:{password}";
+
+    public bool Verify(string password, string storedHash) => storedHash == Hash(password);
+
+    public string CreateDummyHash() => "dummy";
+}
+
+// ADR 012 y ADR 014: la solicitud de permiso en nombre del usuario. El doble
+// deduplica las pendientes igual que el gateway real, para que la prueba del 409
+// del cambio de contrasena pueda reproducir el segundo intento.
+internal sealed class FakePermissionRequestGateway : IPermissionRequestGateway
+{
+    private readonly HashSet<(Guid RequesterId, string Permission)> _pending = [];
+
+    public int CreatedCount { get; private set; }
+
+    public IReadOnlyCollection<(Guid RequesterId, string Permission)> Pending => _pending;
+
+    public Task<PermissionRequestOutcome> RequestAsync(
+        Guid requesterId,
+        string permissionName,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_pending.Add((requesterId, permissionName)))
+        {
+            return Task.FromResult(PermissionRequestOutcome.AlreadyPending);
+        }
+
+        CreatedCount++;
+
+        return Task.FromResult(PermissionRequestOutcome.Created);
     }
 }

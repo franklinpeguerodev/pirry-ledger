@@ -10,15 +10,29 @@ public sealed class IssueInvoiceBody
     public bool IsDelivery { get; init; }
 
     public List<InvoiceItemBody>? Items { get; init; }
+
+    public Guid BranchId { get; init; }
 }
 
 public sealed class InvoiceItemBody
 {
-    public string? Name { get; init; }
-
-    public decimal UnitPrice { get; init; }
+    public Guid ProductId { get; init; }
 
     public int Quantity { get; init; }
+}
+
+public sealed class ProductBody
+{
+    public string? Name { get; init; }
+
+    public string? Description { get; init; }
+
+    public decimal Price { get; init; }
+}
+
+public sealed class ProductActiveBody
+{
+    public bool IsActive { get; init; }
 }
 
 public sealed class PaymentBody

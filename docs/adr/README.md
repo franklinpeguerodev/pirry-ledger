@@ -14,3 +14,5 @@ One-line index of the ADRs in this folder. The title and date below come from ea
 - `010-role-as-text-in-responses.md` (2026-10-24) — Role travels as text in API responses.
 - `011-consume-permission-grant.md` (2026-10-30) — Consume a permission grant: naming convention, deletion of the grant, and ordering with the invoice transition.
 - `012-request-permission-from-business.md` (2026-10-31) — Request a permission from a business operation.
+- `013-admin-created-users.md` (2026-11-04) — Users are created by an Administrator, not by a public registration.
+- `014-password-change-permission.md` (2026-11-04) — Every password change of a Standard requires an Administrator's approval.

@@ -2,6 +2,7 @@ using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.AccessControl.Application;
+using PirryLedger.Core.Contracts.Permissions;
 
 namespace PirryLedger.Core.Permissions.Tests;
 
@@ -39,8 +40,12 @@ internal sealed class EscenarioDePermisos
 
         // Authenticate real: las pruebas llaman a los casos de uso, que a
         // su vez llaman a Authenticate.ExecuteAsync/ExecuteWithRoleAsync.
-        // El Authority falso se inyecta con un solo permiso conocido.
-        Authority = new FakePermissionAuthority("ViewSalesSummary");
+        // El Authority falso declara los permisos conocidos. ADR 014 anadio los
+        // dos de contrasena, y la aprobacion de ResetPassword se prueba aqui.
+        Authority = new FakePermissionAuthority(
+            "ViewSalesSummary",
+            PermissionNames.ResetPassword,
+            PermissionNames.ChangePassword);
         Authenticate = new Authenticate(Sessions, Users, Clock, Authority);
 
         // Login real para emitir tokens en claro para los dos usuarios.
@@ -114,6 +119,9 @@ internal sealed class InMemoryUserRepository : IUserRepository
 
     public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_users.FirstOrDefault(u => u.Id == userId));
+
+    public Task<int> CountActiveByBranchAsync(Guid branchId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_users.Count(user => user.BranchId == branchId && user.Active));
 
     public Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<User>>(_users.OrderBy(u => u.Email).ToList());

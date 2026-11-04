@@ -7,13 +7,25 @@ namespace PirryLedger.Business.Api.Models;
 // propiedades internas de la entidad ni de su coleccion escribible.
 public sealed record InvoiceItemResponse(
     Guid Id,
+    Guid? ProductId,
     string Name,
     decimal UnitPrice,
     int Quantity,
     decimal LineTotal)
 {
     public static InvoiceItemResponse From(InvoiceItem item) =>
-        new(item.Id, item.Name, item.UnitPrice, item.Quantity, item.LineTotal);
+        new(item.Id, item.ProductId, item.Name, item.UnitPrice, item.Quantity, item.LineTotal);
+}
+
+public sealed record ProductResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    decimal Price,
+    bool IsActive)
+{
+    public static ProductResponse From(Product product) =>
+        new(product.Id, product.Name, product.Description, product.Price, product.IsActive);
 }
 
 public sealed record InvoicePaymentResponse(
@@ -44,6 +56,9 @@ public sealed record InvoiceResponse(
     Guid Id,
     string State,
     bool IsDelivery,
+    Guid BranchId,
+    string BranchName,
+    string BranchAddress,
     DateTime IssuedAtUtc,
     decimal Total,
     decimal PaidAmount,
@@ -57,6 +72,9 @@ public sealed record InvoiceResponse(
             invoice.Id,
             invoice.State.ToString(),
             invoice.IsDelivery,
+            invoice.BranchId,
+            invoice.BranchName,
+            invoice.BranchAddress,
             invoice.IssuedAtUtc,
             invoice.Total,
             invoice.PaidAmount,

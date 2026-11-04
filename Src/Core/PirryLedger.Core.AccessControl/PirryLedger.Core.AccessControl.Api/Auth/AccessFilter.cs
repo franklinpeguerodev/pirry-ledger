@@ -124,7 +124,8 @@ public static class AccessFilter
     {
         try
         {
-            await authenticate.ExecuteAsync(plainToken, context.HttpContext.RequestAborted);
+            var user = await authenticate.ExecuteAsync(plainToken, context.HttpContext.RequestAborted);
+            SetBranchScope(context.HttpContext, user);
             return null;
         }
         catch (InvalidSessionException error)
@@ -141,10 +142,11 @@ public static class AccessFilter
     {
         try
         {
-            await authenticate.ExecuteWithRoleAsync(
+            var user = await authenticate.ExecuteWithRoleAsync(
                 plainToken,
                 role,
                 context.HttpContext.RequestAborted);
+            SetBranchScope(context.HttpContext, user);
 
             return null;
         }
@@ -171,10 +173,11 @@ public static class AccessFilter
     {
         try
         {
-            await authenticate.ExecuteWithPermissionAsync(
+            var user = await authenticate.ExecuteWithPermissionAsync(
                 plainToken,
                 permissionName,
                 context.HttpContext.RequestAborted);
+            SetBranchScope(context.HttpContext, user);
 
             return null;
         }
@@ -257,6 +260,13 @@ public static class AccessFilter
         var token = header[prefix.Length..].Trim();
 
         return string.IsNullOrEmpty(token) ? null : token;
+    }
+
+    private static void SetBranchScope(HttpContext context, AuthenticatedUser user)
+    {
+        var scope = context.RequestServices.GetRequiredService<IBranchScopeAccessor>();
+        scope.BranchId = user.Role == Role.Administrator ? null : user.BranchId;
+        scope.IsGlobal = user.Role == Role.Administrator;
     }
 
     private static IResult InvalidSession() => AccessDenied("Sesion no valida.", isRoleShortage: false);

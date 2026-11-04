@@ -9,6 +9,7 @@ Source: Requerimientos del Core, sección 2. Only the entities that delivered or
 | CodigoRecuperacion | Usuario · código · fecha de emisión · fecha de vencimiento · usado o no usado |
 | CorreoEnCola | Destinatario · asunto · cuerpo · estado · intentos · fecha de creación · fecha de envío · último error |
 | SolicitudPermiso | Solicitante · permiso solicitado · estado · aprobador · fecha de creación · fecha de resolución · motivo del rechazo |
+| Sucursal | Nombre · dirección · activa · alcance global o física |
 
 ## Not defined by the course (design decisions)
 
@@ -19,6 +20,9 @@ The course does not define these, so they are Franklin's design decisions. When 
 - How a session credential is represented and invalidated (RF-CA-12, 18, 20). Delivered, `docs/adr/001-session-credential.md`.
 - The business entity that carries the state machine: `Invoice`, see `business-module.md`.
 - What a "permiso" is and which action it unlocks (RF-GP-05), for the permissions piece. Current iteration: see `docs/current-iteration.md`.
+- Branch scope: `Branch` is the English code name for `Sucursal`; the `Todas`
+  row is reserved for Administrators and invoice snapshots preserve the branch
+  name and address at issuance.
 
 ## Naming
 

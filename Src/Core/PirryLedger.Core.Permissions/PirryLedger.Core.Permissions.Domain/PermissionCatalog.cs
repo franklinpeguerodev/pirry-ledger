@@ -17,6 +17,12 @@ public static class PermissionCatalog
 {
     public const string ViewSalesSummary = "ViewSalesSummary";
 
+    // ADR 014: los dos permisos de contrasena. Nombres fijos, sin <guid>: la
+    // concesion es por usuario y permiso.
+    public const string ChangePassword = "ChangePassword";
+
+    public const string ResetPassword = "ResetPassword";
+
     // Mismo literal que PermissionNames.CancelInvoicePrefix. No se comparte
     // para no crear la referencia Permissions.Domain -> Core.Contracts; la
     // prueba PruebasDelCatalogoDePermisos comprueba que las dos coinciden.
@@ -25,7 +31,7 @@ public static class PermissionCatalog
     // Lista cerrada de los nombres fijos. Si se anade un permiso fijo, va
     // aqui y solo aqui.
     private static readonly IReadOnlyCollection<string> Known =
-        new[] { ViewSalesSummary };
+        new[] { ViewSalesSummary, ChangePassword, ResetPassword };
 
     public static IReadOnlyCollection<string> KnownPermissions() => Known;
 

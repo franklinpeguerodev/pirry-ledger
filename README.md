@@ -3,12 +3,19 @@
 ERP para un negocio de comida rápida. Práctica 2 — Una suite que detecta defectos: Gestión de permisos.
 
 En este punto el repositorio tiene la cola de email con su persistencia y un
-comando para enviar lo pendiente. La API expone el registro con activación, el
-inicio de sesión con su tabla de sesiones, la recuperación de contraseña y la
+comando para enviar lo pendiente. La API expone el alta de usuarios por el
+Administrador con activación por correo, el inicio de sesión con su tabla de
+sesiones, la recuperación de contraseña con aprobación del Administrador y la
 administración de usuarios. El módulo Permissions expone la gestión de
 solicitudes de permiso con su máquina de estados y su suite de pruebas. El
 módulo Business tiene la máquina de estados de `Invoice` con siete estados, sus
 once transiciones permitidas y su suite de pruebas.
+
+La administración de usuarios y facturas está ligada a sucursales. El
+Administrador trabaja con alcance global mediante la sucursal especial
+`Todas`; cada usuario Estándar pertenece a una sucursal física y solo puede
+consultar u operar facturas de ella. Al emitir una factura se conserva el
+nombre y la dirección de la sucursal como información histórica.
 
 Este README está ordenado como se usa:
 
@@ -141,9 +148,10 @@ contiene valores reales.
 
 Las dos obligatorias se necesitan para arrancar la aplicación y para ejecutar el
 enviador de email. Las seis SMTP son opcionales: sin ellas la aplicación y el
-registro funcionan igual, pero el enviador no podrá entregar emails reales. Las
-tres del primer Administrador también son opcionales; sin ellas no se crea
-automáticamente ningún Administrador.
+alta de usuarios funcionan igual, pero el enviador no podrá entregar emails
+reales. Las tres del primer Administrador también son opcionales; sin ellas no
+se crea automáticamente ningún Administrador, y sin un Administrador no se
+puede crear ningún usuario (ADR 013).
 
 Al arrancar, la aplicación busca un archivo `.env` desde el directorio desde el
 que lanzas el comando hacia arriba y carga sus variables. Ese archivo es la
@@ -218,12 +226,12 @@ dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedge
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
-`ac_activation_tokens` y `ac_sessions`), la cola de Notifications
+`ac_activation_tokens`, `ac_sessions` y `ac_branches`), la cola de Notifications
 (`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`) y las cuatro tablas de facturas del
-módulo Business (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments` y
-`bil_invoice_edits`), en la misma base y manteniendo la propiedad de cada módulo.
+`ux_per_permission_grants_user_permission`) y las tablas del módulo Business
+(`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments`, `bil_invoice_edits`
+y `bil_products`), en la misma base y manteniendo la propiedad de cada módulo.
 
 El orden de los cuatro comandos da igual: ninguna de esas tablas declara claves
 foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
@@ -238,9 +246,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son once tablas de módulo: las cuatro de `ac_`, `not_email_queue`, las dos de
-`per_` y las cuatro de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
-es la duodécima fila, pero no es de ninguna pieza.
+Son trece tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
+`per_` y las cinco de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
+es la decimocuarta fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -264,7 +272,20 @@ Applying migration '20261029150722_InitialBusinessSchema'.
 Done.
 ```
 
-Cuatro mensajes que no son errores. `Acquiring an exclusive lock...` sale en todas
+En una base que ya tenía las migraciones iniciales, los últimos cambios se
+aplican así:
+
+```
+Applying migration '20261104162827_AddBranchesAndUserBranch'.
+Done.
+```
+
+```
+Applying migration '20261104162843_AddInvoiceBranchSnapshot'.
+Done.
+```
+
+Los mensajes anteriores no son errores. `Acquiring an exclusive lock...` sale en todas
 las ejecuciones. Y en una base recién creada, EF Core va primero a preguntar por
 su tabla de migraciones, que todavía no existe, así que imprime un
 `Failed executing DbCommand` con el `SELECT ... FROM "__EFMigrationsHistory"`
@@ -334,25 +355,84 @@ credencial.
 
 ### Paso 8: comprobar que funciona
 
-En una segunda terminal, registra un usuario Estándar:
+En una segunda terminal, entra como el Administrador de la semilla y crea un
+usuario Estándar con él. El alta ya no es pública: `POST /api/auth/register`
+devuelve `404` y la cuenta se crea desde `POST /api/admin/users` (ADR 013).
+Primero crea una sucursal física; la respuesta contiene el `id` que se usa al
+crear el usuario.
 
 ```powershell
+$credencialesAdmin = @{
+    email = '<email-del-administrador>'
+    password = '<password-del-administrador>'
+} | ConvertTo-Json
+
+$sesionAdmin = Invoke-RestMethod `
+    -Uri 'http://localhost:5243/api/auth/login' `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Body $credencialesAdmin
+
+$sucursal = @{
+    name = 'Sucursal Centro'
+    address = 'Calle Principal 100'
+} | ConvertTo-Json
+
+$branch = Invoke-RestMethod `
+    -Uri 'http://localhost:5243/api/admin/branches' `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body $sucursal
+
 $cuenta = @{
     name = 'Ana'
     email = 'ana@ejemplo.com'
     password = 'abc12345'
+    branchId = $branch.id
 } | ConvertTo-Json
 
 Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/auth/register' `
+    -Uri 'http://localhost:5243/api/admin/users' `
     -Method Post `
     -ContentType 'application/json' `
+    -Headers @{ Authorization = "Bearer $($sesionAdmin.token)" } `
     -Body $cuenta
 ```
 
-El registro responde `202` y la cuenta queda inactiva; el enlace de activación
-se encola en la cola de email. Si ese email ya estaba registrado, la respuesta
-es `409`: usa otro email y repite.
+El alta responde `201` con el `id` de la cuenta creada y la cuenta queda
+inactiva; el enlace de activación se encola en la cola de email. Si ese email
+ya estaba registrado, la respuesta es `409`: usa otro email y repite.
+
+El Administrador también puede listar y editar sucursales físicas:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:5243/api/admin/branches/$($branch.id)" `
+    -Method Put `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body (@{
+        name = 'Sucursal Centro'
+        address = 'Calle Principal 101'
+        active = $true
+    } | ConvertTo-Json)
+```
+
+Una sucursal no puede desactivarse mientras tenga usuarios activos. Para
+asignar una sucursal física a un usuario Estándar, el Administrador usa:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:5243/api/admin/users/$($cuenta.id)/branch" `
+    -Method Post `
+    -ContentType 'application/json' `
+    -Headers @{ Authorization = "******" } `
+    -Body (@{ branchId = $branch.id } | ConvertTo-Json)
+```
+
+El cambio de sucursal invalida las sesiones existentes del usuario; deberá
+iniciar sesión de nuevo.
 
 Para continuar necesitas el enlace de activación. Si configuraste [SMTP real con Gmail](#paso-opcional-smtp-real-con-gmail),
 llega por email. Sin SMTP puedes leerlo directamente de la cola:
@@ -392,10 +472,11 @@ Cuando esto responda, la instalación básica funciona: continúa con la secció
 
 ### El primer Administrador
 
-El registro público siempre crea un `Role.Standard`, porque un usuario recién
-registrado no puede gobernarse a sí mismo. Por eso no hay forma de llegar a
-Administrador por el camino normal, y sin uno **RF-CA-08, RF-CA-20 y RF-CA-21 no
-se pueden probar**: los tres son operaciones que solo un Administrador puede
+Desde ADR 013 **no hay alta pública**: los usuarios los crea un Administrador.
+Eso hace la semilla todavía más necesaria, porque es la única forma de tener el
+primer Administrador y, sin él, no se puede crear ninguna cuenta. También
+siguen sin poder probarse sin un Administrador **RF-CA-08, RF-CA-19, RF-CA-20 y
+RF-CA-21**: las cuatro son operaciones que solo un Administrador puede
 ejecutar.
 
 La solución es una semilla que corre en el arranque y lee las tres variables
@@ -541,10 +622,11 @@ empleados por sucursal. Se usara a diario desde una tablet y contara con una vis
 proyecto de la asignatura Programación III.
 
 La iteración actual (Práctica 1) entrega la primera pieza funcional del Core:
-**Control de acceso completo**, desde el registro con activación por email
-hasta la recuperación de contraseña y la administración de usuarios, más la
-cola mínima de email saliente y la **estructura declarada** (sin pruebas) de la
-máquina de estados del negocio.
+**Control de acceso completo**, desde el alta de usuarios por el Administrador
+con activación por email hasta la recuperación de contraseña con aprobación del
+Administrador y la administración de usuarios, más la cola mínima de email
+saliente y la **estructura declarada** (sin pruebas) de la máquina de estados
+del negocio.
 
 ### Arquitectura: monolito modular
 
@@ -638,10 +720,10 @@ sobre EF Core en memoria.
 
 | Flujo | Requisitos | Sección para probarlos |
 |---|---|---|
-| Registro y activación | RF-CA-01, 02, 14, 15, 16, 17 | [3.1](#31-registro-y-activación) |
-| Sesión | RF-CA-03, 07, 18, 19 | [3.2](#32-sesión) |
-| Contraseñas (recuperación, forzado, cambio) | RF-CA-09, 10, 11, 12, 13, 22 | [3.3](#33-contraseñas) |
-| rolees y administración de usuarios | RF-CA-04, 05, 06, 08, 20, 21 | [3.4](#34-administración-de-usuarios) |
+| **Alta de usuarios y activación** | **RF-CA-01, 02, 14, 15, 16, 17** | **[3.1](#31-alta-de-usuarios-y-activación)** |
+| Sesión | RF-CA-03, 07, 18 | [3.2](#32-sesión) |
+| **Contraseñas (recuperación, forzado, cambio)** | **RF-CA-09, 10, 11, 12, 13, 22** | **[3.3](#33-contraseñas)** |
+| **rolees y administración de usuarios** | **RF-CA-04, 05, 06, 08, 19, 20, 21** | **[3.4](#34-administración-de-usuarios)** |
 | Cola de email saliente | RF-NOT-08, 09, 12, 13 | [3.5](#35-cola-de-email) |
 | Máquina de estados del negocio | RF-NEG-03, 04, 05, 09, RD-04 | [3.6](#36-máquina-de-estados-del-negocio) |
 | **Gestión de permisos** | **RF-GP-01 … RF-GP-07**, RD-04, RD-07, RD-09, RD-12 | **[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07)** |
@@ -665,6 +747,14 @@ sobre EF Core en memoria.
 > y [3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)
 > son suyas.
 
+> **Endurecimiento del Core** — después de la Práctica 3, el Control de acceso
+> se endureció: los usuarios los crea un Administrador (ADR 013), una cuenta
+> bloqueada se desbloquea por API (RF-CA-19) y **todo cambio de contraseña de
+> un Estándar exige aprobación** (ADR 014). Las secciones [3.1](#31-alta-de-usuarios-y-activación),
+> [3.3](#33-contraseñas) y [3.4](#34-administración-de-usuarios) cuentan cómo
+> provocar cada uno, y [3.14](#314-límite-de-solicitudes-por-ip) explica el
+> límite por IP de los dos flujos que mandan correo.
+
 ### Decisiones documentadas
 
 Convención de los ADR: nombre de archivo y título en inglés, contenido en español.
@@ -683,6 +773,8 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | El `role` de las respuestas viaja como texto, no como número | `docs/adr/010-role-as-text-in-responses.md` |
 | La anulación consume la concesión `CancelInvoice:<id>` antes de guardar, y sin concesión se rechaza | `docs/adr/011-consume-permission-grant.md` |
 | La operación de negocio pide el permiso por un contrato de `Core.Contracts`, y el `403`/`409` distingue "recién pedido" de "ya pendiente" | `docs/adr/012-request-permission-from-business.md` |
+| Los usuarios los crea un Administrador; no hay alta pública, y el desbloqueo de una cuenta bloqueada es una operación idempotente | `docs/adr/013-admin-created-users.md` |
+| Todo cambio de contraseña de un Estándar exige aprobación de un Administrador, y la aprobación ocurre antes de que el código llegue al correo | `docs/adr/014-password-change-permission.md` |
 
 ---
 
@@ -694,7 +786,7 @@ consultas SQL que cada sección indica.
 ### Guía HTTP manual
 
 `Src/Host/PirryLedger.Host/PirryLedger.Host.http` es una guía de regresión
-manual que recorre los 14 endpoints de AccessControl con sus rechazos, en el
+manual que recorre los 15 endpoints de AccessControl con sus rechazos, en el
 orden de las secciones 3.1 a 3.4 y con el bloqueo de RF-CA-19 al final. Se
 ejecuta con el cliente HTTP de VS Code (extensión REST Client) o con el de
 JetBrains.
@@ -706,11 +798,14 @@ Para usarla:
    estándar ya viene fijado en `ana@ejemplo.com`; el email y la contraseña del
    Administrador se copian de tu `.env` (`PIRRY_LEDGER_FIRST_ADMIN_*`, paso 4).
    No los escribas en el archivo ni en ningún sitio compartido.
-3. Envía las peticiones de arriba hacia abajo. Hay **tres pausas**: el token de
-   activación y los dos códigos de recuperación no llegan en ninguna respuesta
-   HTTP, porque existen solo dentro del email en cola (RF-NOT-08). La guía
-   indica la consulta SQL con la que se leen.
-4. La última sección bloquea la cuenta quince minutos; ejecútala al final.
+3. Envía las peticiones de arriba hacia abajo. Hay **tres pausas de correo**: el
+   token de activación y los dos códigos de recuperación no llegan en ninguna
+   respuesta HTTP, porque existen solo dentro del email en cola (RF-NOT-08). La
+   guía indica la consulta SQL con la que se leen.
+4. La guía pide además **dos ids de solicitud de permiso**, que tampoco vienen
+   de ninguna respuesta: la de `ResetPassword` y la de `ChangePassword`. Se
+   leen de la lista de pendientes que la propia guía pide.
+5. La última sección bloquea la cuenta quince minutos; ejecútala al final.
 
 La guía no cubre tres cosas, a propósito: las reglas que la API no puede
 alcanzar (el último Administrador active) y las que dependen del reloj
@@ -718,6 +813,9 @@ alcanzar (el último Administrador active) y las que dependen del reloj
 emails se prueba con `-- --send-mail` (sección 3.5); y los hashes, los
 contadores y los estados de la cola se comprueban con las consultas SQL de cada
 sección.
+
+Ojo con el límite por IP: dos corridas seguidas dentro de diez minutos darían un
+`429` en `recovery` o `resend-activation` (sección 3.14).
 
 ### Guía HTTP de la Práctica 2
 
@@ -746,6 +844,15 @@ Cada petición dice en su título el código HTTP que debe devolver. El archivo
 termina con las comprobaciones de contenido que no se ven en un código de
 estado y con el checklist de la rúbrica.
 
+> **Esta guía es el registro de la Práctica 2 y no se ha tocado.** Sus tres
+> peticiones a `POST /api/auth/register` responden `404` desde ADR 013 y su
+> escenario de recuperación de contraseña ya no es el vigente desde ADR 014. Se
+> deja así a propósito: es la evidencia de lo que se entregó en esa práctica.
+> Para comprobar el API actual, usa
+> [PirryLedger.Host.http](#guía-http-manual) o
+> [PirryLedger.Permissions.http](#guía-http-de-la-práctica-2), que sí están
+> al día.
+
 ### Pruebas
 
 ```powershell
@@ -753,8 +860,8 @@ dotnet test pirry-ledger.slnx
 ```
 
 Un solo comando, desde un clon limpio, ejecuta **las cinco** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (109), Notifications (6),
-Permissions (48), Business (134) e Integración (4). Son **301 pruebas** en total.
+necesita base de datos ni servidor SMTP: AccessControl (147), Notifications (6),
+Permissions (52), Business (134) e Integración (4). Son **343 pruebas** en total.
 Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
 uso, los repositorios y la máquina de estados de `Invoice` con una prueba por
 fila de sus tablas. La suite de integración (sección
@@ -832,12 +939,35 @@ $sesion = Invoke-RestMethod -Uri 'http://localhost:5243/api/auth/login' -Method 
 $adminHeaders = @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
-### 3.1 Registro y activación
+### 3.1 Alta de usuarios y activación
 
-#### RF-CA-01 — el registro acepta un email libre y rechaza el duplicado
+Desde ADR 013 **no hay alta pública**. El alta la hace un Administrador con
+`POST /api/admin/users`, y `POST /api/auth/register` devuelve `404`: ya no
+existe. La decisión y sus alternativas están en
+`docs/adr/013-admin-created-users.md`.
 
-Registra un email cualquiera. Después repite con el mismo email, también en
-mayúsculas: la primera vez responde `202` con `{"activated":false}` y el
+```powershell
+$alta = @{
+    name = 'Ana'
+    email = 'ana@ejemplo.com'
+    password = 'abc12345'
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post `
+  -Headers $adminHeaders -ContentType 'application/json' -Body $alta
+```
+
+```
+201  {"id":"9f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"}
+```
+
+Sin `Authorization` la respuesta es `401`; con la sesión de un Estándar es
+`403`. Sin token de Administrador el alta no se ejecuta.
+
+#### RF-CA-01 — el alta acepta un email libre y rechaza el duplicado
+
+Crea un usuario con un email cualquiera. Después repite el alta con el mismo
+email, también en mayúsculas: la primera vez responde `201` con el `id` y el
 duplicado responde `409` con un mensaje genérico que no dice qué dato falla.
 
 ```sql
@@ -846,6 +976,11 @@ SELECT email, active FROM ac_users ORDER BY email;
 
 Hay una sola fila por email, sin importar si se escribió en mayúsculas o con
 espacios alrededor.
+
+El cuerpo **no** lleva `role`. El modelo `CreateUserRequest` no tiene esa
+propiedad, así que un cliente que envíe `"role": "Administrator"` obtiene un
+`Standard` igual: la única puerta al rol de Administrador es RF-CA-08
+(§3.4).
 
 #### RF-CA-02 — la contraseña no se guarda en claro
 
@@ -869,9 +1004,9 @@ del alcance de esta práctica. La decisión y sus alternativas están en
 
 ```powershell
 # Menos de 8 caracteres -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
 # Solo letras -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/register -Method Post -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
 
 Ambas respuestas son `400` con un mensaje en español; en ningún caso se crea la
@@ -879,7 +1014,7 @@ cuenta ni se encola un email.
 
 #### RF-CA-15 — la cuenta nace inactiva y el enlace es de un solo uso
 
-Tras registrar, antes de abrir el enlace:
+Tras el alta, antes de abrir el enlace:
 
 ```sql
 SELECT active FROM ac_users;   -- false
@@ -1027,7 +1162,8 @@ El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una
 sesión no cierra las demás del mismo usuario: un empleado puede tener el móvil y
 el portátil abiertos a la vez.
 
-#### RF-CA-19 — cinco intentos fallidos bloquean la cuenta quince minutos
+#### RF-CA-19 — cinco intentos fallidos bloquean la cuenta quince minutos, y el
+Administrador la desbloquea
 
 ```powershell
 1..5 | ForEach-Object {
@@ -1057,16 +1193,47 @@ WHERE email = 'ana@ejemplo.com';
 Resultado esperado después del login correcto: `failed_attempts = 0` y
 `locked_until_utc` sin valor.
 
+El bloqueo también se levanta sin esperar, a petición del Administrador
+(ADR 013):
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/api/admin/users/<id>/unlock `
+  -Method Post -Headers $adminHeaders
+```
+
+Responde `204` siempre que el usuario exista, esté bloqueado o no: es
+idempotente, porque el Administrador pidió un estado y no una transición.
+Repetir la llamada responde `204` otra vez, no `400`. No toca el hash de la
+contraseña ni invalida sesiones.
+
+```sql
+SELECT failed_attempts, locked_until_utc
+FROM ac_users
+WHERE email = 'ana@ejemplo.com';
+```
+
+Resultado esperado tras el desbloqueo: `failed_attempts = 0` y
+`locked_until_utc` sin valor, igual que después de un login correcto.
+
 La expiración de las ocho horas de la sesión no se prueba esperando: `IClock` es
 inyectable y las pruebas automatizadas avanzan el reloj.
 
 ### 3.3 Contraseñas
 
+Desde ADR 014 **todo cambio de contraseña de un Estándar exige la aprobación
+de un Administrador**. La aprobación se pide antes de que el código llegue al
+correo, de modo que "tener un código válido" significa "haber sido aprobado".
+Un Administrador está exento para su propia contraseña: con un solo
+Administrador, y dado que nadie puede resolver su propia solicitud (RF-GP-07),
+exigirle aprobación encerraría el sistema.
+
+La decisión y sus alternativas están en
+`docs/adr/014-password-change-permission.md`.
+
 #### RF-CA-09 — solicitar recuperación sin revelar si el email existe
 
 Solicita la recuperación con un email existente y con uno inexistente. Ambas
-peticiones responden `202` con el mismo body; solo el email existente deja un
-mensaje pendiente en `not_email_queue`.
+peticiones responden `202` con el mismo body.
 
 ```powershell
 $recuperacion = @{ email = 'ana@ejemplo.com' } | ConvertTo-Json
@@ -1074,7 +1241,28 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
   -Method Post -Body $recuperacion -ContentType 'application/json'
 ```
 
-Ejecuta el enviador (`--send-mail`) y usa el código recibido en:
+Para un **Estándar** esa petición no genera código ni encola correo: crea una
+solicitud de permiso `ResetPassword` en estado `Pending`. Se ve aquí:
+
+```sql
+SELECT requested_permission, state
+FROM per_permission_requests
+WHERE requested_permission = 'ResetPassword';
+```
+
+El Administrador la aprueba con las rutas de la sección
+[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07), y **en ese momento** se
+emite el código y se encola el correo:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:5243/api/permissions/requests/<id>/approve" `
+  -Method Post -Headers $adminHeaders
+```
+
+Para un **Administrador** no hay nada que aprobar: la petición emite el código y
+encola el correo directamente.
+
+Ahora sí, ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
 $restablecer = @{ code = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
@@ -1082,11 +1270,26 @@ Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
 
+El restablecimiento consume la concesión `ResetPassword`, que es de un solo uso.
+
 #### RF-CA-10 — el código es de un solo uso y vence
 
 Ejecuta el enviador, usa el código recibido una vez y repite exactamente la
 misma petición. La primera llamada cambia la contraseña; la segunda responde
-`400` y no la cambia. El código se almacena como SHA-256 y vence en 15 minutos.
+`400` y no la cambia. El código se almacena como SHA-256 y **vence en cuatro
+horas**, no en quince minutos: con la aprobación del Administrador en medio, el
+reloj empieza a contar cuando se emite el código, y el usuario puede no estar
+mirando el correo en ese momento. El texto del correo dice "4 horas" y sale del
+mismo valor que usa la fecha de vencimiento, así que no pueden discrepar.
+
+Para comprobar el vencimiento sin esperar cuatro horas, acorta la fecha solo en
+la fila de prueba y repite la petición: debe responder `400` y la contraseña no
+cambia.
+
+```sql
+UPDATE ac_recovery_codes SET expires_at_utc = now() - interval '1 hour'
+WHERE used_at_utc IS NULL;
+```
 
 #### RF-CA-11 — una recuperación reemplaza la contraseña anterior
 
@@ -1110,9 +1313,13 @@ Invoke-RestMethod `
   -Method Post -Headers $adminHeaders
 ```
 
-La contraseña anterior deja de funcionar inmediatamente y el nuevo código se
-encola. El usuario completa el cambio mediante
-`/api/auth/reset-password`.
+La contraseña anterior deja de funcionar inmediatamente, el nuevo código se
+encola y la concesión `ResetPassword` queda creada: el Administrador **es** la
+aprobación, así que este atajo no pasa por ninguna solicitud. El usuario
+completa el cambio mediante `/api/auth/reset-password`.
+
+Repetir el `force-reset` no acumula concesiones ni códigos: la concesión se
+actualiza y el código anterior queda invalidado.
 
 #### RF-CA-22 — cambio autenticado
 
@@ -1129,9 +1336,28 @@ coincide es `400` con `{"message":"La contrasena actual no es correcta."}` y la
 contraseña no cambia. El cambio aplica la misma política mínima de RF-CA-14 e
 invalida las sesiones previas.
 
+Para un **Estándar** el cambio sin aprobación se rechaza, y el motivo se
+distingue del `400` de arriba:
+
+| Situación | Código | Cuerpo |
+|---|---|---|
+| No hay concesión: se acaba de crear la solicitud | `403` | `{"message":"Se envio una solicitud para cambiar su contrasena. Un Administrador debe aprobarla."}` |
+| Ya había una solicitud pendiente | `409` | `{"message":"Ya hay una solicitud pendiente para cambiar su contrasena."}` |
+
+El mensaje es el mismo en los dos casos que el de la anulación de facturas
+(ADR 012): el `403` dice "acabo de pedirlo" y el `409` dice "ya lo pediste". La
+contraseña no cambia en ninguno de los dos, y con la contraseña actual
+equivocada **no se gasta la concesión**: la verificación de la contraseña actual
+corre antes de consumirla.
+
+La solicitud se aprueba como cualquier otra de la sección
+[3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07), y al aprobarla se concede
+`ChangePassword`. Con la concesión, la misma petición responde `204` y la
+concesión se consume: un cambio de contraseña aprobado no habilita un segundo.
+
 ### 3.4 Administración de usuarios
 
-La semilla del primer Administrador descrita arriba permite probar las cinco
+La semilla del primer Administrador descrita arriba permite probar las siete
 rutas administrativas. Obtén el token del Administrador y sigue.
 
 #### RF-CA-21 y RF-CA-05 — listar usuarios y proteger operaciones administrativas
@@ -1153,15 +1379,15 @@ operación.
 
 #### RF-CA-04 — todo usuario tiene exactamente un role
 
-Registra un usuario nuevo y revisa el resultado del listado administrativo:
+Crea un usuario nuevo con `POST /api/admin/users` y revisa el resultado del
+listado administrativo:
 
 ```sql
 SELECT email, role FROM ac_users ORDER BY created_at_utc DESC LIMIT 1;
 ```
 
-El registro público siempre crea el role `Standard`; no acepta un role enviado por
-el cliente. El único cambio posterior es la operación administrativa de
-RF-CA-08.
+El alta siempre crea el role `Standard`; no acepta un role enviado por el
+cliente. El único cambio posterior es la operación administrativa de RF-CA-08.
 
 #### RF-CA-06 — un usuario Estándar no puede ejecutar operaciones de Administrador
 
@@ -1264,7 +1490,7 @@ toma cero.
 
 #### RF-NOT-13 — las credenciales vienen de variables de entorno
 
-Deja un email pendiente (el registro de un usuario deja pendiente su email de
+Deja un email pendiente (el alta de un usuario deja pendiente su email de
 activación) y quita la contraseña SMTP de la configuración: borra o vacía la
 línea `PIRRY_LEDGER_SMTP_PASSWORD` de tu `.env`. Si en algún momento la
 definiste además como variable de entorno de Windows, bórrala también de ahí:
@@ -1595,6 +1821,7 @@ Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities
 `Tests/PirryLedger.Business.Tests/Reglas/` y `.../Persistencia/`.
 
 | Criterio | Qué hace el código | Prueba que lo demuestra |
+| Catálogo de productos | `Product` valida nombre, descripción, precio y estado; se persiste en `bil_products` y solo un producto activo puede entrar en una factura | `PruebasDeProductos` |
 |---|---|---|
 | Emitir exige al menos un ítem y guarda el total | `Issue` rechaza la lista vacía y suma precio por cantidad | `EmitirGuardaLaFacturaConSusItemsYSuTotal`, `EmitirSinItemsSeRechazaYNoCreaNada` |
 | El delivery se marca al emitir | `Issue(..., isDelivery)` guarda la marca | `EmitirUnaFacturaDeDeliveryGuardaLaMarca` |
@@ -1727,8 +1954,9 @@ tabla y el índice único ya existen (ADR 008).
 dotnet test Tests\PirryLedger.Core.Permissions.Tests\PirryLedger.Core.Permissions.Tests.csproj
 ```
 
-Salida esperada: **48 pruebas superadas**, 0 con error (41 anteriores + 10 de
-catálogo + 7 de consumo, descontando solapamientos: el total del proyecto es 48).
+Salida esperada: **52 pruebas superadas**, 0 con error (48 anteriores + 2 de
+catálogo de contraseñas + 2 de emisión del código al aprobar, descontando
+solapamientos: el total del proyecto es 52).
 
 Para ejecutar solo una familia:
 
@@ -2004,7 +2232,7 @@ dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj
 ```
 
-Salida esperada: **134 pruebas** en Business y **109** en Control de acceso, 0 con
+Salida esperada: **134 pruebas** en Business y **147** en Control de acceso, 0 con
 error. Las familias se pueden correr por separado:
 
 ```powershell
@@ -2046,7 +2274,7 @@ aplicación. Vive en `Tests/PirryLedger.Integration.Tests/` y compone:
   Administrator que aprueba salga del mismo caso de uso que en producción. Solo
   se sustituyen sus dos puertos de persistencia (`IUserRepository`,
   `ISessionRepository`) por clases en memoria, igual que hace la suite de
-  Permissions: AccessControl no es la pieza que se integra y sus 109 pruebas ya
+  Permissions: AccessControl no es la pieza que se integra y sus 147 pruebas ya
   cubren esa parte.
 
 Cada operación abre un `DbContext` nuevo, como el scope de una petición HTTP.
@@ -2083,20 +2311,66 @@ con la API levantada.
 
 ---
 
+### 3.14 Límite de solicitudes por IP
+
+Los dos endpoints que mandan correo a una dirección que elige el cliente están
+limitados por IP: **cinco peticiones cada diez minutos** en
+`POST /api/auth/recovery` y en `POST /api/auth/resend-activation`. Al superar
+el límite, la respuesta es `429` con la cabecera `Retry-After`:
+
+```
+429  {"message":"Demasiadas solicitudes. Intente de nuevo mas tarde."}
+```
+
+`Retry-After` lleva los segundos que quedan para que termine la ventana, que
+es lo que el cliente necesita para saber cuándo reintentar.
+
+Para verlo con la API levantada, seis peticiones seguidas a la misma ruta:
+
+```powershell
+1..6 | ForEach-Object {
+  Invoke-WebRequest -Uri http://localhost:5243/api/auth/resend-activation -Method Post `
+    -Body (@{ email = 'ana@ejemplo.com' } | ConvertTo-Json) -ContentType 'application/json'
+}
+```
+
+Las cinco primeras responden `202` y la sexta responde `429`. Pasados diez
+minutos, la ventana se reinicia sola y la API vuelve a responder `202`.
+
+El límite es **por IP y por ruta**: otra IP no se ve afectada, y la recuperación
+y el reenvio de activación llevan cada uno su propio contador. Las rutas que no
+declaran límite no se tocan.
+
+La IP es la de la conexión. Hoy no hay proxy inverso delante de la API
+(ADR 005), así que esa es la del cliente real; cuando lo haya, decidir si se
+confía en `X-Forwarded-For` es una decisión aparte.
+
+La implementación está en
+`Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Api/Auth/RequestRateLimitMiddleware.cs`
+y las pruebas en
+`Tests/PirryLedger.Core.AccessControl.Tests/Credencial/PruebasDeLimiteDeSolicitudes.cs`.
+El reloj del límite es el `IClock` inyectable (RD-11), así que la ventana de diez
+minutos se recorre en las pruebas sin esperar.
+
+```powershell
+dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj --filter "FullyQualifiedName~PruebasDeLimiteDeSolicitudes"
+```
+
+---
+
 ## 4. Referencia
 
 ### Endpoints de acceso Control
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/api/auth/register` | Registra un usuario y encola el email de activación. Responde `202`. |
-| `POST` | `/api/auth/resend-activation` | Reenvía el enlace. La respuesta es idéntica exista o no el email. |
+| `POST` | `/api/auth/resend-activation` | Reenvía el enlace. La respuesta es idéntica exista o no el email. Limitado a 5 por IP cada 10 minutos (`429` con `Retry-After`). |
 | `GET` | `/activate?token=<valor>` | Activa la cuenta con el token del enlace. |
 | `POST` | `/api/auth/login` | Devuelve el token de sesión en el body de la respuesta. |
 | `POST` | `/api/auth/logout` | Cierra la sesión del token que llega en la cabecera. Responde `204` siempre. |
-| `POST` | `/api/auth/recovery` | Encola un código de recuperación. Responde igual exista o no el email. |
-| `POST` | `/api/auth/reset-password` | Consume el código y establece una contraseña nueva. |
-| `POST` | `/api/auth/change-password` | Cambia la contraseña propia y exige la contraseña actual. |
+| `POST` | `/api/auth/recovery` | Pide la recuperación. Para un Estándar crea una solicitud `ResetPassword` pendiente; para un Administrador emite el código. Responde igual exista o no el email. Limitado a 5 por IP cada 10 minutos (`429` con `Retry-After`). |
+| `POST` | `/api/auth/reset-password` | Consume el código y establece una contraseña nueva. El código vale 4 horas. |
+| `POST` | `/api/auth/change-password` | Cambia la contraseña propia y exige la contraseña actual. Un Estándar necesita la concesión `ChangePassword` (`403` al pedirla, `409` si ya hay una pendiente). |
 | `GET` | `/me` | Nombre, email y role del usuario autenticado. Exige `Authorization: Bearer <token>`. |
 
 ### Endpoints de la Asignación 2 (gestión de permisos)
@@ -2115,6 +2389,15 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `POST` | `/api/permissions/requests/{id}/reject` | Rechaza con motivo escrito. Cuerpo `{"reason":"..."}`. Responde `204`. |
 | `GET` | `/api/permissions/sales-summary` | Ruta de demostración del sistema de permisos. Responde `200` con datos fijos (`date`, `totalInvoices`, `totalAmount`, `branch`). Exige el permiso `ViewSalesSummary` concedido. |
 
+### Catálogo de productos
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/admin/products` | Crea un producto. Cuerpo `{"name":"Combo","description":"...", "price":500}`. Exige `Administrator`. |
+| `PUT` | `/api/admin/products/{id}` | Actualiza nombre, descripción y precio. Exige `Administrator`. |
+| `POST` | `/api/admin/products/{id}/active` | Activa o desactiva un producto. Cuerpo `{"isActive":false}`. Exige `Administrator`. |
+| `GET` | `/api/billing/products` | Lista el catálogo. Cualquier sesión válida. |
+
 ### Endpoints del negocio (facturas)
 
 Estos endpoints llegaron con la fase 4 de la Práctica 3
@@ -2123,7 +2406,7 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/api/billing/invoices` | Emite una factura. Cuerpo `{"isDelivery":false,"items":[{"name":"Combo","unitPrice":500,"quantity":1}]}`. Responde `201` con la factura. |
+| `POST` | `/api/billing/invoices` | Emite una factura seleccionando productos activos. Cuerpo `{"isDelivery":false,"items":[{"productId":"<guid>","quantity":1}]}`. Responde `201` con la factura y conserva el nombre/precio aplicados. |
 | `POST` | `/api/billing/invoices/{id}/collect` | Cobra la factura. Cuerpo `{"payments":[{"method":"Cash","amount":500,"receivedAmount":600}]}`. Responde `200`. |
 | `POST` | `/api/billing/invoices/{id}/debt` | Deja la factura en deuda. Cuerpo `{"debtorName":"Ana Perez","payments":[]}`. Responde `200`. |
 | `PUT` | `/api/billing/invoices/{id}/items` | Reemplaza los ítems de una factura emitida y guarda el historial. Responde `200`. |
@@ -2140,11 +2423,13 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
+| `POST` | `/api/admin/users` | Crea un usuario y encola el email de activación. Cuerpo `{"name":"...","email":"...","password":"..."}`, sin `role`. Responde `201` con el `id`. |
 | `GET` | `/api/admin/users` | Lista usuarios con role y status. Exige Administrador. |
 | `POST` | `/api/admin/users/{id}/role` | Cambia el role de otro usuario. Exige Administrador. |
 | `POST` | `/api/admin/users/{id}/deactivate` | Desactiva otro usuario e invalida sus sesiones. Exige Administrador. |
 | `POST` | `/api/admin/users/{id}/reactivate` | Reactiva otro usuario. Exige Administrador. |
-| `POST` | `/api/admin/users/{id}/force-reset` | Invalida la contraseña anterior y encola un código nuevo. Exige Administrador. |
+| `POST` | `/api/admin/users/{id}/unlock` | Desbloquea una cuenta bloqueada. Responde `204` siempre, sea cual sea su estado. Exige Administrador. |
+| `POST` | `/api/admin/users/{id}/force-reset` | Invalida la contraseña anterior, concede `ResetPassword` y encola un código nuevo. Exige Administrador. |
 
 ### Esquema de la base de datos
 

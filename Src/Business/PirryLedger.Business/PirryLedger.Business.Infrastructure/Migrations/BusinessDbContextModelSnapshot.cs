@@ -25,9 +25,24 @@ namespace PirryLedger.Business.Infrastructure.Migrations
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("BranchAddress")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("branch_address");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("branch_name");
 
                     b.Property<string>("DebtorName")
                         .HasMaxLength(120)
@@ -54,7 +69,6 @@ namespace PirryLedger.Business.Infrastructure.Migrations
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoiceEdit", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -84,7 +98,6 @@ namespace PirryLedger.Business.Infrastructure.Migrations
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoiceItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -98,6 +111,10 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
@@ -110,13 +127,14 @@ namespace PirryLedger.Business.Infrastructure.Migrations
 
                     b.HasIndex("InvoiceId");
 
+                    b.HasIndex("ProductId");
+
                     b.ToTable("bil_invoice_items", (string)null);
                 });
 
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoicePayment", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -163,6 +181,39 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                     b.ToTable("bil_invoice_payments", (string)null);
                 });
 
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("bil_products", (string)null);
+                });
+
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoiceEdit", b =>
                 {
                     b.HasOne("PirryLedger.Business.Domain.Entities.Invoice", null)
@@ -179,6 +230,11 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasForeignKey("InvoiceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("PirryLedger.Business.Domain.Entities.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoicePayment", b =>

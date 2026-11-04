@@ -15,6 +15,7 @@ public sealed class GetInvoice
 
     public Task<Invoice> ExecuteAsync(
         Guid invoiceId,
+        Guid? branchId = null,
         CancellationToken cancellationToken = default) =>
-        _invoices.GetRequiredAsync(invoiceId, cancellationToken);
+        _invoices.GetRequiredAsync(invoiceId, branchId, cancellationToken);
 }

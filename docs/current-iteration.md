@@ -8,6 +8,74 @@ Franklin replaces this file at the start of each assignment. The agent reads it 
 
 Brief and rubric: `docs/assignments/practica-3.md`, transcribed from the professor's PDF. Two repository notes at its end apply: the rubric says "tres" defects but there are **four** (`practica-3-defecto-1` to `-4`), and the "entre 3 y 5 estados" of RF-NEG-03 does not limit this machine (see decision 2). The defects are described in section 1.3 of the brief itself, over Franklin's own tables, so there is no separate defects annex as in Práctica 2.
 
+**Práctica 3 is delivered** (2026-11-01, closing documented in `docs/practica-3-closing`). It stays in this file because its decisions, its work plan and its delivery checks are still the reference for what was graded. The work that follows is the Core hardening below.
+
+## Core hardening (current work)
+
+Not a course assignment: this is Franklin's own hardening of the Access control piece, decided on 2026-11-04. It closes gaps the professor's requirements do not cover but that the code left open. The two decisions that shape it are ADR 013 (users are created by an Administrator) and ADR 014 (every password change of a Standard needs an Administrator's approval), both authorized by Franklin and accepted.
+
+### In scope
+
+| Area | Requirement IDs | Decision |
+|---|---|---|
+| Users are created by an Administrator; `POST /api/auth/register` no longer exists | RF-CA-01, 15, 21 | ADR 013 |
+| An Administrator unlocks a blocked account, idempotently | RF-CA-19 | ADR 013 |
+| Every password change of a Standard needs an Administrator's approval | RF-CA-09, 12, 13, 22; RF-GP-01, 03, 05, 07 | ADR 014 |
+| The recovery code lasts four hours instead of fifteen minutes | RF-CA-10 | ADR 014, decision 7 |
+| Per-IP rate limit on the two flows that send mail | RF-CA-09, 17 | ADR 014 context; no new ADR needed |
+| No migration for the access-control hardening | — | ADR 013 decision 8, ADR 014 |
+| Product catalog in Business | — | Product entity persisted in `bil_products`; Administrator manages it and invoices use active products |
+
+### Out of scope
+
+- The audit records of the administrative operations (RF-AUD-02, week 14).
+- The notice to the Administrator when a request arrives (RF-NEG-07, week 10).
+- Any change to the business module except the product catalog described above.
+- `created_by_user_id`: who created whom is an audit record, and the audit is a later piece.
+- Full inventory: stock, movements, suppliers, purchases and cost accounting.
+
+### Rules this work follows
+
+- The Administrator is exempt from the approval for its own password. With a single Administrator, RF-GP-07 (nobody resolves their own request) would make the system impossible to administer, so the exemption is the only exit, not a convenience.
+- The approval happens **before** the code reaches the mail. A valid code therefore implies a granted approval, and RF-CA-11 is satisfied as it is written.
+- The two new permission names, `ChangePassword` and `ResetPassword`, are fixed names in the closed catalog. They fit `permission_name varchar(64)`, so there is no migration.
+- The rate limit is hand-rolled in `PirryLedger.Core.AccessControl.Api` with the injectable `IClock`, not a new package: it matches the style of `AccessFilter` and `ApiErrorHandling` and stays testable without starting the application (RD-12).
+- The rate limit is per IP **and** per route, so the recovery flow and the activation resend have independent counters.
+- Product changes keep the invoice item's historical name and price; deactivation affects only future invoices.
+
+### Verification
+
+343 tests, all green, with no database and no SMTP server. Each new behaviour was shown red for the right reason before it was shown green: skipping the Standard gate in `ChangeOwnPassword` turned four tests red, removing the Administrator exemption in `PasswordRecovery` turned four red, and not counting the requests in the rate limiter turned five red.
+
+Branch `feature/admin-created-users`, from `develop`. Seven commits, one change each. No push, no merge and no tag without Franklin's authorization.
+
+### Open decisions
+
+None. Both ADRs are accepted.
+
+## Branch scope extension (2026-11-04)
+
+This hardening also introduces branch scope across user administration and
+billing:
+
+- `Branch` is owned by Access Control. The Administrator creates and lists
+  physical branches; the protected special row `Todas` represents global
+  Administrator scope.
+- The Administrator can edit a physical branch's name, address and active
+  status. Names are unique, `Todas` is protected, and a branch with active
+  users cannot be deactivated.
+- The Administrator assigns a physical branch to a Standard through a separate
+  operation; changing the assignment invalidates that user's sessions.
+- Every user stores exactly one branch reference. Standard users must reference
+  an active physical branch; Administrators reference `Todas`.
+- Standard users can operate and query invoices only in their branch.
+  Administrators have global access and choose the physical branch when issuing
+  an invoice.
+- An issued invoice stores the branch name and one free-text address (maximum
+  100 characters) as immutable historical snapshots.
+- The migration refuses to continue when an existing Standard user has no
+  branch assignment; it never silently chooses a default.
+
 ## Requirement files to read
 
 `docs/requirements/README.md` (index) first, then `business-module.md`, `design-rules.md` and `permissions.md`. Read `access-control.md` only to protect what is already delivered: section 1.5 of the brief re-verifies access control and permissions.
@@ -124,7 +192,7 @@ Work and decisions consciously left out of this iteration. Nothing here is waiti
 
 - **Do not run `dotnet ef migrations add` in the permissions module.** Its model declares no foreign keys to `ac_users`, and its migration snapshot was only generated on 2026-10-20. Until it is settled whether those keys belong in the model (declared by table name) or stay out of the database for good, any new migration would be generated from a model that contradicts how the tables were designed. The alternatives and their consequences are in the logbook of Práctica 2, Entry 8.
 - **The four foreign keys to `ac_users` are not in the database.** `requester_id`, `approver_id`, `user_id` and `granted_by_user_id` carry no referential constraint. Integrity comes from the application, which takes both identities from the authenticated session. It stays that way until the decision above is taken.
-- **Missing migration metadata is caught by hand, not by a test.** A migration committed without its `.Designer.cs` is ignored silently by EF Core. No automated check guards it yet.
+- **Migration metadata is now complete for the branch-scope changes.** EF Core discovers `AddBranchesAndUserBranch` and `AddInvoiceBranchSnapshot`, including their `.Designer.cs` files; the remaining limitation is that no automated check guards future missing metadata.
 - **The business module owns its tables.** Migrations for the tables of the invoicing module are part of this iteration; none touch the permissions module.
 - **Daily sales and pending delivery invoices.** Franklin wants delivery invoices that are still `Issued` to count in the daily sales. It is decided in week 10 with the reports.
 
@@ -168,4 +236,4 @@ File: `docs/bitacora-practica-3.md`, a new file. It documents at least one real 
 
 ## Delivered earlier
 
-Práctica 1 (Access control, mail queue and the structure of the business state machine), Asignación 2 (Permissions management and its first suite) and Práctica 2 (full Permissions suite and its six planted defects) are delivered. Their decisions live in `docs/adr/`; their commands in `README.md`; their briefs in `docs/assignments/`.
+Práctica 1 (Access control, mail queue and the structure of the business state machine), Asignación 2 (Permissions management and its first suite), Práctica 2 (full Permissions suite and its six planted defects) and Práctica 3 (the business module, its suite, its four planted defects and its integration test) are delivered. Their decisions live in `docs/adr/`; their commands in `README.md`; their briefs in `docs/assignments/`.

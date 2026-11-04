@@ -3,6 +3,7 @@ using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
@@ -15,7 +16,6 @@ public static class DependencyInjection
 {
     // Decision de Franklin. El ADR justifica por que absoluta y no deslizante.
     private static readonly TimeSpan SessionDuration = TimeSpan.FromHours(8);
-    private static readonly TimeSpan RecoveryCodeDuration = TimeSpan.FromMinutes(15);
 
     public static IServiceCollection AddAccessControl(
         this IServiceCollection services,
@@ -34,17 +34,22 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IBranchRepository, BranchRepository>();
+        services.AddScoped<IBranchDirectory, BranchDirectory>();
+        services.AddScoped<IBranchScopeAccessor, BranchScopeAccessor>();
         services.AddScoped<IActivationTokenRepository, ActivationTokenRepository>();
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
 
-        services.AddScoped<RegisterUser>(provider => new RegisterUser(
+        services.AddScoped<CreateUserByAdministrator>(provider => new CreateUserByAdministrator(
             provider.GetRequiredService<IUserRepository>(),
             provider.GetRequiredService<IActivationTokenRepository>(),
             provider.GetRequiredService<IPasswordHasher>(),
             provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<Authenticate>(),
             provider.GetRequiredService<IClock>(),
-            baseUrl));
+            baseUrl,
+            provider.GetRequiredService<IBranchRepository>()));
 
         services.AddScoped<ActivateAccount>();
 
@@ -71,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<ListUsers>();
         services.AddScoped<ChangeUserRole>();
         services.AddScoped<DeactivateUser>();
+        services.AddScoped<UnlockUser>();
 
         // RF-CA-17. No necesita IPasswordHasher: el reenvio no toca la contrasena.
         services.AddScoped<ResendActivationLink>(provider => new ResendActivationLink(
@@ -84,22 +90,44 @@ public static class DependencyInjection
         // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
         // dispararlo: no es una operation de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();
+        services.AddScoped<EnsureGlobalBranch>();
+        services.AddScoped<CreateBranch>();
+        services.AddScoped<UpdateBranch>();
+        services.AddScoped<AssignUserBranch>();
+        services.AddScoped<ListBranches>();
+
+        services.AddScoped<PasswordResetIssuer>(provider => new PasswordResetIssuer(
+            provider.GetRequiredService<IUserRepository>(),
+            provider.GetRequiredService<IRecoveryCodeRepository>(),
+            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<IClock>(),
+            // ADR 014: la duracion vive en la capa Application para que el texto
+            // del correo y la fecha de vencimiento salgan del mismo valor.
+            RecoveryCodePolicy.Validity));
+
+        // ADR 014: el contrato que consume la pieza de Permissions al aprobar un
+        // ResetPassword. La implementacion es de esta pieza; Permissions solo ve
+        // la interfaz de Core.Contracts.
+        services.AddScoped<IPasswordResetIssuer>(provider =>
+            provider.GetRequiredService<PasswordResetIssuer>());
 
         services.AddScoped<PasswordRecovery>(provider => new PasswordRecovery(
             provider.GetRequiredService<IUserRepository>(),
             provider.GetRequiredService<IRecoveryCodeRepository>(),
-            provider.GetRequiredService<IEmailQueue>(),
+            provider.GetRequiredService<IPasswordResetIssuer>(),
+            provider.GetRequiredService<IPermissionAuthority>(),
+            provider.GetRequiredService<IPermissionRequestGateway>(),
             provider.GetRequiredService<IClock>(),
-            provider.GetRequiredService<IPasswordHasher>(),
-            RecoveryCodeDuration));
+            provider.GetRequiredService<IPasswordHasher>()));
+
         services.AddScoped<ForcePasswordReset>(provider => new ForcePasswordReset(
             provider.GetRequiredService<IUserRepository>(),
-            provider.GetRequiredService<IRecoveryCodeRepository>(),
-            provider.GetRequiredService<IEmailQueue>(),
             provider.GetRequiredService<Authenticate>(),
+            provider.GetRequiredService<IPermissionAuthority>(),
+            provider.GetRequiredService<IPasswordResetIssuer>(),
             provider.GetRequiredService<IClock>(),
-            provider.GetRequiredService<IPasswordHasher>(),
-            RecoveryCodeDuration));
+            provider.GetRequiredService<IPasswordHasher>()));
+
         services.AddScoped<ChangeOwnPassword>();
 
         return services;

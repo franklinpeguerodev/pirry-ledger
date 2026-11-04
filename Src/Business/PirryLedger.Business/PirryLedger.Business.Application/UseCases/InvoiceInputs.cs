@@ -6,6 +6,8 @@ namespace PirryLedger.Business.Application.UseCases;
 // arma desde el cuerpo HTTP y el caso de uso no necesita mutarlas.
 public sealed record InvoiceItemInput(string Name, decimal UnitPrice, int Quantity);
 
+public sealed record ProductItemInput(Guid ProductId, int Quantity);
+
 public sealed record InvoicePaymentInput(
     PaymentMethod Method,
     decimal Amount,

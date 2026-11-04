@@ -24,4 +24,14 @@ public interface IPermissionAuthority
     // uso que anula la factura decide el mensaje al usuario. Solo borra el par
     // del usuario que llama; la concesion de otro usuario no se toca.
     Task<bool> ConsumeAsync(Guid userId, string permissionName, CancellationToken cancellationToken = default);
+
+    // ADR 014: concede el permiso sin pasar por una solicitud. Lo usa
+    // ForcePasswordReset, donde el Administrator que llama ES la aprobacion.
+    // Es un upsert por (usuario, permiso) (ADR 008), asi que repetirlo no
+    // acumula filas.
+    Task GrantAsync(
+        Guid userId,
+        string permissionName,
+        Guid grantedByUserId,
+        CancellationToken cancellationToken = default);
 }

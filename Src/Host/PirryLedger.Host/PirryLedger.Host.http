@@ -3,7 +3,8 @@
 # Qué es este archivo: una colección ordenada de peticiones HTTP que recorre cada
 # endpoint de AccessControl junto con sus rechazos, encadenadas con variables de
 # modo que una corrida de arriba hacia abajo solo necesita pegar los valores de las
-# pausas del correo en cola (tres pausas, dos valores).
+# pausas del correo en cola y de los ids de solicitud (tres pausas de correo, dos
+# ids).
 #
 # Qué NO es este archivo:
 #   - No reemplaza las pruebas unitarias (Tests/): reglas que la API no puede
@@ -19,9 +20,11 @@
 #
 # Las pausas manuales son inevitables: el token de activación y el código de
 # recuperación existen solo dentro del correo en cola (eso es RF-NOT-08
-# funcionando), así que ninguna respuesta HTTP puede llevarlos. Todos los demás
-# valores — tokens de sesión e ids de usuario — se capturan automáticamente desde
-# las respuestas nombradas de abajo.
+# funcionando), así que ninguna respuesta HTTP puede llevarlos. Los ids de las
+# solicitudes de permiso tampoco: la respuesta de `recovery` es idéntica exista
+# o no el correo, y por tanto no puede decir cuál es. Todos los demás valores —
+# tokens de sesión e ids de usuario — se capturan automáticamente desde las
+# respuestas nombradas de abajo.
 #
 # Cómo ejecutarlo
 #   1. Levantar la API (README, paso 7):
@@ -31,13 +34,18 @@
 #      lo indique.
 #
 # Este archivo espera una primera corrida sobre esta base de datos: la cuenta
-# estándar arranca inactiva. Para volver a empezar una corrida nueva, devolver
-# primero la cuenta a ese estado (la última sección además la bloquea por
-# 15 minutos):
+# estándar la crea el Administrador en la primera sección y nace inactiva. En
+# las corridas siguientes esa alta responde 409 y hay que saltarla (la sección
+# lo dice). Para volver a empezar una corrida nueva, devolver primero la cuenta
+# a ese estado (la última sección además la bloquea por 15 minutos):
 #
 #   UPDATE ac_users
 #   SET active = false, failed_attempts = 0, locked_until_utc = NULL
 #   WHERE email = 'ana@ejemplo.com';
+#
+# Ojo con el límite por IP: `recovery` y `resend-activation` admiten cinco
+# peticiones cada diez minutos por IP (sección 3.14 del README). Dos corridas
+# seguidas dentro de esa ventana darían un 429 en la segunda.
 #
 # Sintaxis: variables @file, separadores ###, nombres de petición # @name y
 # referencias a respuestas {{name.response.body.$.field}} (REST Client de VS Code
@@ -93,9 +101,16 @@
 # Usar la fila MÁS RECIENTE para la petición que acabas de enviar; los códigos
 # antiguos dejan de funcionar en cuanto se encola una petición nueva (forzar y
 # recuperar invalidan los códigos pendientes).
+#
+# Los dos ids de solicitud de permiso tampoco vienen de ninguna respuesta: la
+# respuesta de `recovery` es idéntica exista o no el correo, así que no puede
+# decir cuál es. Se leen de la lista de pendientes del Administrador, que la
+# sección de contraseñas indica paso a paso.
 
 @tokenActivacion = <pega-aqui-el-token-de-64-hex-del-correo-de-activacion>
 @codigoRecuperacion = <pega-aqui-el-codigo-de-64-hex-del-correo-de-recuperacion>
+@idSolicitudRecuperacion = <pega-aqui-el-id-de-la-solicitud-ResetPassword>
+@idSolicitudCambio = <pega-aqui-el-id-de-la-solicitud-ChangePassword>
 # --- Contrato (artefacto de desarrollo, no un caso de negocio) -----------------
 
 ### Documento OpenAPI -> 200. Describe el contrato; no ejercita ninguna regla de
@@ -103,13 +118,33 @@
 
 GET {{host}}/openapi/v1.json
 
-# --- Registro y activación: 3.1 (RF-CA-01, 14, 15, 16, 17) --------------------
+# --- Alta de usuario y activación: 3.1 (RF-CA-01, 14, 15, 16, 17) ------------
+#
+# Desde ADR 013 no hay alta pública. `POST /api/auth/register` ya no existe y
+# devuelve 404. La cuenta la crea un Administrador con `POST /api/admin/users`,
+# así que esta sección necesita el token del Administrador: se pide al principio.
+#
+# En una corrida anterior la cuenta ya existe y esta alta responde 409. En ese
+# caso, salta a "PAUSA 1" usando el token de activación de la corrida anterior,
+# o ejecuta antes la SQL de reset del encabezado del archivo.
 
-### Registrar un usuario nuevo -> 202. En una base donde el correo ya existe
-### responde 409; eso es RF-CA-01 funcionando como está diseñado.
+### Iniciar sesión como administrador -> 200. Necesario para el alta.
 
-# @name registro
-POST {{host}}/api/auth/register
+# @name loginAdminAlta
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoAdmin}}",
+  "password": "{{contrasenaAdmin}}"
+}
+
+### Crear un usuario nuevo -> 201 {"id":"..."}. La cuenta nace inactiva y el
+### enlace de activación se encola (RF-CA-01, RF-CA-15).
+
+# @name alta
+POST {{host}}/api/admin/users
+Authorization: Bearer {{loginAdminAlta.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -118,9 +153,11 @@ Content-Type: application/json
   "password": "{{contrasena}}"
 }
 
-### El mismo correo otra vez -> 409 con el mismo cuerpo que un registro nuevo.
+### El mismo correo otra vez -> 409 con un mensaje genérico que no dice qué dato
+### falla (RF-CA-01).
 
-POST {{host}}/api/auth/register
+POST {{host}}/api/admin/users
+Authorization: Bearer {{loginAdminAlta.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -129,15 +166,38 @@ Content-Type: application/json
   "password": "{{contrasena}}"
 }
 
-### Contraseña débil (menos de 8 caracteres) -> 400 (RF-CA-14).
+### Contraseña débil (menos de 8 caracteres) -> 400 (RF-CA-14). No crea la cuenta.
 
-POST {{host}}/api/auth/register
+POST {{host}}/api/admin/users
+Authorization: Bearer {{loginAdminAlta.response.body.$.token}}
 Content-Type: application/json
 
 {
   "name": "{{nombre}}",
-  "email": "{{correo}}",
+  "email": "{{correoMalFormado}}",
   "password": "abc12"
+}
+
+### El alta sin token -> 401: la ruta existe, lo que falta es la credencial.
+
+POST {{host}}/api/admin/users
+Content-Type: application/json
+
+{
+  "name": "{{nombre}}",
+  "email": "{{correo}}",
+  "password": "{{contrasena}}"
+}
+
+### La ruta que existió antes del ADR 013 -> 404. El alta pública ya no está.
+
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "{{nombre}}",
+  "email": "{{correo}}",
+  "password": "{{contrasena}}"
 }
 
 ### Iniciar sesión antes de activar -> 401 {"message":"La cuenta no esta activada."}
@@ -279,10 +339,12 @@ GET {{host}}/api/admin/users
 Authorization: Bearer {{loginUsuario2.response.body.$.token}}
 
 ### Lista de usuarios con sesión de Administrador -> 200 (RF-CA-21). Las filas
-### vienen ordenadas por correo: con el fixture por defecto $[0] es el usuario
-### Estándar y $[1] es el administrador, pero el orden se invierte si el correo
-### del estándar es alfabéticamente mayor que el del administrador, así que lo
-### seguro es elegir el id por el correo de la respuesta. La lista trae solo id,
+### vienen ordenadas por correo. Con el fixture por defecto el correo del
+### administrador (administrador@ejemplo.com) va antes que el del estándar
+### (ana@ejemplo.com), así que $[0] es el Administrador —el propio— y $[1] es el
+### usuario Estándar. Ese orden se invierte si el correo del estándar va antes
+### alfabéticamente, así que lo seguro es elegir el id por el correo de la
+### respuesta. La lista trae solo id,
 ### name, email, role, active y createdAtUtc — nunca hashes, tokens ni
 ### credentialVersion. Si tu cliente
 ### no puede resolver el índice, pega un id del cuerpo de la respuesta en las
@@ -371,11 +433,18 @@ Authorization: Bearer {{loginAdmin.response.body.$.token}}
 
 # --- Escenario A: recuperación de contraseña guiada por el usuario: 3.3 (RF-CA-09, 10, 11, 12, 22)
 # Este escenario cambia @contrasena y luego lo devuelve, así que una corrida
-# completa deja el fixture como lo encontró. Una sola pausa, después de la
-# primera petición.
+# completa deja el fixture como lo encontró.
+#
+# Desde ADR 014 el Estándar NO recibe el código al pedir la recuperación: la
+# petición crea una solicitud de permiso ResetPassword pendiente y el
+# Administrador tiene que aprobarla. Solo al aprobar se emite el código y se
+# encola el correo. Esa es la PAUSA 2.
+#
+# El cambio de contraseña del final también necesita aprobación (permiso
+# ChangePassword), así que la sección tiene dos pasos del Administrador.
 
 ### Pedir un código de recuperación -> 202, misma respuesta para una cuenta
-### desconocida (RF-CA-09).
+### desconocida (RF-CA-09). Todavía NO hay correo: hay una solicitud pendiente.
 
 # @name recuperar
 POST {{host}}/api/auth/recovery
@@ -394,9 +463,23 @@ Content-Type: application/json
   "email": "{{correoInexistente}}"
 }
 
-### PAUSA 2: leer el código de recuperación encolado por la petición anterior (el
-### correo MÁS RECIENTE de @correo) en @codigoRecuperacion y completar el
-### restablecimiento -> 204 (RF-CA-10).
+### El Administrador ve la solicitud pendiente -> 200. La fila con
+### requestedPermission "ResetPassword" es la que hay que aprobar; copia su id
+### en @idSolicitudRecuperacion.
+
+# @name listarPendientes
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Aprobar la solicitud -> 204. AHORA se emite el código y se encola el correo
+### con él (ADR 014, decisión 2).
+
+POST {{host}}/api/permissions/requests/{{idSolicitudRecuperacion}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### PAUSA 2: leer el código de recuperación encolado al aprobar (el correo MÁS
+### RECIENTE de @correo) en @codigoRecuperacion y completar el restablecimiento
+### -> 204 (RF-CA-10). El código vale 4 horas y es de un solo uso.
 
 POST {{host}}/api/auth/reset-password
 Content-Type: application/json
@@ -440,7 +523,9 @@ Content-Type: application/json
 
 ### Cambiar con la contraseña actual INCORRECTA -> 400 con un rechazo controlado
 ### (RF-CA-22). El código devuelve 400 (RegistrationRejectedException), no 401:
-### la sesión es válida, solo la contraseña actual proporcionada no lo es.
+### la sesión es válida, solo la contraseña actual proporcionada no lo es. Este
+### 400 NO gasta ninguna concesión: la contraseña actual se comprueba antes de
+### pedir el permiso.
 
 POST {{host}}/api/auth/change-password
 Authorization: Bearer {{loginRecuperado.response.body.$.token}}
@@ -451,8 +536,47 @@ Content-Type: application/json
   "newPassword": "{{contrasenaNueva}}"
 }
 
-### Cambiar con la contraseña actual correcta -> 204. Esto devuelve
+### Cambiar con la contraseña actual correcta -> 403: el Estándar necesita que un
+### Administrador apruebe el cambio (ADR 014). El cuerpo lo dice:
+### "Se envio una solicitud para cambiar su contrasena. Un Administrador debe
+### aprobarla." La contraseña NO cambia todavía.
+
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "{{contrasenaNueva}}",
+  "newPassword": "{{contrasena}}"
+}
+
+### Repetir el cambio sin que se apruebe -> 409 "Ya hay una solicitud pendiente
+### para cambiar su contrasena." El 403 dice "acabo de pedirlo" y el 409 dice
+### "ya lo pediste"; la contraseña sigue sin cambiar.
+
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{loginRecuperado.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "{{contrasenaNueva}}",
+  "newPassword": "{{contrasena}}"
+}
+
+### El Administrador ve la solicitud de cambio de contraseña -> 200. Copia el id
+### de la fila con requestedPermission "ChangePassword" en @idSolicitudCambio.
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Aprobar el cambio -> 204. Queda concedida la permiso ChangePassword.
+
+POST {{host}}/api/permissions/requests/{{idSolicitudCambio}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### El cambio con la contraseña actual correcta -> 204. Esto devuelve
 ### @contrasena, así que se restablece el fixture (RF-CA-22, RF-CA-14, RF-CA-12).
+### La concesión se consume: un cambio aprobado no habilita un segundo.
 
 POST {{host}}/api/auth/change-password
 Authorization: Bearer {{loginRecuperado.response.body.$.token}}
@@ -484,10 +608,15 @@ Content-Type: application/json
 # el que ENCOLA ESTE escenario (forzar invalida todo código pendiente anterior),
 # así que no hay duda de qué correo leer. También termina devolviendo
 # @contrasena.
+#
+# Desde ADR 014 el force-reset es la excepción: el Administrador ES la
+# aprobación, así que concede el permiso ResetPassword y emite el código sin
+# pasar por ninguna solicitud. No hay pausa de aprobación aquí, solo la del
+# correo.
 
 ### Forzar un restablecimiento de contraseña -> 204. La contraseña actual del
-### objetivo muere de inmediato y se le encola un código de recuperación
-### (RF-CA-13).
+### objetivo muere de inmediato, se concede ResetPassword y se le encola un
+### código de recuperación (RF-CA-13, ADR 014 decisión 4).
 
 POST {{host}}/api/admin/users/{{listarUsuarios.response.body.$[1].id}}/force-reset
 Authorization: Bearer {{loginAdmin.response.body.$.token}}
@@ -526,8 +655,32 @@ Content-Type: application/json
   "password": "{{contrasenaNueva}}"
 }
 
-### Devolver @contrasena -> 204 (RF-CA-22), y la sesión que la cambió deja de
-### servir -> 401 (RF-CA-12).
+### Devolver @contrasena -> 403: el Estándar también necesita aprobación para
+### cambiar su contraseña (ADR 014). Es el mismo ciclo del escenario A: la
+### solicitud se crea sola y el Administrador la aprueba.
+
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{loginForzada.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "{{contrasenaNueva}}",
+  "newPassword": "{{contrasena}}"
+}
+
+### El Administrador ve la solicitud -> 200. Copia el id de la fila con
+### requestedPermission "ChangePassword" en @idSolicitudCambio.
+
+GET {{host}}/api/permissions/requests/pending
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Aprobar -> 204.
+
+POST {{host}}/api/permissions/requests/{{idSolicitudCambio}}/approve
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### El cambio con la contraseña actual correcta -> 204, y la sesión que la cambió
+### deja de servir -> 401 (RF-CA-12).
 
 POST {{host}}/api/auth/change-password
 Authorization: Bearer {{loginForzada.response.body.$.token}}
@@ -556,10 +709,11 @@ Content-Type: application/json
 # --- RF-CA-19: cinco intentos fallidos bloquean la cuenta durante quince minutos -
 # Ejecutar esta sección AL FINAL: bloquea @correo durante 15 minutos, así que
 # una re-ejecución de este archivo dentro de esa ventana recibe 401 en la sección
-# de sesión. El bloqueo se levanta solo; nada en la API puede acortarlo. Entrar a
-# esta sección con el contador en cero — todos los escenarios de arriba terminan
-# con un inicio de sesión exitoso, y un inicio exitoso reinicia el contador (igual
-# que cualquier cambio de contraseña).
+# de sesión. El bloqueo se levanta solo, pero el Administrador también puede
+# desbloquear la cuenta antes de tiempo (ADR 013, decisión 6), y esa es la vía
+# que se prueba aquí. Entrar a esta sección con el contador en cero — todos los
+# escenarios de arriba terminan con un inicio de sesión exitoso, y un inicio
+# exitoso reinicia el contador (igual que cualquier cambio de contraseña).
 
 ### Intento fallido 1 de 5 -> 401 con el mensaje genérico.
 
@@ -623,16 +777,29 @@ Content-Type: application/json
   "password": "{{contrasena}}"
 }
 
-### ESPERAR QUINCE MINUTOS AQUÍ. El bloqueo se levanta solo. Luego:
+### El Administrador desbloquea la cuenta -> 204. No hay que esperar los quince
+### minutos: el desbloqueo pone el contador en cero y limpia la fecha de bloqueo
+### (ADR 013, decisión 6). Es el usuario estándar, el mismo $[1] del force-reset.
 
-### Iniciar sesión con la contraseña correcta -> 200. Este éxito devuelve el
-### contador a cero. Para ver los números (sección 3.2 del README):
+POST {{host}}/api/admin/users/{{listarUsuarios.response.body.$[1].id}}/unlock
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Desbloquear otra vez -> 204 otra vez: la operación es idempotente, porque el
+### Administrador pidió un estado y no una transición.
+
+POST {{host}}/api/admin/users/{{listarUsuarios.response.body.$[1].id}}/unlock
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
+
+### Para ver los números (sección 3.2 del README):
 ###
 ###   SELECT failed_attempts, locked_until_utc
 ###   FROM ac_users WHERE email = 'ana@ejemplo.com';
 ###
-### Esperado después de este inicio: failed_attempts = 0, locked_until_utc
+### Esperado después del desbloqueo: failed_attempts = 0, locked_until_utc
 ### vacío.
+
+### Iniciar sesión con la contraseña correcta -> 200. Este éxito devuelve el
+### contador a cero.
 
 POST {{host}}/api/auth/login
 Content-Type: application/json

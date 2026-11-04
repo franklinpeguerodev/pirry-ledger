@@ -20,6 +20,8 @@ public sealed class AccessControlDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Branch> Branches => Set<Branch>();
+
     public DbSet<ActivationToken> ActivationTokens => Set<ActivationToken>();
 
     public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();

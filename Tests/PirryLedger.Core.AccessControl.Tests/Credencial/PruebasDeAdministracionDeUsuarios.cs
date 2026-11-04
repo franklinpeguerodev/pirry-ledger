@@ -64,12 +64,14 @@ public sealed class PruebasDeAdministracionDeUsuarios
     }
 
     [Fact]
-    public void LasCuatroOperacionesDeAdministracionExigenAdministrador()
+    public void LasSeisOperacionesDeAdministracionExigenAdministrador()
     {
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.CreateUserByAdministrator));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ListUsers));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ChangeUserRole));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.DeactivateUser));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.ReactivateUser));
+        Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(Operation.UnlockUser));
 
         // Y la tabla no tiene operaciones de mas: si alguien anade una al enum y
         // la declara, esta prueba falla y obliga a decidir si es de
@@ -80,27 +82,84 @@ public sealed class PruebasDeAdministracionDeUsuarios
     // --- RF-CA-06: el rechazo tiene que ocurrir con peticion a mano ---
 
     [Fact]
-    public async Task EstandarRecibe403EnLasTresOperaciones()
+    public async Task EstandarRecibe403EnLasCincoOperaciones()
     {
         var (scenario, _, tokenEstandar) = await EscenarioConAmbosAsync();
 
         var listar = new ListUsers(scenario.Users, scenario.Authenticate);
         var ChangeRole = new ChangeUserRole(scenario.Users, scenario.Authenticate);
         var Deactivate = new DeactivateUser(scenario.Users, scenario.Authenticate);
+        var unlock = new UnlockUser(scenario.Users, scenario.Authenticate);
+        var branch = Branch.Create("Sucursal Centro", "Calle Principal 1");
+        var crear = new CreateUserByAdministrator(
+            scenario.Users,
+            new FakeActivationTokenRepository(),
+            scenario.Hasher,
+            new InMemoryEmailQueue(),
+            scenario.Authenticate,
+            scenario.Clock,
+            "http://localhost:5243",
+            new FakeBranchRepository(branch));
 
         var objetivo = scenario.Users.Create(
             "Objetivo", "objetivo@ejemplo.com", scenario.Hasher.Hash("abc12345"), utcNow, active: true);
 
-        // Los tres rechazos, del mismo Type y por la misma reason. Si uno de
+        // Los cinco rechazos, del mismo Type y por la misma reason. Si uno de
         // ellos pasara, el Standard tendria una Operation abierta.
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => listar.ExecuteAsync(tokenEstandar));
+
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => crear.ExecuteAsync(
+                tokenEstandar,
+                "Nuevo",
+                "nuevo@ejemplo.com",
+                "abc12345",
+                branch.Id,
+                TimeSpan.FromHours(24)));
 
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => ChangeRole.ExecuteAsync(tokenEstandar, objetivo.Id, "Standard"));
 
         await Assert.ThrowsAsync<InsufficientRoleException>(
             () => Deactivate.ExecuteAsync(tokenEstandar, objetivo.Id));
+
+        await Assert.ThrowsAsync<InsufficientRoleException>(
+            () => unlock.ExecuteAsync(tokenEstandar, objetivo.Id));
+
+        // Y el alta rechazada no creo nada.
+        Assert.Null(await scenario.Users.FindByEmailAsync("nuevo@ejemplo.com"));
+    }
+
+    private sealed class FakeBranchRepository : IBranchRepository
+    {
+        private readonly Branch _branch;
+
+        public FakeBranchRepository(Branch branch)
+        {
+            _branch = branch;
+        }
+
+        public Task<Branch?> FindByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Branch?>(id == _branch.Id ? _branch : null);
+
+        public Task<Branch?> FindByNameAsync(
+            string name,
+            Guid? excludingId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<Branch?>(
+                _branch.Name == name.Trim() && _branch.Id != excludingId ? _branch : null);
+
+        public Task<IReadOnlyList<Branch>> ListAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Branch>>(new[] { _branch });
+
+        public Task SaveAsync(
+            Branch branch,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     [Fact]

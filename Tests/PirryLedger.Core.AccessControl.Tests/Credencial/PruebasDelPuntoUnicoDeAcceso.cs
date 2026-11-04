@@ -29,7 +29,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     // parametros al construir la Route y falla si no encuentra el servicio.
     private static readonly Type[] ServiciosDeLasRutas =
     [
-        typeof(RegisterUser),
+        typeof(CreateUserByAdministrator),
         typeof(ActivateAccount),
         typeof(ResendActivationLink),
         typeof(Login),
@@ -38,6 +38,12 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(ListUsers),
         typeof(ChangeUserRole),
         typeof(DeactivateUser),
+        typeof(UnlockUser),
+        typeof(CreateBranch),
+        typeof(UpdateBranch),
+        typeof(AssignUserBranch),
+        typeof(ListBranches),
+        typeof(IBranchDirectory),
         typeof(PirryLedger.Core.Contracts.Time.IClock),
         // Casos de uso del modulo de Permissions que el filtro resuelve al
         // construir las Route de MapPermissions().
@@ -60,6 +66,10 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(PirryLedger.Business.Application.UseCases.ListInvoices),
         typeof(PirryLedger.Business.Application.UseCases.GetInvoice),
         typeof(PirryLedger.Business.Application.UseCases.ListInvoiceEdits),
+        typeof(PirryLedger.Business.Application.UseCases.CreateProduct),
+        typeof(PirryLedger.Business.Application.UseCases.UpdateProduct),
+        typeof(PirryLedger.Business.Application.UseCases.SetProductActive),
+        typeof(PirryLedger.Business.Application.UseCases.ListProducts),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de
@@ -251,30 +261,35 @@ public class PruebasDelPuntoUnicoDeAcceso
             RoleRequirements.ToleratesInvalidCredential(Operation.QueryOwnSession));
     }
 
-    // Las tres de administracion tienen que exigir el Role concreto, y ese Role se
-    // pide a la tabla, no se escribe en el endpoint.
+    // Las operaciones de administracion tienen que exigir el Role concreto, y ese
+    // Role se pide a la tabla, no se escribe en el endpoint.
     [Theory]
+    [InlineData(Operation.CreateUserByAdministrator)]
     [InlineData(Operation.ListUsers)]
     [InlineData(Operation.ChangeUserRole)]
     [InlineData(Operation.DeactivateUser)]
     [InlineData(Operation.ReactivateUser)]
+    [InlineData(Operation.UnlockUser)]
+    [InlineData(Operation.CreateProduct)]
+    [InlineData(Operation.UpdateProduct)]
+    [InlineData(Operation.SetProductActive)]
     public void LasOperacionesDeAdministracionExigenElRolDeAdministrador(Operation operation)
     {
         Assert.Equal(AccessLevel.Administrator, RoleRequirements.RequiredLevel(operation));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(operation));
     }
 
-    // El caso que mas se repite al releer RF-CA-05: las cinco rutas de
+    // El caso que mas se repite al releer RF-CA-05: las siete rutas de
     // administracion declaradas, contadas desde las rutas reales. Si alguien
-    // anade una quinta y la deja fuera de administracion, esto salta.
+    // anade una septima y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteCincoRutasDeAdministrador()
+    public void HayExactamenteCatorceRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(5, deAdministracion.Count);
+        Assert.Equal(14, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {

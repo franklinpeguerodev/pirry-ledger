@@ -14,7 +14,7 @@ public sealed class PruebasDeApprovePermissionRequest
     private const string PermissionName = "ViewSalesSummary";
 
     // Helper: escenario + repositorios + caso de uso de aprobacion.
-    private static async Task<(EscenarioDePermisos escenario, FakePermissionRequestRepository requests, FakePermissionGrantRepository grants, ApprovePermissionRequest caso, string standardToken, string adminToken)>
+    private static async Task<(EscenarioDePermisos escenario, FakePermissionRequestRepository requests, FakePermissionGrantRepository grants, FakePasswordResetIssuer issuer, ApprovePermissionRequest caso, string standardToken, string adminToken)>
         BuildAsync()
     {
         var escenario = new EscenarioDePermisos();
@@ -22,8 +22,10 @@ public sealed class PruebasDeApprovePermissionRequest
         var adminToken = await escenario.OpenAdminSessionAsync();
         var requests = new FakePermissionRequestRepository();
         var grants = new FakePermissionGrantRepository();
-        var caso = new ApprovePermissionRequest(requests, grants, escenario.Authenticate, escenario.Clock);
-        return (escenario, requests, grants, caso, standardToken, adminToken);
+        var issuer = new FakePasswordResetIssuer();
+        var caso = new ApprovePermissionRequest(
+            requests, grants, escenario.Authenticate, issuer, escenario.Clock);
+        return (escenario, requests, grants, issuer, caso, standardToken, adminToken);
     }
 
     private static async Task<Guid> CreatePendingAsync(
@@ -40,7 +42,7 @@ public sealed class PruebasDeApprovePermissionRequest
     public async Task AprobarUnaSolicitudPendienteLaPasaAAplicadaYRegistraConcesion()
     {
         // Arrange: el Standard crea, el Admin aprueba.
-        var (escenario, requests, grants, caso, standardToken, adminToken) = await BuildAsync();
+        var (escenario, requests, grants, _, caso, standardToken, adminToken) = await BuildAsync();
         var requestId = await CreatePendingAsync(escenario, requests, standardToken);
 
         // Act
@@ -64,7 +66,7 @@ public sealed class PruebasDeApprovePermissionRequest
     {
         // Arrange: el Standard crea, el Admin aprueba una vez. La segunda
         // aprobacion tiene que fallar (RF-GP-06: transicion prohibida).
-        var (escenario, requests, grants, caso, standardToken, adminToken) = await BuildAsync();
+        var (escenario, requests, grants, _, caso, standardToken, adminToken) = await BuildAsync();
         var requestId = await CreatePendingAsync(escenario, requests, standardToken);
 
         await caso.ExecuteAsync(adminToken, requestId, CancellationToken.None);
@@ -84,7 +86,7 @@ public sealed class PruebasDeApprovePermissionRequest
     public async Task AprobarUnaSolicitudInexistenteSeRechaza()
     {
         // Arrange
-        var (escenario, requests, grants, caso, _, adminToken) = await BuildAsync();
+        var (escenario, requests, grants, _, caso, _, adminToken) = await BuildAsync();
         var inexistente = Guid.NewGuid();
 
         // Act + Assert
@@ -99,7 +101,7 @@ public sealed class PruebasDeApprovePermissionRequest
         // Arrange: el Admin crea la solicitud y luego intenta aprobarla.
         // Esta es la version "directa" de RF-GP-07: la misma persona
         // intenta resolver su propia solicitud.
-        var (escenario, requests, grants, caso, _, adminToken) = await BuildAsync();
+        var (escenario, requests, grants, _, caso, _, adminToken) = await BuildAsync();
         var requestId = await CreatePendingAsync(escenario, requests, adminToken);
 
         // Act + Assert: la regla compara identidades (admin.Id == request.RequesterId).
@@ -124,7 +126,8 @@ public sealed class PruebasDeApprovePermissionRequest
         var adminToken = await escenario.OpenAdminSessionAsync();
         var requests = new FakePermissionRequestRepository();
         var grants = new FakePermissionGrantRepository();
-        var caso = new ApprovePermissionRequest(requests, grants, escenario.Authenticate, escenario.Clock);
+        var caso = new ApprovePermissionRequest(
+            requests, grants, escenario.Authenticate, new FakePasswordResetIssuer(), escenario.Clock);
 
         // El Standard crea la solicitud.
         var crear = new CreatePermissionRequest(requests, escenario.Authority, escenario.Authenticate, escenario.Clock);
@@ -146,5 +149,44 @@ public sealed class PruebasDeApprovePermissionRequest
         var sinTocar = await requests.FindByIdAsync(requestId);
         Assert.Equal(PermissionRequestState.Pending, sinTocar!.State);
         Assert.Equal(0, grants.SavedCount);
+    }
+
+    // ADR 014, decision 2: aprobar un ResetPassword es lo que dispara el codigo
+    // de recuperacion. Antes de la aprobacion no se emitio nada; despues, si.
+    [Fact]
+    public async Task AprobarResetPasswordEmiteElCodigoDeRecuperacion()
+    {
+        // Arrange: el Standard pide el permiso de recuperacion y el Admin lo
+        // deja pendiente. El permiso ya es conocido por el catalogo falso.
+        var (escenario, requests, _, issuer, caso, standardToken, adminToken) = await BuildAsync();
+        var crear = new CreatePermissionRequest(
+            requests, escenario.Authority, escenario.Authenticate, escenario.Clock);
+        var requestId = await crear.ExecuteAsync(
+            standardToken, PermissionNames.ResetPassword, CancellationToken.None);
+
+        Assert.Empty(issuer.IssuedFor);
+
+        // Act
+        await caso.ExecuteAsync(adminToken, requestId, CancellationToken.None);
+
+        // Assert: el codigo se emitio para el solicitante, no para el aprobador.
+        var emitidoPara = Assert.Single(issuer.IssuedFor);
+        Assert.Equal(escenario.Standard.Id, emitidoPara);
+    }
+
+    // ADR 014: la emision es exclusiva de ResetPassword. Aprobar cualquier otro
+    // permiso no debe enviar un codigo de recuperacion.
+    [Fact]
+    public async Task AprobarOtroPermisoNoEmiteCodigoDeRecuperacion()
+    {
+        // Arrange
+        var (escenario, requests, _, issuer, caso, standardToken, adminToken) = await BuildAsync();
+        var requestId = await CreatePendingAsync(escenario, requests, standardToken);
+
+        // Act
+        await caso.ExecuteAsync(adminToken, requestId, CancellationToken.None);
+
+        // Assert
+        Assert.Empty(issuer.IssuedFor);
     }
 }

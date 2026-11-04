@@ -23,7 +23,8 @@ public sealed class User
         string passwordHash,
         Role role,
         bool active,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        Guid branchId)
     {
         Id = id;
         Name = name;
@@ -32,6 +33,7 @@ public sealed class User
         Role = role;
         Active = active;
         CreatedAtUtc = createdAtUtc;
+        BranchId = branchId;
     }
 
     public Guid Id { get; private set; }
@@ -52,6 +54,8 @@ public sealed class User
     // Decision propia: RF-CA-15 lo declara "decisiones de diseno". Lo necesita
     // el listado de RF-CA-21 y el seed idempotente del primer Administrator.
     public DateTime CreatedAtUtc { get; private set; }
+
+    public Guid BranchId { get; private set; }
 
     // Trazabilidad minima: null significa que la contrasena solo ha sido la
     // inicial; se establece cada vez que ChangePassword reemplaza el hash.
@@ -102,7 +106,20 @@ public sealed class User
             passwordHash,
             Role.Standard,
             active: false,
-            utcNow);
+            utcNow,
+            Branch.AllId);
+    }
+
+    public static User Create(
+        string name,
+        string email,
+        string passwordHash,
+        DateTime utcNow,
+        Guid branchId)
+    {
+        var user = Create(name, email, passwordHash, utcNow);
+        user.AssignBranch(branchId);
+        return user;
     }
 
     // La segunda puerta, y la unica que no es el registro Public. La necesita el
@@ -149,7 +166,19 @@ public sealed class User
             passwordHash,
             Role.Administrator,
             active: true,
-            utcNow);
+            utcNow,
+            Branch.AllId);
+    }
+
+    public void AssignBranch(Guid branchId)
+    {
+        if (branchId == Guid.Empty || branchId == Branch.AllId && Role == Role.Standard)
+        {
+            throw new ArgumentException("El usuario Estándar debe tener una sucursal física.", nameof(branchId));
+        }
+
+        BranchId = branchId;
+        CredentialVersion++;
     }
 
     // RF-CA-16: abrir el enlace de activacion activa la cuenta. Solo desde
@@ -236,6 +265,23 @@ public sealed class User
 
     // RF-CA-19: un inicio de Session correcto pone el contador en cero.
     public void RegisterSuccessfulAttempt()
+    {
+        FailedAttempts = 0;
+        LockedUntilUtc = null;
+    }
+
+    // RF-CA-19 y docs/adr/013-admin-created-users.md, decision 6: el
+    // Administrator desbloquea una cuenta sin esperar los quince minutos.
+    //
+    // No toca el hash ni CredentialVersion: desbloquear no cambia la contrasena
+    // ni invalida sesiones, porque una cuenta bloqueada no tiene sesiones validas
+    // que invalidar.
+    //
+    // Es idempotente a proposito, y por eso no lanza si la cuenta ya estaba
+    // desbloqueada: el Administrator pide un estado, no una transicion. Es
+    // distinto de Deactivate y Reactivate, donde el segundo intento si se rechaza
+    // porque ahi si hay una transicion que no se puede repetir.
+    public void Unlock()
     {
         FailedAttempts = 0;
         LockedUntilUtc = null;

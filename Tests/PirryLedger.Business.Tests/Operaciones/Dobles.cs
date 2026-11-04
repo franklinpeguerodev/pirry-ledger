@@ -17,11 +17,23 @@ internal sealed class FakeInvoiceRepository : IInvoiceRepository
 
     public void Seed(Invoice invoice) => _invoices[invoice.Id] = invoice;
 
-    public Task<Invoice?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_invoices.TryGetValue(id, out var invoice) ? invoice : null);
+    public Task<Invoice?> GetByIdAsync(
+        Guid id,
+        Guid? branchId = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            _invoices.TryGetValue(id, out var invoice)
+            && (branchId is null || invoice.BranchId == branchId)
+                ? invoice
+                : null);
 
-    public Task<IReadOnlyList<Invoice>> ListAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<Invoice>>(_invoices.Values.ToList());
+    public Task<IReadOnlyList<Invoice>> ListAsync(
+        Guid? branchId = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Invoice>>(
+            _invoices.Values
+                .Where(invoice => branchId is null || invoice.BranchId == branchId)
+                .ToList());
 
     public Task AddAsync(Invoice invoice, CancellationToken cancellationToken = default)
     {
@@ -71,6 +83,19 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
     {
         ConsumeCalls++;
         return Task.FromResult(_granted.Remove((userId, permissionName)));
+    }
+
+    // ADR 014: concesion directa. La suite de Business no ejercita el cambio de
+    // contrasena, pero el contrato crece y el doble tiene que cumplirlo.
+    public Task GrantAsync(
+        Guid userId,
+        string permissionName,
+        Guid grantedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        _granted.Add((userId, permissionName));
+
+        return Task.CompletedTask;
     }
 
     public void Grant(Guid userId, string permissionName) =>

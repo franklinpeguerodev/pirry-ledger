@@ -22,48 +22,6 @@ public static class EndpointRegistration
 
     public static IEndpointRouteBuilder MapAccessControl(this IEndpointRouteBuilder endpoints)
     {
-        // RF-CA-01, RF-CA-15 y RF-NOT-08.
-        endpoints.MapPost("/api/auth/register", async (
-            RegisterRequest request,
-            RegisterUser register,
-            IClock clock,
-            CancellationToken cancellationToken) =>
-        {
-            // RD-07 y RD-08: todo rechazo sale como un message controlado. Ni una
-            // traza, ni una consulta SQL, ni el Email o la contrasena del
-            // User en la respuesta.
-            try
-            {
-                await register.ExecuteAsync(
-                    request.Name,
-                    request.Email,
-                    request.Password,
-                    TokenValidity,
-                    cancellationToken);
-            }
-            catch (DuplicateEmailException)
-            {
-                // 409 con el mismo cuerpo que un Email nuevo. El flujo no dice si
-                // ese Email ya estaba registrado.
-                return Results.Json(
-                    new ErrorResponse("No pudimos completar el registro con esos datos."),
-                    statusCode: StatusCodes.Status409Conflict);
-            }
-            catch (RegistrationRejectedException error)
-            {
-                return Results.Json(
-                    new ErrorResponse(error.Message),
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-
-            // 202: el Email sale por la cola, no ahora. La cuenta existe pero esta
-            // inactiva hasta que se abra el enlace.
-            return Results.Json(
-                new ActivatedResponse(Activated: false),
-                statusCode: StatusCodes.Status202Accepted);
-        })
-        .WithAccess(Operation.RegisterUser);
-
         // RF-CA-16: abrir el enlace activa la cuenta.
         endpoints.MapGet("/activate", async (
             string? token,
@@ -108,7 +66,10 @@ public static class EndpointRegistration
                 new SentResponse(Sent: true),
                 statusCode: StatusCodes.Status202Accepted);
         })
-        .WithAccess(Operation.ResendActivation);
+        .WithAccess(Operation.ResendActivation)
+        // RF-CA-09: este endpoint manda un correo a una direccion que elige el
+        // cliente. Sin limite, se puede usar para inundar un buzon.
+        .RequireRequestRateLimit(RequestRateLimit.ActivationResend);
 
         endpoints.MapPost("/api/auth/recovery", async (
             PasswordRecoveryRequest request,
@@ -117,7 +78,11 @@ public static class EndpointRegistration
         {
             await recovery.RequestAsync(request.Email, cancellationToken);
             return Results.Json(new SentResponse(true), statusCode: StatusCodes.Status202Accepted);
-        }).WithAccess(Operation.RequestRecovery);
+        })
+        .WithAccess(Operation.RequestRecovery)
+        // RF-CA-09: mismo motivo que el reenvio, y ademas cada solicitud de un
+        // Standard crea una solicitud de permiso pendiente.
+        .RequireRequestRateLimit(RequestRateLimit.PasswordRecovery);
 
         endpoints.MapPost("/api/auth/reset-password", async (
             ResetPasswordRequest request,
@@ -230,7 +195,7 @@ public static class EndpointRegistration
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
-            return Results.Json(new MeResponse(user.Name, user.Email, user.Role.ToString()));
+            return Results.Json(new MeResponse(user.Name, user.Email, user.Role.ToString(), user.BranchId));
         })
         .WithAccess(Operation.QueryOwnSession);
 
@@ -255,6 +220,19 @@ public static class EndpointRegistration
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
             }
+            catch (PasswordChangeApprovalRequiredException error)
+            {
+                // ADR 014: el Standard no tenia concesion, se creo la solicitud
+                // y el cambio queda a la espera de un Administrator. 403: la
+                // sesion vale, el permiso no.
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (PasswordChangeApprovalPendingException error)
+            {
+                // Ya habia una solicitud pendiente: no se creo otra. 409: el
+                // estado actual impide repetir la operacion.
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status409Conflict);
+            }
             catch (RegistrationRejectedException error)
             {
                 return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
@@ -264,7 +242,8 @@ public static class EndpointRegistration
         return endpoints;
     }
 
-    // RF-CA-21, RF-CA-08 y RF-CA-20: las cuatro rutas de Administrator.
+    // RF-CA-01, RF-CA-19, RF-CA-21, RF-CA-08 y RF-CA-20: las seis rutas de
+    // Administrator.
     //
     // RF-CA-05: aqui no se compara ningun role. Cada route se declara con
     // WithAccess(Operation.X) y el filtro de acceso consulta RoleRequirements, el
@@ -277,6 +256,149 @@ public static class EndpointRegistration
     // rubrica revisa.
     private static void MapUserAdministration(IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapPost("/api/admin/branches", async (
+            BranchRequest request,
+            CreateBranch create,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var branch = await create.ExecuteAsync(request.Name, request.Address, cancellationToken);
+                return Results.Json(BranchResponse.From(branch), statusCode: StatusCodes.Status201Created);
+            }
+            catch (ArgumentException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithAccess(Operation.CreateBranch);
+
+        endpoints.MapPut("/api/admin/branches/{id:guid}", async (
+            Guid id,
+            UpdateBranchRequest request,
+            UpdateBranch update,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var branch = await update.ExecuteAsync(
+                    id,
+                    request.Name,
+                    request.Address,
+                    request.Active,
+                    cancellationToken);
+
+                return Results.Ok(BranchResponse.From(branch));
+            }
+            catch (ArgumentException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithAccess(Operation.UpdateBranch);
+
+        endpoints.MapGet("/api/admin/branches", async (
+            ListBranches list,
+            CancellationToken cancellationToken) =>
+        {
+            var branches = await list.ExecuteAsync(cancellationToken);
+            return Results.Ok(branches.Select(BranchResponse.From).ToList());
+        }).WithAccess(Operation.ListBranches);
+
+        endpoints.MapPost("/api/admin/users/{id:guid}/branch", async (
+            Guid id,
+            AssignUserBranchRequest request,
+            HttpRequest httpRequest,
+            AssignUserBranch assign,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await assign.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    id,
+                    request.BranchId,
+                    cancellationToken);
+
+                return Results.NoContent();
+            }
+            catch (InvalidSessionException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InsufficientRoleException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithAccess(Operation.AssignUserBranch);
+
+        // RF-CA-01, RF-CA-15 y docs/adr/013-admin-created-users.md: el alta de un
+        // User. Sustituye a la antigua ruta publica /api/auth/register, que ya no
+        // existe.
+        //
+        // 201 con el Id del recurso creado. La cuenta nace inactiva y el enlace de
+        // activacion sale por la cola, igual que antes: el alta no crea un User
+        // usable.
+        endpoints.MapPost("/api/admin/users", async (
+            CreateUserRequest request,
+            HttpRequest httpRequest,
+            CreateUserByAdministrator create,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var id = await create.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    request.Name,
+                    request.Email,
+                    request.Password,
+                    request.BranchId,
+                    TokenValidity,
+                    cancellationToken);
+
+                return Results.Json(
+                    new CreatedUserResponse(id),
+                    statusCode: StatusCodes.Status201Created);
+            }
+            catch (InvalidSessionException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InsufficientRoleException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (DuplicateEmailException)
+            {
+                // 409 con un cuerpo generico: no dice si ese Email ya estaba
+                // registrado.
+                return Results.Json(
+                    new ErrorResponse("No pudimos completar el alta con esos datos."),
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+            catch (RegistrationRejectedException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+        .WithAccess(Operation.CreateUserByAdministrator);
+
         // RF-CA-21: listar usuarios con su role y su estado.
         endpoints.MapGet("/api/admin/users", async (
             HttpRequest httpRequest,
@@ -320,6 +442,7 @@ public static class EndpointRegistration
                     TokenBearer.Read(httpRequest) ?? string.Empty,
                     id,
                     request.Role,
+                    request.BranchId,
                     cancellationToken);
 
                 return Results.NoContent();
@@ -370,6 +493,47 @@ public static class EndpointRegistration
             return await ChangeStateAsync(httpRequest, deactivate, id, Operation.ReactivateUser, cancellationToken);
         })
         .WithAccess(Operation.ReactivateUser);
+
+        // RF-CA-19 y docs/adr/013-admin-created-users.md: desbloquear una cuenta.
+        //
+        // 204 siempre que el User exista, este bloqueado o no: es idempotente. Un
+        // segundo intento no es un error, porque el Administrator pidio un estado
+        // y el estado ya era el pedido.
+        endpoints.MapPost("/api/admin/users/{id:guid}/unlock", async (
+            Guid id,
+            HttpRequest httpRequest,
+            UnlockUser unlock,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await unlock.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    id,
+                    cancellationToken);
+
+                return Results.NoContent();
+            }
+            catch (InvalidSessionException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+            catch (InsufficientRoleException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+            catch (AdministrationOperationRejectedException error)
+            {
+                return Results.Json(
+                    new ErrorResponse(error.Message),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+        })
+        .WithAccess(Operation.UnlockUser);
 
         endpoints.MapPost("/api/admin/users/{id:guid}/force-reset", async (
             Guid id,

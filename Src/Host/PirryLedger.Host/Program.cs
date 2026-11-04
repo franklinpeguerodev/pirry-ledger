@@ -69,6 +69,8 @@ builder.Services.AddBusiness(connection);
 
 var app = builder.Build();
 
+await EnsureGlobalBranchSeed(app);
+
 // Primer Administrator (docs/adr/002-first-administrator.md). Se ejecuta en el
 // arranque y es idempotente: si ya hay un Administrator, no hace nada y la
 // aplicacion sigue igual. Solo corre si estan las variables, para que una base
@@ -145,6 +147,12 @@ app.Use(ApiErrorHandling.HandleErrorsAsync);
 // RF-CA-05: una ruta de negocio sin ConAcceso no se ejecuta. Va despues del
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
 app.Use(PirryLedger.Core.AccessControl.Api.AccessFilter.RequireDeclaredOperationAsync);
+
+// RF-CA-09: limite de solicitudes por IP en los flujos que mandan correo. Va
+// despues del enrutado porque lee el RequestRateLimitMetadata del endpoint
+// resuelto, y antes de los endpoints para no ejecutar el caso de uso cuando ya
+// se sabe que la peticion se rechaza.
+app.UseMiddleware<PirryLedger.Core.AccessControl.Api.RequestRateLimitMiddleware>();
 
 app.MapAccessControl();
 app.MapNotifications();
@@ -255,6 +263,7 @@ static async Task SeedFirstAdministrator(WebApplication app)
             Console.WriteLine("Se creo el primer Administrator desde las variables de entorno.");
         }
     }
+
     catch (FirstAdministratorNotSeededException error)
     {
         // El mensaje de la excepcion ya es apto para ver: dice el problema sin el
@@ -263,4 +272,11 @@ static async Task SeedFirstAdministrator(WebApplication app)
         // Administrator.
         Console.Error.WriteLine($"No se pudo crear el primer Administrator: {error.Message}");
     }
+}
+
+static async Task EnsureGlobalBranchSeed(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var seeder = scope.ServiceProvider.GetRequiredService<EnsureGlobalBranch>();
+    await seeder.ExecuteAsync();
 }

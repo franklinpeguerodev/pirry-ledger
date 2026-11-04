@@ -10,6 +10,7 @@ using PirryLedger.Business.Domain.StateMachines;
 using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Auth;
+using PirryLedger.Core.AccessControl.Domain.Enums;
 
 namespace PirryLedger.Business.Api;
 
@@ -21,17 +22,96 @@ public static class EndpointRegistration
 {
     public static IEndpointRouteBuilder MapBusiness(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapPost("/api/admin/products", (
+            ProductBody body,
+            CreateProduct useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var product = await useCase.ExecuteAsync(
+                    body.Name ?? string.Empty,
+                    body.Description,
+                    body.Price,
+                    cancellationToken);
+
+                return Results.Json(
+                    ProductResponse.From(product),
+                    statusCode: StatusCodes.Status201Created);
+            }))
+        .WithAccess(Operation.CreateProduct);
+
+        endpoints.MapPut("/api/admin/products/{id:guid}", (
+            Guid id,
+            ProductBody body,
+            UpdateProduct useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var product = await useCase.ExecuteAsync(
+                    id,
+                    body.Name ?? string.Empty,
+                    body.Description,
+                    body.Price,
+                    cancellationToken);
+
+                return Results.Ok(ProductResponse.From(product));
+            }))
+        .WithAccess(Operation.UpdateProduct);
+
+        endpoints.MapPost("/api/admin/products/{id:guid}/active", (
+            Guid id,
+            ProductActiveBody body,
+            SetProductActive useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var product = await useCase.ExecuteAsync(id, body.IsActive, cancellationToken);
+                return Results.Ok(ProductResponse.From(product));
+            }))
+        .WithAccess(Operation.SetProductActive);
+
+        endpoints.MapGet("/api/billing/products", (
+            ListProducts useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var products = await useCase.ExecuteAsync(cancellationToken);
+                return Results.Ok(products.Select(ProductResponse.From).ToList());
+            }))
+        .WithAccess(Operation.ListProducts);
+
         // RF-NEG-02: emitir una factura. El borrador vive solo en el cliente, asi
         // que se guarda ya emitida. Responde 201 con la factura creada.
         endpoints.MapPost("/api/billing/invoices", (
             IssueInvoiceBody body,
             IssueInvoice useCase,
+            Authenticate authenticate,
+            IBranchDirectory branches,
+            HttpRequest httpRequest,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
+                var caller = await authenticate.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    cancellationToken);
+
+                var branchId = caller.Role == Role.Administrator
+                    ? body.BranchId
+                    : caller.BranchId;
+                var branch = await branches.FindAsync(branchId, cancellationToken)
+                    ?? throw new InvalidOperationException("La sucursal indicada no existe.");
+
+                if (branch.IsGlobal)
+                {
+                    throw new InvalidOperationException("La factura debe pertenecer a una sucursal física.");
+                }
+
                 var invoice = await useCase.ExecuteAsync(
-                    ToItems(body.Items),
+                    ToProductItems(body.Items),
                     body.IsDelivery,
+                    branch.Id,
+                    branch.Name,
+                    branch.Address,
                     cancellationToken);
 
                 return Results.Json(
@@ -109,7 +189,7 @@ public static class EndpointRegistration
 
                 var invoice = await useCase.ExecuteAsync(
                     id,
-                    ToItems(body.Items),
+                    ToProductItems(body.Items),
                     caller.Id,
                     cancellationToken);
 
@@ -208,10 +288,18 @@ public static class EndpointRegistration
         // RF-NEG-02: consultar facturas. Cualquier sesion valida.
         endpoints.MapGet("/api/billing/invoices", (
             ListInvoices useCase,
+            Authenticate authenticate,
+            HttpRequest httpRequest,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
-                var invoices = await useCase.ExecuteAsync(cancellationToken);
+                var caller = await authenticate.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    cancellationToken);
+                Guid? branchId = caller.Role == Role.Administrator
+                    ? null
+                    : caller.BranchId;
+                var invoices = await useCase.ExecuteAsync(branchId, cancellationToken);
 
                 return Results.Ok(invoices.Select(InvoiceResponse.From).ToList());
             }))
@@ -220,10 +308,18 @@ public static class EndpointRegistration
         endpoints.MapGet("/api/billing/invoices/{id:guid}", (
             Guid id,
             GetInvoice useCase,
+            Authenticate authenticate,
+            HttpRequest httpRequest,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
-                var invoice = await useCase.ExecuteAsync(id, cancellationToken);
+                var caller = await authenticate.ExecuteAsync(
+                    TokenBearer.Read(httpRequest) ?? string.Empty,
+                    cancellationToken);
+                Guid? branchId = caller.Role == Role.Administrator
+                    ? null
+                    : caller.BranchId;
+                var invoice = await useCase.ExecuteAsync(id, branchId, cancellationToken);
 
                 return Results.Ok(InvoiceResponse.From(invoice));
             }))
@@ -260,6 +356,16 @@ public static class EndpointRegistration
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status404NotFound);
         }
+        catch (ProductNotFoundException error)
+        {
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (ProductInactiveException error)
+        {
+            return BadRequest(error.Message);
+        }
         catch (CancellationPermissionRequiredException error)
         {
             return Results.Json(
@@ -287,14 +393,11 @@ public static class EndpointRegistration
             new ErrorResponse(message),
             statusCode: StatusCodes.Status400BadRequest);
 
-    private static IReadOnlyCollection<InvoiceItemInput> ToItems(List<InvoiceItemBody>? items) =>
+    private static IReadOnlyCollection<ProductItemInput> ToProductItems(List<InvoiceItemBody>? items) =>
         items?
-            .Select(item => new InvoiceItemInput(
-                item.Name ?? string.Empty,
-                item.UnitPrice,
-                item.Quantity))
+            .Select(item => new ProductItemInput(item.ProductId, item.Quantity))
             .ToList()
-        ?? new List<InvoiceItemInput>();
+        ?? new List<ProductItemInput>();
 
     private static IReadOnlyCollection<InvoicePaymentInput> ToPayments(List<PaymentBody>? payments) =>
         payments?

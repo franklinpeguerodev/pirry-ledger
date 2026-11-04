@@ -13,6 +13,17 @@ public static class PermissionNames
 {
     public const string CancelInvoicePrefix = "CancelInvoice:";
 
+    // ADR 014: los dos permisos de contrasena. Son nombres fijos, sin <guid>:
+    // la concesion es por usuario y el indice unico (user_id, permission_name)
+    // de ADR 008 ya garantiza una sola fila por par.
+    //
+    //   ChangePassword -> cambiar la contrasena con sesion (RF-CA-12).
+    //   ResetPassword  -> emitir el codigo de recuperacion y restablecerla
+    //                     (RF-CA-09, RF-CA-10, RF-CA-11).
+    public const string ChangePassword = "ChangePassword";
+
+    public const string ResetPassword = "ResetPassword";
+
     // 14 caracteres del prefijo + 36 del GUID "D" = 50, y la columna
     // permission_name es varchar(64) (ADR 008).
     public static string CancelInvoice(Guid invoiceId) =>

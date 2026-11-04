@@ -39,10 +39,13 @@ public static class RoleRequirements
     // serviria de oraculo sobre si un token existo alguna vez.
     private static readonly Dictionary<Operation, Requirement> Requirements = new()
     {
-        // RF-CA-01 y RF-CA-02: registro, activacion y reenvio ocurren antes de
-        // que exista una Session, asi que son publicos. El reenvio responde igual
+        // RF-CA-15 y RF-CA-16: activar y reenviar el enlace ocurren antes de que
+        // exista una Session, asi que son publicos. El reenvio responde igual
         // haya o no Email, y por eso no puede filtrar por User.
-        [Operation.RegisterUser] = new(AccessLevel.Public),
+        //
+        // RF-CA-01 ya NO esta aqui: el alta la hace un Administrator
+        // (docs/adr/013-admin-created-users.md), y su entrada vive en el bloque
+        // de administracion.
         [Operation.ActivateAccount] = new(AccessLevel.Public),
         [Operation.ResendActivation] = new(AccessLevel.Public),
 
@@ -60,8 +63,13 @@ public static class RoleRequirements
         // Standard tambien necesita saber quien es.
         [Operation.QueryOwnSession] = new(AccessLevel.AnySession),
 
+        // RF-CA-01 y RF-CA-21: el alta de un User es de Administrator
+        // (docs/adr/013-admin-created-users.md). Un Standard que llame a
+        // /api/admin/users recibe 403, igual que en las otras cuatro.
+        [Operation.CreateUserByAdministrator] = new(AccessLevel.Administrator),
+
         // RF-CA-21: listar usuarios es de Administrator, y un Standard recibe
-        // rechazo (el mismo 403 que en las otras tres).
+        // rechazo (el mismo 403 que en las otras cuatro).
         [Operation.ListUsers] = new(AccessLevel.Administrator),
 
         // RF-CA-08: cambiar el role lo hace un Administrator.
@@ -70,6 +78,15 @@ public static class RoleRequirements
         // RF-CA-20: Deactivate y Reactivate los hace un Administrator.
         [Operation.DeactivateUser] = new(AccessLevel.Administrator),
         [Operation.ReactivateUser] = new(AccessLevel.Administrator),
+
+        // RF-CA-19 y docs/adr/013-admin-created-users.md: desbloquear una cuenta
+        // bloqueada por cinco intentos fallidos es de Administrator. Un Standard
+        // no puede saltarse el bloqueo por su cuenta.
+        [Operation.UnlockUser] = new(AccessLevel.Administrator),
+        [Operation.CreateBranch] = new(AccessLevel.Administrator),
+        [Operation.UpdateBranch] = new(AccessLevel.Administrator),
+        [Operation.AssignUserBranch] = new(AccessLevel.Administrator),
+        [Operation.ListBranches] = new(AccessLevel.Administrator),
 
         [Operation.RequestRecovery] = new(AccessLevel.Public),
         [Operation.ResetPassword] = new(AccessLevel.Public),
@@ -114,6 +131,11 @@ public static class RoleRequirements
         // que la tabla sigue diciendo a quien admite cada ruta.
         [Operation.ListInvoices] = new(AccessLevel.AnySession),
         [Operation.GetInvoice] = new(AccessLevel.AnySession),
+
+        [Operation.CreateProduct] = new(AccessLevel.Administrator),
+        [Operation.UpdateProduct] = new(AccessLevel.Administrator),
+        [Operation.SetProductActive] = new(AccessLevel.Administrator),
+        [Operation.ListProducts] = new(AccessLevel.AnySession),
     };
 
     // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui
