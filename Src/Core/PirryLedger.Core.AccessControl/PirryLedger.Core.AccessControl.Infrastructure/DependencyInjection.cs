@@ -89,6 +89,7 @@ public static class DependencyInjection
         // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
         // dispararlo: no es una operation de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();
+        services.AddScoped<EnsureGlobalBranch>();
 
         services.AddScoped<PasswordResetIssuer>(provider => new PasswordResetIssuer(
             provider.GetRequiredService<IUserRepository>(),
