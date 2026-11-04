@@ -8,7 +8,8 @@
 # activación) en @tokenActivacion y completar las entradas marcadas.
 #
 # Autocontenido: este archivo no comparte estado con PirryLedger.Host.http.
-# Incluye el registro, la activación y los dos logins que necesita. Quien lo
+# Incluye el alta del usuario estandar por el Administrador, la activación y
+# los dos logins que necesita. Quien lo
 # ejecuta no tiene que correr antes el guion de Práctica 1 ni tener usuarios
 # pre-creados en la base.
 #
@@ -33,7 +34,7 @@
 #   4. Se puede re-ejecutar sobre una base que ya tiene concesiones: el
 #      repositorio reutiliza la fila de per_permission_grants en lugar de
 #      insertar otra (upsert por user_id + permission_name), asi que la segunda
-#      corrida NO da 500. Aun asi, el registro del usuario estandar responde 409
+#      corrida NO da 500. Aun asi, el alta del usuario estandar responde 409
 #      y su rol queda en Administrator de la corrida anterior: la SQL de reset de
 #      la cabecera deja el escenario como estaba.
 #
@@ -86,7 +87,7 @@
 # --- Valores de la pausa manual -----------------------------------------------
 
 # PAUSA 1: el token de activacion llega solo por el correo en cola del
-# registro (RF-NOT-08). Ninguna respuesta HTTP puede llevarlo.
+# alta (RF-NOT-08). Ninguna respuesta HTTP puede llevarlo.
 #
 #   SELECT body FROM not_email_queue
 #   WHERE recipient = '<correoEstandar>'
@@ -104,14 +105,32 @@
 
 GET {{host}}/openapi/v1.json
 
-# --- Bootstrap: registro, activacion y dos sesiones ---------------------------
+# --- Bootstrap: alta, activacion y dos sesiones ------------------------------
+#
+# Desde ADR 013 no hay alta publica: el usuario estandar lo crea el
+# Administrador, asi que su sesion va primero.
 
-### Registrar el usuario estandar -> 202 (RF-CA-01). Si ya existe (corrida
-### anterior) responde 409; en ese caso saltar hasta "PAUSA 1" usando el token
-### de la corrida anterior, o bien ejecutar antes la SQL de reset del inicio.
-### Para una corrida limpia desde cero, una sola vez en la vida de la base.
+### Iniciar sesion como Administrador -> 200 (RF-CA-03). Si la cuenta del
+### administrador no existe (seed no corrio), verificar las variables
+### PIRRY_LEDGER_FIRST_ADMIN_* del `.env` y reiniciar el Host.
 
-POST {{host}}/api/auth/register
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{correoAdmin}}",
+  "password": "{{contrasenaAdmin}}"
+}
+
+### Crear el usuario estandar -> 201 {"id":"..."} (RF-CA-01). Si ya existe
+### (corrida anterior) responde 409; en ese caso saltar hasta "PAUSA 1" usando el
+### token de activacion de la corrida anterior, o bien ejecutar antes la SQL de
+### reset del inicio. Para una corrida limpia desde cero, una sola vez en la
+### vida de la base.
+
+POST {{host}}/api/admin/users
+Authorization: Bearer {{loginAdmin.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -137,19 +156,6 @@ Content-Type: application/json
 {
   "email": "{{correoEstandar}}",
   "password": "{{contrasenaEstandar}}"
-}
-
-### Iniciar sesion como Administrador -> 200 (RF-CA-03). Si la cuenta del
-### administrador no existe (seed no corrio), verificar las variables
-### PIRRY_LEDGER_FIRST_ADMIN_* del `.env` y reiniciar el Host.
-
-# @name loginAdmin
-POST {{host}}/api/auth/login
-Content-Type: application/json
-
-{
-  "email": "{{correoAdmin}}",
-  "password": "{{contrasenaAdmin}}"
 }
 
 # --- RF-GP-01: crear una solicitud de permiso ------------------------------

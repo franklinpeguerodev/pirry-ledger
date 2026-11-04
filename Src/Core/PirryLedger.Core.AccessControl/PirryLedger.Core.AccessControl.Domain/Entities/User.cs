@@ -241,6 +241,23 @@ public sealed class User
         LockedUntilUtc = null;
     }
 
+    // RF-CA-19 y docs/adr/013-admin-created-users.md, decision 6: el
+    // Administrator desbloquea una cuenta sin esperar los quince minutos.
+    //
+    // No toca el hash ni CredentialVersion: desbloquear no cambia la contrasena
+    // ni invalida sesiones, porque una cuenta bloqueada no tiene sesiones validas
+    // que invalidar.
+    //
+    // Es idempotente a proposito, y por eso no lanza si la cuenta ya estaba
+    // desbloqueada: el Administrator pide un estado, no una transicion. Es
+    // distinto de Deactivate y Reactivate, donde el segundo intento si se rechaza
+    // porque ahi si hay una transicion que no se puede repetir.
+    public void Unlock()
+    {
+        FailedAttempts = 0;
+        LockedUntilUtc = null;
+    }
+
     public bool IsBlocked(DateTime utcNow) =>
         LockedUntilUtc is not null && utcNow < LockedUntilUtc.Value;
 }

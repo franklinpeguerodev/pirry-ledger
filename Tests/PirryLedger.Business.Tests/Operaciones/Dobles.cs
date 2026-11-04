@@ -73,6 +73,19 @@ internal sealed class FakePermissionAuthority : IPermissionAuthority
         return Task.FromResult(_granted.Remove((userId, permissionName)));
     }
 
+    // ADR 014: concesion directa. La suite de Business no ejercita el cambio de
+    // contrasena, pero el contrato crece y el doble tiene que cumplirlo.
+    public Task GrantAsync(
+        Guid userId,
+        string permissionName,
+        Guid grantedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        _granted.Add((userId, permissionName));
+
+        return Task.CompletedTask;
+    }
+
     public void Grant(Guid userId, string permissionName) =>
         _granted.Add((userId, permissionName));
 }

@@ -8,6 +8,48 @@ Franklin replaces this file at the start of each assignment. The agent reads it 
 
 Brief and rubric: `docs/assignments/practica-3.md`, transcribed from the professor's PDF. Two repository notes at its end apply: the rubric says "tres" defects but there are **four** (`practica-3-defecto-1` to `-4`), and the "entre 3 y 5 estados" of RF-NEG-03 does not limit this machine (see decision 2). The defects are described in section 1.3 of the brief itself, over Franklin's own tables, so there is no separate defects annex as in Práctica 2.
 
+**Práctica 3 is delivered** (2026-11-01, closing documented in `docs/practica-3-closing`). It stays in this file because its decisions, its work plan and its delivery checks are still the reference for what was graded. The work that follows is the Core hardening below.
+
+## Core hardening (current work)
+
+Not a course assignment: this is Franklin's own hardening of the Access control piece, decided on 2026-11-04. It closes gaps the professor's requirements do not cover but that the code left open. The two decisions that shape it are ADR 013 (users are created by an Administrator) and ADR 014 (every password change of a Standard needs an Administrator's approval), both authorized by Franklin and accepted.
+
+### In scope
+
+| Area | Requirement IDs | Decision |
+|---|---|---|
+| Users are created by an Administrator; `POST /api/auth/register` no longer exists | RF-CA-01, 15, 21 | ADR 013 |
+| An Administrator unlocks a blocked account, idempotently | RF-CA-19 | ADR 013 |
+| Every password change of a Standard needs an Administrator's approval | RF-CA-09, 12, 13, 22; RF-GP-01, 03, 05, 07 | ADR 014 |
+| The recovery code lasts four hours instead of fifteen minutes | RF-CA-10 | ADR 014, decision 7 |
+| Per-IP rate limit on the two flows that send mail | RF-CA-09, 17 | ADR 014 context; no new ADR needed |
+| No migration: no new columns and no new tables | — | ADR 013 decision 8, ADR 014 |
+
+### Out of scope
+
+- The audit records of the administrative operations (RF-AUD-02, week 14).
+- The notice to the Administrator when a request arrives (RF-NEG-07, week 10).
+- Any change to the business module, to the permission state machine or to the mail queue.
+- `created_by_user_id`: who created whom is an audit record, and the audit is a later piece.
+
+### Rules this work follows
+
+- The Administrator is exempt from the approval for its own password. With a single Administrator, RF-GP-07 (nobody resolves their own request) would make the system impossible to administer, so the exemption is the only exit, not a convenience.
+- The approval happens **before** the code reaches the mail. A valid code therefore implies a granted approval, and RF-CA-11 is satisfied as it is written.
+- The two new permission names, `ChangePassword` and `ResetPassword`, are fixed names in the closed catalog. They fit `permission_name varchar(64)`, so there is no migration.
+- The rate limit is hand-rolled in `PirryLedger.Core.AccessControl.Api` with the injectable `IClock`, not a new package: it matches the style of `AccessFilter` and `ApiErrorHandling` and stays testable without starting the application (RD-12).
+- The rate limit is per IP **and** per route, so the recovery flow and the activation resend have independent counters.
+
+### Verification
+
+343 tests, all green, with no database and no SMTP server. Each new behaviour was shown red for the right reason before it was shown green: skipping the Standard gate in `ChangeOwnPassword` turned four tests red, removing the Administrator exemption in `PasswordRecovery` turned four red, and not counting the requests in the rate limiter turned five red.
+
+Branch `feature/admin-created-users`, from `develop`. Seven commits, one change each. No push, no merge and no tag without Franklin's authorization.
+
+### Open decisions
+
+None. Both ADRs are accepted.
+
 ## Requirement files to read
 
 `docs/requirements/README.md` (index) first, then `business-module.md`, `design-rules.md` and `permissions.md`. Read `access-control.md` only to protect what is already delivered: section 1.5 of the brief re-verifies access control and permissions.
@@ -168,4 +210,4 @@ File: `docs/bitacora-practica-3.md`, a new file. It documents at least one real 
 
 ## Delivered earlier
 
-Práctica 1 (Access control, mail queue and the structure of the business state machine), Asignación 2 (Permissions management and its first suite) and Práctica 2 (full Permissions suite and its six planted defects) are delivered. Their decisions live in `docs/adr/`; their commands in `README.md`; their briefs in `docs/assignments/`.
+Práctica 1 (Access control, mail queue and the structure of the business state machine), Asignación 2 (Permissions management and its first suite), Práctica 2 (full Permissions suite and its six planted defects) and Práctica 3 (the business module, its suite, its four planted defects and its integration test) are delivered. Their decisions live in `docs/adr/`; their commands in `README.md`; their briefs in `docs/assignments/`.

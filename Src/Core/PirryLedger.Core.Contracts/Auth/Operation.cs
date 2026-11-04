@@ -21,8 +21,9 @@ namespace PirryLedger.Core.Contracts.Auth;
 // sola. Si se declara aqui y no en RoleRequirements, la ruta se rechaza.
 public enum Operation
 {
-    // Registro y activacion. Abiertas a cualquiera: no hay Session todavia.
-    RegisterUser,
+    // Activacion. Abiertas a cualquiera: no hay Session todavia. El alta ya no
+    // es publica: la hace un Administrator (ADR 013), asi que vive en el bloque
+    // de administracion de mas abajo.
     ActivateAccount,
     ResendActivation,
 
@@ -38,11 +39,13 @@ public enum Operation
     // Consultar quien es. Cualquier Session valida.
     QueryOwnSession,
 
-    // Administracion de usuarios: RF-CA-08, 20 y 21.
+    // Administracion de usuarios: RF-CA-01, 08, 19, 20 y 21.
     ListUsers,
+    CreateUserByAdministrator,
     ChangeUserRole,
     DeactivateUser,
     ReactivateUser,
+    UnlockUser,
 
     RequestRecovery,
     ResetPassword,

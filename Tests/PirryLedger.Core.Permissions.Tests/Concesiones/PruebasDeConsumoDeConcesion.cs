@@ -138,7 +138,8 @@ public sealed class PruebasDeConsumoDeConcesion
 
         await using var contexto = ContextoEnMemoria(nameof(LaAutoridadDejaDeVerElPermisoDespuesDeConsumirlo));
         var repositorio = new PermissionGrantRepository(contexto);
-        var autoridad = new EfPermissionAuthority(repositorio);
+        var autoridad = new EfPermissionAuthority(
+            repositorio, new FakeClock(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc)));
         await repositorio.SaveAsync(Concesion(usuarioId, permiso), CancellationToken.None);
 
         // Act
@@ -161,7 +162,8 @@ public sealed class PruebasDeConsumoDeConcesion
 
         await using var contexto = ContextoEnMemoria(nameof(LaAutoridadNoConsumeConUsuarioVacio));
         var repositorio = new PermissionGrantRepository(contexto);
-        var autoridad = new EfPermissionAuthority(repositorio);
+        var autoridad = new EfPermissionAuthority(
+            repositorio, new FakeClock(new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc)));
         await repositorio.SaveAsync(Concesion(usuarioId, permiso), CancellationToken.None);
 
         // Act

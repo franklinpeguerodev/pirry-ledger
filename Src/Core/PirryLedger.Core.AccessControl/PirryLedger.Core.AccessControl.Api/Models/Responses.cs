@@ -28,3 +28,9 @@ public sealed record MeResponse(string Name, string Email, string Role);
 // numero, un cliente con una version distinta del API interpretaria 0 y 1 de
 // otra manera, y el JSON dejaria de ser legible en un log.
 public sealed record ChangeRoleRequest(string Role);
+
+// RF-CA-01 y docs/adr/013-admin-created-users.md: lo unico que devuelve el alta.
+// El Id es lo que el cliente necesita para el siguiente paso (listar, promover o
+// desbloquear). Ni el hash, ni el token de activacion, ni el estado: la cuenta
+// nace inactiva siempre, asi que no hay nada que informar.
+public sealed record CreatedUserResponse(Guid Id);

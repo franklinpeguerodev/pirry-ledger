@@ -146,6 +146,12 @@ app.Use(ApiErrorHandling.HandleErrorsAsync);
 // enrutado (para que endpoint ya este resuelto) y antes de los endpoints.
 app.Use(PirryLedger.Core.AccessControl.Api.AccessFilter.RequireDeclaredOperationAsync);
 
+// RF-CA-09: limite de solicitudes por IP en los flujos que mandan correo. Va
+// despues del enrutado porque lee el RequestRateLimitMetadata del endpoint
+// resuelto, y antes de los endpoints para no ejecutar el caso de uso cuando ya
+// se sabe que la peticion se rechaza.
+app.UseMiddleware<PirryLedger.Core.AccessControl.Api.RequestRateLimitMiddleware>();
+
 app.MapAccessControl();
 app.MapNotifications();
 app.MapPermissions();

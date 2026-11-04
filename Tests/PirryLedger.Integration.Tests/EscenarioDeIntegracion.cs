@@ -7,6 +7,7 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Permissions.Application.Services;
 using PirryLedger.Core.Permissions.Application.UseCases;
@@ -142,7 +143,10 @@ internal sealed class EscenarioDeIntegracion
                 Sessions,
                 Users,
                 Clock,
-                new EfPermissionAuthority(new PermissionGrantRepository(permisos))),
+                new EfPermissionAuthority(new PermissionGrantRepository(permisos), Clock)),
+            // ADR 014: aprobar una anulacion de factura no emite codigos; el
+            // escenario no necesita un emisor real.
+            new SinEmisorDeCodigos(),
             Clock);
 
         await aprobacion.ExecuteAsync(token, solicitud.Id);
@@ -191,7 +195,7 @@ internal sealed class EscenarioDeIntegracion
         PermissionsDbContext permisos)
     {
         var concesiones = new PermissionGrantRepository(permisos);
-        var autoridad = new EfPermissionAuthority(concesiones);
+        var autoridad = new EfPermissionAuthority(concesiones, Clock);
 
         var solicitudes = new PermissionRequestRepository(permisos);
         var puerta = new PermissionRequestGateway(solicitudes, autoridad, Clock);
@@ -209,4 +213,13 @@ internal sealed class EscenarioDeIntegracion
             solicitud.RequestedPermission == nombre
             && solicitud.State == PermissionRequestState.Pending);
     }
+}
+
+// ADR 014: aprobar una anulacion de factura no emite codigos de recuperacion.
+// Este escenario no ejercita ese camino, asi que un emisor que no hace nada es
+// suficiente y deja claro que la emision es exclusiva de ResetPassword.
+internal sealed class SinEmisorDeCodigos : IPasswordResetIssuer
+{
+    public Task IssueAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }

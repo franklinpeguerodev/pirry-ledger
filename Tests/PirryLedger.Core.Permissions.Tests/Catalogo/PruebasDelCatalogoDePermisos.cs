@@ -70,4 +70,19 @@ public sealed class PruebasDelCatalogoDePermisos
         Assert.False(PermissionCatalog.IsKnown("PermisoInventado"));
         Assert.True(PermissionCatalog.IsKnown(PermissionCatalog.ViewSalesSummary));
     }
+
+    // ADR 014: los dos permisos de contrasena son nombres fijos del catalogo. La
+    // misma cadena esta en PermissionNames (contrato) y en PermissionCatalog
+    // (dominio); si una cambia sin la otra, esto salta.
+    [Theory]
+    [InlineData(PermissionNames.ChangePassword)]
+    [InlineData(PermissionNames.ResetPassword)]
+    public void ElCatalogoAceptaLosPermisosDeContrasena(string nombre)
+    {
+        // Act + Assert
+        Assert.True(PermissionCatalog.IsKnown(nombre));
+
+        // permission_name es varchar(64) (ADR 008).
+        Assert.True(nombre.Length <= 64);
+    }
 }
