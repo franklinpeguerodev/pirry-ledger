@@ -380,6 +380,7 @@ public static class EndpointRegistration
                     TokenBearer.Read(httpRequest) ?? string.Empty,
                     id,
                     request.Role,
+                    request.BranchId,
                     cancellationToken);
 
                 return Results.NoContent();
