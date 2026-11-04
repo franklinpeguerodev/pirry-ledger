@@ -23,14 +23,16 @@ Not a course assignment: this is Franklin's own hardening of the Access control 
 | Every password change of a Standard needs an Administrator's approval | RF-CA-09, 12, 13, 22; RF-GP-01, 03, 05, 07 | ADR 014 |
 | The recovery code lasts four hours instead of fifteen minutes | RF-CA-10 | ADR 014, decision 7 |
 | Per-IP rate limit on the two flows that send mail | RF-CA-09, 17 | ADR 014 context; no new ADR needed |
-| No migration: no new columns and no new tables | — | ADR 013 decision 8, ADR 014 |
+| No migration for the access-control hardening | — | ADR 013 decision 8, ADR 014 |
+| Product catalog in Business | — | Product entity persisted in `bil_products`; Administrator manages it and invoices use active products |
 
 ### Out of scope
 
 - The audit records of the administrative operations (RF-AUD-02, week 14).
 - The notice to the Administrator when a request arrives (RF-NEG-07, week 10).
-- Any change to the business module, to the permission state machine or to the mail queue.
+- Any change to the business module except the product catalog described above.
 - `created_by_user_id`: who created whom is an audit record, and the audit is a later piece.
+- Full inventory: stock, movements, suppliers, purchases and cost accounting.
 
 ### Rules this work follows
 
@@ -39,6 +41,7 @@ Not a course assignment: this is Franklin's own hardening of the Access control 
 - The two new permission names, `ChangePassword` and `ResetPassword`, are fixed names in the closed catalog. They fit `permission_name varchar(64)`, so there is no migration.
 - The rate limit is hand-rolled in `PirryLedger.Core.AccessControl.Api` with the injectable `IClock`, not a new package: it matches the style of `AccessFilter` and `ApiErrorHandling` and stays testable without starting the application (RD-12).
 - The rate limit is per IP **and** per route, so the recovery flow and the activation resend have independent counters.
+- Product changes keep the invoice item's historical name and price; deactivation affects only future invoices.
 
 ### Verification
 

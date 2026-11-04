@@ -1757,6 +1757,7 @@ Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities
 `Tests/PirryLedger.Business.Tests/Reglas/` y `.../Persistencia/`.
 
 | Criterio | Qué hace el código | Prueba que lo demuestra |
+| Catálogo de productos | `Product` valida nombre, descripción, precio y estado; se persiste en `bil_products` y solo un producto activo puede entrar en una factura | `PruebasDeProductos` |
 |---|---|---|
 | Emitir exige al menos un ítem y guarda el total | `Issue` rechaza la lista vacía y suma precio por cantidad | `EmitirGuardaLaFacturaConSusItemsYSuTotal`, `EmitirSinItemsSeRechazaYNoCreaNada` |
 | El delivery se marca al emitir | `Issue(..., isDelivery)` guarda la marca | `EmitirUnaFacturaDeDeliveryGuardaLaMarca` |
@@ -2324,6 +2325,15 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `POST` | `/api/permissions/requests/{id}/reject` | Rechaza con motivo escrito. Cuerpo `{"reason":"..."}`. Responde `204`. |
 | `GET` | `/api/permissions/sales-summary` | Ruta de demostración del sistema de permisos. Responde `200` con datos fijos (`date`, `totalInvoices`, `totalAmount`, `branch`). Exige el permiso `ViewSalesSummary` concedido. |
 
+### Catálogo de productos
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/admin/products` | Crea un producto. Cuerpo `{"name":"Combo","description":"...", "price":500}`. Exige `Administrator`. |
+| `PUT` | `/api/admin/products/{id}` | Actualiza nombre, descripción y precio. Exige `Administrator`. |
+| `POST` | `/api/admin/products/{id}/active` | Activa o desactiva un producto. Cuerpo `{"isActive":false}`. Exige `Administrator`. |
+| `GET` | `/api/billing/products` | Lista el catálogo. Cualquier sesión válida. |
+
 ### Endpoints del negocio (facturas)
 
 Estos endpoints llegaron con la fase 4 de la Práctica 3
@@ -2332,7 +2342,7 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/api/billing/invoices` | Emite una factura. Cuerpo `{"isDelivery":false,"items":[{"name":"Combo","unitPrice":500,"quantity":1}]}`. Responde `201` con la factura. |
+| `POST` | `/api/billing/invoices` | Emite una factura seleccionando productos activos. Cuerpo `{"isDelivery":false,"items":[{"productId":"<guid>","quantity":1}]}`. Responde `201` con la factura y conserva el nombre/precio aplicados. |
 | `POST` | `/api/billing/invoices/{id}/collect` | Cobra la factura. Cuerpo `{"payments":[{"method":"Cash","amount":500,"receivedAmount":600}]}`. Responde `200`. |
 | `POST` | `/api/billing/invoices/{id}/debt` | Deja la factura en deuda. Cuerpo `{"debtorName":"Ana Perez","payments":[]}`. Responde `200`. |
 | `PUT` | `/api/billing/invoices/{id}/items` | Reemplaza los ítems de una factura emitida y guarda el historial. Responde `200`. |

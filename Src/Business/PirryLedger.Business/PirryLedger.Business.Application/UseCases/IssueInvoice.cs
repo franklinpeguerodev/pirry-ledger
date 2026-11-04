@@ -1,4 +1,5 @@
 using PirryLedger.Business.Application.Ports;
+using PirryLedger.Business.Application.Exceptions;
 using PirryLedger.Business.Domain.Entities;
 using PirryLedger.Core.Contracts.Time;
 
@@ -10,12 +11,49 @@ namespace PirryLedger.Business.Application.UseCases;
 public sealed class IssueInvoice
 {
     private readonly IInvoiceRepository _invoices;
+    private readonly IProductRepository? _products;
     private readonly IClock _clock;
 
     public IssueInvoice(IInvoiceRepository invoices, IClock clock)
     {
         _invoices = invoices;
         _clock = clock;
+    }
+
+    public IssueInvoice(IInvoiceRepository invoices, IProductRepository products, IClock clock)
+        : this(invoices, clock)
+    {
+        _products = products;
+    }
+
+    public async Task<Invoice> ExecuteAsync(
+        IReadOnlyCollection<ProductItemInput> items,
+        bool isDelivery,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        if (_products is null)
+        {
+            throw new InvalidOperationException("El catalogo de productos no esta configurado.");
+        }
+
+        var products = new List<InvoiceItem>();
+
+        foreach (var item in items)
+        {
+            var product = await _products.GetByIdAsync(item.ProductId, cancellationToken)
+                ?? throw new ProductNotFoundException();
+
+            if (!product.IsActive)
+            {
+                throw new ProductInactiveException();
+            }
+
+            products.Add(InvoiceItem.Create(product, item.Quantity));
+        }
+
+        return await IssueAsync(products, isDelivery, cancellationToken);
     }
 
     public async Task<Invoice> ExecuteAsync(
@@ -25,14 +63,20 @@ public sealed class IssueInvoice
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        var invoice = Invoice.Create();
-
         var domainItems = items
             .Select(item => InvoiceItem.Create(item.Name, item.UnitPrice, item.Quantity))
             .ToList();
 
-        invoice.Issue(domainItems, isDelivery, _clock.UtcNow);
+        return await IssueAsync(domainItems, isDelivery, cancellationToken);
+    }
 
+    private async Task<Invoice> IssueAsync(
+        IReadOnlyCollection<InvoiceItem> items,
+        bool isDelivery,
+        CancellationToken cancellationToken)
+    {
+        var invoice = Invoice.Create();
+        invoice.Issue(items, isDelivery, _clock.UtcNow);
         await _invoices.AddAsync(invoice, cancellationToken);
         await _invoices.SaveChangesAsync(cancellationToken);
 

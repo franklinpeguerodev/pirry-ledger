@@ -82,6 +82,10 @@ public enum Operation
     ListInvoices,
     GetInvoice,
     ListInvoiceEdits,
+    CreateProduct,
+    UpdateProduct,
+    SetProductActive,
+    ListProducts,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica
