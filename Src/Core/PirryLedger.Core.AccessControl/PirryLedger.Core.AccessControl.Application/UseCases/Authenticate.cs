@@ -7,7 +7,7 @@ namespace PirryLedger.Core.AccessControl.Application;
 
 // Quien esta autenticado, ya validado. Viaja hasta el endpoint, que solo lo usa
 // para responder.
-public sealed record AuthenticatedUser(Guid Id, string Name, string Email, Role Role);
+public sealed record AuthenticatedUser(Guid Id, string Name, string Email, Role Role, Guid BranchId);
 
 // Excepcion unica de autenticacion. El endpoint la convierte en 401. El role
 // insuficiente NO se lanza desde aqui: es un 403 y lo decide el punto de role.
@@ -63,7 +63,7 @@ public sealed class Authenticate
     {
         var user = await ValidateAsync(plainToken, cancellationToken);
 
-        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role);
+        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role, user.BranchId);
     }
 
     // La misma validacion, pero devolviendo false en vez de lanzar. Para los
@@ -95,7 +95,7 @@ public sealed class Authenticate
             throw new InsufficientRoleException();
         }
 
-        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role);
+        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role, user.BranchId);
     }
 
     // RF-GP-05: la misma idea que ExecuteWithRoleAsync pero consultando
@@ -117,7 +117,7 @@ public sealed class Authenticate
             throw new InsufficientPermissionException();
         }
 
-        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role);
+        return new AuthenticatedUser(user.Id, user.Name, user.Email, user.Role, user.BranchId);
     }
 
     // El nucleo: las cinco condiciones, en un solo metodo. Todo lo demas lo llama.

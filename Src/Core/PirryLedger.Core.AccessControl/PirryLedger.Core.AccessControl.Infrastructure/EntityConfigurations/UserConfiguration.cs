@@ -58,6 +58,15 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasColumnName("active")
             .IsRequired();
 
+        builder.Property(user => user.BranchId)
+            .HasColumnName("branch_id")
+            .IsRequired();
+
+        builder.HasOne<Branch>()
+            .WithMany()
+            .HasForeignKey(user => user.BranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(user => user.CreatedAtUtc)
             .HasColumnName("created_at_utc")
             .IsRequired();

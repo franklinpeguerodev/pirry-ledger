@@ -69,6 +69,8 @@ builder.Services.AddBusiness(connection);
 
 var app = builder.Build();
 
+await EnsureGlobalBranchSeed(app);
+
 // Primer Administrator (docs/adr/002-first-administrator.md). Se ejecuta en el
 // arranque y es idempotente: si ya hay un Administrator, no hace nada y la
 // aplicacion sigue igual. Solo corre si estan las variables, para que una base
@@ -261,6 +263,7 @@ static async Task SeedFirstAdministrator(WebApplication app)
             Console.WriteLine("Se creo el primer Administrator desde las variables de entorno.");
         }
     }
+
     catch (FirstAdministratorNotSeededException error)
     {
         // El mensaje de la excepcion ya es apto para ver: dice el problema sin el
@@ -269,4 +272,11 @@ static async Task SeedFirstAdministrator(WebApplication app)
         // Administrator.
         Console.Error.WriteLine($"No se pudo crear el primer Administrator: {error.Message}");
     }
+}
+
+static async Task EnsureGlobalBranchSeed(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var seeder = scope.ServiceProvider.GetRequiredService<EnsureGlobalBranch>();
+    await seeder.ExecuteAsync();
 }

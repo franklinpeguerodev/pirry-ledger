@@ -17,11 +17,23 @@ internal sealed class FakeInvoiceRepository : IInvoiceRepository
 
     public void Seed(Invoice invoice) => _invoices[invoice.Id] = invoice;
 
-    public Task<Invoice?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_invoices.TryGetValue(id, out var invoice) ? invoice : null);
+    public Task<Invoice?> GetByIdAsync(
+        Guid id,
+        Guid? branchId = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            _invoices.TryGetValue(id, out var invoice)
+            && (branchId is null || invoice.BranchId == branchId)
+                ? invoice
+                : null);
 
-    public Task<IReadOnlyList<Invoice>> ListAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<Invoice>>(_invoices.Values.ToList());
+    public Task<IReadOnlyList<Invoice>> ListAsync(
+        Guid? branchId = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Invoice>>(
+            _invoices.Values
+                .Where(invoice => branchId is null || invoice.BranchId == branchId)
+                .ToList());
 
     public Task AddAsync(Invoice invoice, CancellationToken cancellationToken = default)
     {

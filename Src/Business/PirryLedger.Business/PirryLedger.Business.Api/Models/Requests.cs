@@ -10,6 +10,8 @@ public sealed class IssueInvoiceBody
     public bool IsDelivery { get; init; }
 
     public List<InvoiceItemBody>? Items { get; init; }
+
+    public Guid BranchId { get; init; }
 }
 
 public sealed class InvoiceItemBody

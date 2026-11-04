@@ -34,6 +34,7 @@ public sealed class ChangeUserRole
         string plainToken,
         Guid userId,
         string newRole,
+        Guid? branchId = null,
         CancellationToken cancellationToken = default)
     {
         var caller = await _authenticate.ExecuteWithRoleAsync(
@@ -68,7 +69,22 @@ public sealed class ChangeUserRole
             throw new AdministrationOperationRejectedException("No existe ese usuario.");
         }
 
-        user.ChangeRole(role);
+        if (role == Role.Standard)
+        {
+            if (branchId is null || branchId == Guid.Empty || branchId == Branch.AllId)
+            {
+                throw new AdministrationOperationRejectedException(
+                    "Un usuario Estándar debe tener una sucursal física.");
+            }
+
+            user.AssignBranch(branchId.Value);
+            user.ChangeRole(role);
+        }
+        else
+        {
+            user.ChangeRole(role);
+            user.AssignBranch(Branch.AllId);
+        }
 
         await _users.SaveAsync(user, cancellationToken);
     }

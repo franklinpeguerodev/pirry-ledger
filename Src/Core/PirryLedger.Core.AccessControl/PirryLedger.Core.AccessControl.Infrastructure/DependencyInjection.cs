@@ -34,6 +34,9 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IBranchRepository, BranchRepository>();
+        services.AddScoped<IBranchDirectory, BranchDirectory>();
+        services.AddScoped<IBranchScopeAccessor, BranchScopeAccessor>();
         services.AddScoped<IActivationTokenRepository, ActivationTokenRepository>();
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
@@ -45,7 +48,8 @@ public static class DependencyInjection
             provider.GetRequiredService<IEmailQueue>(),
             provider.GetRequiredService<Authenticate>(),
             provider.GetRequiredService<IClock>(),
-            baseUrl));
+            baseUrl,
+            provider.GetRequiredService<IBranchRepository>()));
 
         services.AddScoped<ActivateAccount>();
 
@@ -86,6 +90,9 @@ public static class DependencyInjection
         // resuelve y lo ejecuta en el arranque, no hay endpoint ni comando para
         // dispararlo: no es una operation de negocio, es parte del despliegue.
         services.AddScoped<SeedFirstAdministrator>();
+        services.AddScoped<EnsureGlobalBranch>();
+        services.AddScoped<CreateBranch>();
+        services.AddScoped<ListBranches>();
 
         services.AddScoped<PasswordResetIssuer>(provider => new PasswordResetIssuer(
             provider.GetRequiredService<IUserRepository>(),

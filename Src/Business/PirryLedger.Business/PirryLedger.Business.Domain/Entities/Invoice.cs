@@ -37,6 +37,12 @@ public sealed class Invoice
 
     public bool IsDelivery { get; private set; }
 
+    public Guid BranchId { get; private set; }
+
+    public string BranchName { get; private set; } = string.Empty;
+
+    public string BranchAddress { get; private set; } = string.Empty;
+
     // Solo cuando la factura queda en deuda: el nombre de la persona.
     public string? DebtorName { get; private set; }
 
@@ -64,6 +70,15 @@ public sealed class Invoice
     // que ya tiene la factura (todavia no tiene ninguno). Si la transicion se
     // rechaza, el agregado no cambia: los items se agregan despues.
     public void Issue(IReadOnlyCollection<InvoiceItem> items, bool isDelivery, DateTime issuedAtUtc)
+        => Issue(items, isDelivery, issuedAtUtc, Guid.Empty, string.Empty, string.Empty);
+
+    public void Issue(
+        IReadOnlyCollection<InvoiceItem> items,
+        bool isDelivery,
+        DateTime issuedAtUtc,
+        Guid branchId,
+        string branchName,
+        string branchAddress)
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -79,6 +94,9 @@ public sealed class Invoice
 
         IsDelivery = isDelivery;
         IssuedAtUtc = issuedAtUtc;
+        BranchId = branchId;
+        BranchName = branchName;
+        BranchAddress = branchAddress;
     }
 
     // Issued -> Paid o Issued -> PendingVerification. La hora y el usuario viven

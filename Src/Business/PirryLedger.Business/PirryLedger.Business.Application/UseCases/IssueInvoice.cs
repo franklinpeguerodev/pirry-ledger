@@ -30,6 +30,21 @@ public sealed class IssueInvoice
         IReadOnlyCollection<ProductItemInput> items,
         bool isDelivery,
         CancellationToken cancellationToken = default)
+        => await ExecuteAsync(
+            items,
+            isDelivery,
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            cancellationToken);
+
+    public async Task<Invoice> ExecuteAsync(
+        IReadOnlyCollection<ProductItemInput> items,
+        bool isDelivery,
+        Guid branchId,
+        string branchName,
+        string branchAddress,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -53,12 +68,27 @@ public sealed class IssueInvoice
             products.Add(InvoiceItem.Create(product, item.Quantity));
         }
 
-        return await IssueAsync(products, isDelivery, cancellationToken);
+        return await IssueAsync(products, isDelivery, branchId, branchName, branchAddress, cancellationToken);
     }
 
     public async Task<Invoice> ExecuteAsync(
         IReadOnlyCollection<InvoiceItemInput> items,
         bool isDelivery,
+        CancellationToken cancellationToken = default)
+        => await ExecuteAsync(
+            items,
+            isDelivery,
+            Guid.Empty,
+            string.Empty,
+            string.Empty,
+            cancellationToken);
+
+    public async Task<Invoice> ExecuteAsync(
+        IReadOnlyCollection<InvoiceItemInput> items,
+        bool isDelivery,
+        Guid branchId,
+        string branchName,
+        string branchAddress,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
@@ -67,16 +97,19 @@ public sealed class IssueInvoice
             .Select(item => InvoiceItem.Create(item.Name, item.UnitPrice, item.Quantity))
             .ToList();
 
-        return await IssueAsync(domainItems, isDelivery, cancellationToken);
+        return await IssueAsync(domainItems, isDelivery, branchId, branchName, branchAddress, cancellationToken);
     }
 
     private async Task<Invoice> IssueAsync(
         IReadOnlyCollection<InvoiceItem> items,
         bool isDelivery,
+        Guid branchId,
+        string branchName,
+        string branchAddress,
         CancellationToken cancellationToken)
     {
         var invoice = Invoice.Create();
-        invoice.Issue(items, isDelivery, _clock.UtcNow);
+        invoice.Issue(items, isDelivery, _clock.UtcNow, branchId, branchName, branchAddress);
         await _invoices.AddAsync(invoice, cancellationToken);
         await _invoices.SaveChangesAsync(cancellationToken);
 

@@ -39,6 +39,9 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(ChangeUserRole),
         typeof(DeactivateUser),
         typeof(UnlockUser),
+        typeof(CreateBranch),
+        typeof(ListBranches),
+        typeof(IBranchDirectory),
         typeof(PirryLedger.Core.Contracts.Time.IClock),
         // Casos de uso del modulo de Permissions que el filtro resuelve al
         // construir las Route de MapPermissions().
@@ -278,13 +281,13 @@ public class PruebasDelPuntoUnicoDeAcceso
     // administracion declaradas, contadas desde las rutas reales. Si alguien
     // anade una septima y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteDiezRutasDeAdministrador()
+    public void HayExactamenteDoceRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(10, deAdministracion.Count);
+        Assert.Equal(12, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {
