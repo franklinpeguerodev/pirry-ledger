@@ -53,6 +53,55 @@ Branch `feature/admin-created-users`, from `develop`. Seven commits, one change 
 
 None. Both ADRs are accepted.
 
+## Product images (current work)
+
+Not a course assignment: this is Franklin's own work on the product catalog, decided
+on 2026-11-09. The decision is ADR 015
+(`docs/adr/015-imagenes-del-catalogo.md`).
+
+### In scope
+
+| Area | Requirement IDs | Decision |
+|---|---|---|
+| A product carries an image, stored privately in Cloudflare R2 | RD-06, RD-10 | ADR 015 |
+| The key and the version live in the own table `bil_product_images` | RD-09 | ADR 015 |
+| The server signs the downloads; the bucket stays private | RD-10 | ADR 015 |
+| The client synchronizes by revision cursor and the server computes the delta | RD-03, RD-12 | ADR 015 |
+| Uploaded images lose their metadata without being re-encoded | RD-07 | ADR 015 |
+| Request size limits, which the project did not have | RD-07 | ADR 015 |
+
+### Out of scope
+
+- The mobile client: local cache, image picker and thumbnails. It is the next
+  iteration, and it consumes the contract that ADR 015 fixes.
+- Automatic cleanup of the orphaned objects of the bucket. Assumed for now.
+- Thumbnails and several sizes of the same photo.
+- Removing the metadata by re-encoding the image.
+- Pruning the revision history.
+- Rate limits on the uploads and on the synchronization.
+- Load tests.
+
+### Rules this work follows
+
+- The server computes the version, the key and the delta. The client never sends a
+  version and never says what it already has: it sends a cursor that the server
+  itself issued.
+- Only an Administrator uploads, replaces and removes images. Any valid session
+  reads them.
+- The set of images is exactly the images of the **active** products. Deactivating a
+  product removes its image from the set; reactivating it puts it back.
+- The metadata of the uploaded image is removed before it is stored, and the sha256
+  is taken over the bytes that are stored.
+- The object is uploaded before the transaction and the previous object is deleted
+  after the commit, so a live image never points to a missing object.
+- Every environment variable of the storage is mandatory: without one of them the
+  application does not start.
+
+### Verification
+
+Every new behaviour is shown red for the right reason before it is shown green. The
+suite runs with one command and without a database, an SMTP server or a bucket.
+
 ## Branch scope extension (2026-11-04)
 
 This hardening also introduces branch scope across user administration and
