@@ -142,6 +142,11 @@ public static class RoleRequirements
         // lo intente recibe 403.
         [Operation.SetProductImage] = new(AccessLevel.Administrator),
         [Operation.RemoveProductImage] = new(AccessLevel.Administrator),
+
+        // ADR 015: la sincronizacion la puede pedir cualquier sesion valida,
+        // porque el mostrador necesita las fotos para cobrar. Solo firma lo
+        // que el cliente no tiene.
+        [Operation.SyncProductImages] = new(AccessLevel.AnySession),
     };
 
     // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui

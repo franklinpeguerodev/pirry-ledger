@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Routing;
 using PirryLedger.Business.Api.Models;
 using PirryLedger.Business.Application;
 using PirryLedger.Business.Application.Exceptions;
+using PirryLedger.Business.Application.Ports;
 using PirryLedger.Business.Application.UseCases;
 using PirryLedger.Business.Domain.Enums;
 using PirryLedger.Business.Domain.Rules;
@@ -27,6 +28,7 @@ public static class EndpointRegistration
         endpoints.MapPost("/api/admin/products", (
             ProductBody body,
             CreateProduct useCase,
+            IProductImageRepository images,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
@@ -36,8 +38,12 @@ public static class EndpointRegistration
                     body.Price,
                     cancellationToken);
 
+                // Un producto recien creado todavia no tiene imagen, pero la
+                // respuesta lleva el mismo formato que el resto.
+                var image = await images.FindLiveAsync(product.Id, cancellationToken);
+
                 return Results.Json(
-                    ProductResponse.From(product),
+                    ProductResponse.From(product, image),
                     statusCode: StatusCodes.Status201Created);
             }))
         .WithAccess(Operation.CreateProduct);
@@ -46,6 +52,7 @@ public static class EndpointRegistration
             Guid id,
             ProductBody body,
             UpdateProduct useCase,
+            IProductImageRepository images,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
@@ -56,7 +63,9 @@ public static class EndpointRegistration
                     body.Price,
                     cancellationToken);
 
-                return Results.Ok(ProductResponse.From(product));
+                var image = await images.FindLiveAsync(id, cancellationToken);
+
+                return Results.Ok(ProductResponse.From(product, image));
             }))
         .WithAccess(Operation.UpdateProduct);
 
@@ -64,11 +73,14 @@ public static class EndpointRegistration
             Guid id,
             ProductActiveBody body,
             SetProductActive useCase,
+            IProductImageRepository images,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
                 var product = await useCase.ExecuteAsync(id, body.IsActive, cancellationToken);
-                return Results.Ok(ProductResponse.From(product));
+                var image = await images.FindLiveAsync(id, cancellationToken);
+
+                return Results.Ok(ProductResponse.From(product, image));
             }))
         .WithAccess(Operation.SetProductActive);
 
@@ -112,6 +124,27 @@ public static class EndpointRegistration
                 return Results.NoContent();
             }))
         .WithAccess(Operation.RemoveProductImage);
+
+        // ADR 015: la sincronizacion de las imagenes. El cliente manda el
+        // cursor que el servidor le dio y recibe lo que cambio: las altas con
+        // su firma y las bajas. Cualquier sesion valida puede pedirla: el
+        // mostrador necesita las fotos para cobrar.
+        endpoints.MapPost("/api/billing/product-images/sync", (
+            ProductImageSyncBody? body,
+            SyncProductImages useCase,
+            HttpContext context,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                var result = await useCase.ExecuteAsync(body?.Since, cancellationToken);
+
+                // Las firmas son credenciales de acceso al bucket: la
+                // respuesta no se guarda en ninguna cache intermedia.
+                context.Response.Headers.CacheControl = "no-store";
+
+                return Results.Ok(ProductImageSyncResponse.From(result));
+            }))
+        .WithAccess(Operation.SyncProductImages);
 
         // RF-NEG-02: emitir una factura. El borrador vive solo en el cliente, asi
         // que se guarda ya emitida. Responde 201 con la factura creada.
@@ -437,6 +470,12 @@ public static class EndpointRegistration
         }
         catch (InvoiceRuleViolationException error)
         {
+            return BadRequest(error.Message);
+        }
+        catch (InvalidProductImageCursorException error)
+        {
+            // El cursor no lo emitio el servidor: no se puede saber que
+            // cambios le faltan al cliente.
             return BadRequest(error.Message);
         }
         catch (InvalidInvoiceTransitionException error)

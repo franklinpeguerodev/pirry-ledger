@@ -74,7 +74,9 @@ public class PruebasDelPuntoUnicoDeAcceso
         // reglas de la imagen que vienen de la configuracion.
         typeof(PirryLedger.Business.Application.UseCases.SetProductImage),
         typeof(PirryLedger.Business.Application.UseCases.RemoveProductImage),
+        typeof(PirryLedger.Business.Application.UseCases.SyncProductImages),
         typeof(PirryLedger.Business.Application.ProductImageOptions),
+        typeof(PirryLedger.Business.Application.Ports.IProductImageRepository),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de

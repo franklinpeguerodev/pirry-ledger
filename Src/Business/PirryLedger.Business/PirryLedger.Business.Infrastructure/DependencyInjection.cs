@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<ListInvoiceEdits>();
         services.AddScoped<SetProductImage>();
         services.AddScoped<RemoveProductImage>();
+        services.AddScoped<SyncProductImages>();
 
         return services;
     }

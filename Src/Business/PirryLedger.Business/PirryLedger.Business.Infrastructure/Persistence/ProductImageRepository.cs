@@ -32,6 +32,18 @@ public sealed class ProductImageRepository : IProductImageRepository
             .OrderBy(image => image.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ProductImage>> ListLiveActiveAsync(
+        CancellationToken cancellationToken = default) =>
+        await _context.ProductImages
+            .Where(image => image.RevisionRemoved == null)
+            .Join(
+                _context.Products.Where(product => product.IsActive),
+                image => image.ProductId,
+                product => product.Id,
+                (image, product) => image)
+            .OrderBy(image => image.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     // Las altas: las imagenes vigentes de productos activos que el cliente
     // todavia no tiene.
     //

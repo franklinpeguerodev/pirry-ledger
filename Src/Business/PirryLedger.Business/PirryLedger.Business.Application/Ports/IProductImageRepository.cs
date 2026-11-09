@@ -20,6 +20,10 @@ public interface IProductImageRepository
     // Todas las imagenes vigentes, de productos activos o inactivos.
     Task<IReadOnlyList<ProductImage>> ListLiveAsync(CancellationToken cancellationToken = default);
 
+    // Las imagenes vigentes de los productos activos. Son las que forman el
+    // conjunto que descarga el cliente (ADR 015).
+    Task<IReadOnlyList<ProductImage>> ListLiveActiveAsync(CancellationToken cancellationToken = default);
+
     // Las altas: las imagenes vigentes de productos activos que el cliente
     // todavia no tiene. Incluye las que vuelven porque el producto se
     // reactivo.

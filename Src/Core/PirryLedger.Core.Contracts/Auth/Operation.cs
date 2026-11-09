@@ -97,6 +97,7 @@ public enum Operation
     // el mostrador necesita ver las fotos para cobrar.
     SetProductImage,
     RemoveProductImage,
+    SyncProductImages,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica

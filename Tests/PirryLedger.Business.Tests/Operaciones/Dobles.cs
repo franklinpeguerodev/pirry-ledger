@@ -200,6 +200,10 @@ internal sealed class FakeProductImageRepository : IProductImageRepository
         Task.FromResult<IReadOnlyList<ProductImage>>(
             [.. _images.Values.SelectMany(items => items).Where(image => image.IsLive)]);
 
+    public Task<IReadOnlyList<ProductImage>> ListLiveActiveAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ProductImage>>(
+            [.. _images.Values.SelectMany(items => items).Where(image => image.IsLive)]);
+
     public Task<IReadOnlyList<ProductImage>> ListUpsertsSinceAsync(long since, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ProductImage>>(
             [.. _images.Values.SelectMany(items => items)
@@ -280,6 +284,8 @@ internal sealed class FakeImageStore : IImageStore
 
     public List<string> Deleted { get; } = [];
 
+    public List<(string Key, string ContentType, DateTime ExpiresAtUtc)> Signed { get; } = [];
+
     public bool FailOnPut { get; set; }
 
     public Task PutAsync(
@@ -303,6 +309,10 @@ internal sealed class FakeImageStore : IImageStore
         return Task.FromResult(true);
     }
 
-    public string CreateDownloadUrl(string key, string contentType, DateTime expiresAtUtc) =>
-        $"https://falso/{key}?firma=prueba";
+    public string CreateDownloadUrl(string key, string contentType, DateTime expiresAtUtc)
+    {
+        Signed.Add((key, contentType, expiresAtUtc));
+
+        return $"https://falso/{key}?firma=prueba";
+    }
 }
