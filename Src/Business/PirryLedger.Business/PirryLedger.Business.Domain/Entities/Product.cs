@@ -30,6 +30,28 @@ public sealed class Product
 
     public bool IsActive { get; private set; }
 
+    // La revision global en la que el producto cambio por ultima vez de
+    // activo a inactivo o al reves (ADR 015).
+    //
+    // Sirve para que el cliente reciba la imagen cuando el producto se
+    // reactiva y la borre cuando se desactiva, sin tocar la imagen misma: la
+    // foto de un producto desactivado sigue en el bucket, porque reactivarlo
+    // la necesita.
+    public long ImageRevision { get; private set; }
+
+    // El producto cambio de estado y su imagen forma parte del conjunto. El
+    // numero lo reserva el repositorio, dentro de la misma transaccion que
+    // guarda el cambio.
+    public void MarkImageSetChanged(long revision)
+    {
+        if (revision <= 0)
+        {
+            throw new InvoiceRuleViolationException("La revision debe ser mayor que cero.");
+        }
+
+        ImageRevision = revision;
+    }
+
     public static Product Create(string name, string? description, decimal price)
     {
         var normalizedName = NormalizeName(name);

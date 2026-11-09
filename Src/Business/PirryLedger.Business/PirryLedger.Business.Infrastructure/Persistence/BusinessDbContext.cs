@@ -15,6 +15,10 @@ public sealed class BusinessDbContext : DbContext
 
     public DbSet<Product> Products => Set<Product>();
 
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+
+    public DbSet<ImageRevisionCounter> ImageRevisionCounters => Set<ImageRevisionCounter>();
+
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
 
     public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();

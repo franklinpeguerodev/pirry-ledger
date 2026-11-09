@@ -23,6 +23,7 @@ public static class DependencyInjection
 
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IProductImageRepository, ProductImageRepository>();
 
         // El bucket de imagenes (ADR 015). El cliente del SDK es seguro para
         // usar entre varios hilos, asi que hay una sola instancia.
