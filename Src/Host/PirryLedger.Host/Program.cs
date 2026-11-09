@@ -65,7 +65,23 @@ builder.Services.AddNotifications(
     connection,
     EnvironmentConfiguration.ReadSmtp(builder.Configuration) ?? SmtpConfiguration.Empty);
 builder.Services.AddPermissions(connection);
-builder.Services.AddBusiness(connection);
+
+// Almacenamiento de imagenes (ADR 015). Las siete variables son obligatorias:
+// si falta una, la aplicacion no arranca y dice cual. Se lee antes de
+// construir el contenedor para no registrar un modulo a medio configurar.
+var imageStorage = EnvironmentConfiguration.ReadImageStorage(
+    builder.Configuration,
+    out var missingImageVariable);
+
+if (imageStorage is null)
+{
+    Console.Error.WriteLine(
+        $"Falta la variable de entorno {missingImageVariable}. " +
+        "El README explica como definirla.");
+    Environment.Exit(1);
+}
+
+builder.Services.AddBusiness(connection, imageStorage);
 
 var app = builder.Build();
 

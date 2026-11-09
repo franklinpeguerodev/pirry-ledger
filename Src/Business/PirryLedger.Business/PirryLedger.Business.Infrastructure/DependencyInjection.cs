@@ -4,6 +4,7 @@ using PirryLedger.Business.Application.Ports;
 using PirryLedger.Business.Application.UseCases;
 using PirryLedger.Business.Domain.Ports;
 using PirryLedger.Business.Infrastructure.Persistence;
+using PirryLedger.Business.Infrastructure.Storage;
 
 namespace PirryLedger.Business.Infrastructure;
 
@@ -11,15 +12,21 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddBusiness(
         this IServiceCollection services,
-        string connectionString)
+        string connectionString,
+        ImageStorageConfiguration imageStorage)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentNullException.ThrowIfNull(imageStorage);
 
         services.AddDbContext<BusinessDbContext>(options =>
             options.UseNpgsql(connectionString));
 
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
+
+        // El bucket de imagenes (ADR 015). El cliente del SDK es seguro para
+        // usar entre varios hilos, asi que hay una sola instancia.
+        services.AddSingleton<IImageStore>(_ => new R2ImageStore(imageStorage));
 
         // Hoy la notificacion al Administrador es vacia: se encola y un proceso
         // aparte la manda (regla de seguridad). La implementacion real llega en
