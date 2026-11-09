@@ -146,33 +146,9 @@ public sealed class ProductImageRepository : IProductImageRepository
         return new ImageSetChange(revision, vigente.ImageKey);
     }
 
-    // Reserva la siguiente revision.
-    //
-    // El UPDATE toma el bloqueo de la fila del contador y lo mantiene hasta
-    // que se confirme la transaccion: las escrituras quedan serializadas y la
-    // revision coincide con el orden de confirmacion. El valor nuevo se lee
-    // despues, en la misma transaccion, con la fila bloqueada por nosotros.
-    //
-    // El proveedor en memoria que usan las pruebas no entiende SQL ni
-    // bloqueos, asi que ahi el numero se lleva en la entidad y se guarda con
-    // el siguiente SaveChanges, que ocurre en la misma transaccion.
-    private async Task<long> ReserveRevisionAsync(CancellationToken cancellationToken)
-    {
-        if (_context.Database.IsRelational())
-        {
-            await _context.Database.ExecuteSqlRawAsync(
-                "UPDATE bil_image_revision SET value = value + 1 WHERE id = 1",
-                cancellationToken);
-
-            return await _context.ImageRevisionCounters
-                .AsNoTracking()
-                .Select(counter => counter.Value)
-                .SingleAsync(cancellationToken);
-        }
-
-        var counter = await _context.ImageRevisionCounters.SingleAsync(cancellationToken);
-        counter.Value += 1;
-
-        return counter.Value;
-    }
+    // Reserva la siguiente revision. La reserva y el cambio se guardan en la
+    // misma transaccion, asi que la revision coincide con el orden de
+    // confirmacion.
+    private async Task<long> ReserveRevisionAsync(CancellationToken cancellationToken) =>
+        await ImageRevisionAllocator.ReserveAsync(_context, cancellationToken);
 }

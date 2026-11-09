@@ -140,6 +140,7 @@ internal sealed class FakeInvoiceEditedNotifier : IInvoiceEditedNotifier
 internal sealed class FakeProductRepository : IProductRepository
 {
     private readonly Dictionary<Guid, Product> _products = new();
+    private long _revision;
 
     public void Seed(Product product) => _products[product.Id] = product;
 
@@ -153,6 +154,19 @@ internal sealed class FakeProductRepository : IProductRepository
     {
         _products[product.Id] = product;
         return Task.CompletedTask;
+    }
+
+    // La revision del conjunto de imagenes que se lleva el cambio de estado.
+    public Task<long> SetActiveAsync(
+        Product product,
+        bool isActive,
+        CancellationToken cancellationToken = default)
+    {
+        _revision++;
+        product.SetActive(isActive);
+        product.MarkImageSetChanged(_revision);
+
+        return Task.FromResult(_revision);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>

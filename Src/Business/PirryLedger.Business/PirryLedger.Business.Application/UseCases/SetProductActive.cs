@@ -21,8 +21,11 @@ public sealed class SetProductActive
         var product = await _products.GetByIdAsync(id, cancellationToken)
             ?? throw new ProductNotFoundException();
 
-        product.SetActive(isActive);
-        await _products.SaveChangesAsync(cancellationToken);
+        // La revision del conjunto de imagenes se reserva en la misma
+        // transaccion que el cambio de estado: si no, el cliente podria
+        // saltarse el cambio (ADR 015).
+        await _products.SetActiveAsync(product, isActive, cancellationToken);
+
         return product;
     }
 }
