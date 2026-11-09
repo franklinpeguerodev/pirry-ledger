@@ -102,6 +102,13 @@ on 2026-11-09. The decision is ADR 015
 Every new behaviour is shown red for the right reason before it is shown green. The
 suite runs with one command and without a database, an SMTP server or a bucket.
 
+**Fix (2026-11-09).** The first real upload to R2 failed with
+`STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER not implemented`: the AWS SDK v4 sends
+the checksum in a trailer that R2 does not implement. The client now sets
+`RequestChecksumCalculation` and `ResponseChecksumValidation` to `WHEN_REQUIRED`, and
+any storage failure (an R2 error, no response, or an SDK error) answers `503`
+instead of `500`. Two tests pin it; the suite is at 421.
+
 ### Logbook
 
 File: `docs/bitacora-imagenes-del-catalogo.md`, a new file. It documents the
