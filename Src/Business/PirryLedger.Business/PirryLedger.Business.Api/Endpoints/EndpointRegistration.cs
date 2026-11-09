@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
 using PirryLedger.Business.Api.Models;
+using PirryLedger.Business.Application;
 using PirryLedger.Business.Application.Exceptions;
 using PirryLedger.Business.Application.UseCases;
 using PirryLedger.Business.Domain.Enums;
@@ -79,6 +81,37 @@ public static class EndpointRegistration
                 return Results.Ok(products.Select(ProductResponse.From).ToList());
             }))
         .WithAccess(Operation.ListProducts);
+
+        // ADR 015: la imagen de un producto. Solo el Administrador la sube,
+        // la reemplaza o la quita.
+        endpoints.MapPut("/api/admin/products/{id:guid}/image", (
+            Guid id,
+            HttpContext context,
+            ProductImageOptions options,
+            SetProductImage useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                RaiseBodyLimit(context, options);
+
+                var content = await ReadImageAsync(context.Request, options, cancellationToken);
+                var image = await useCase.ExecuteAsync(id, content, cancellationToken);
+
+                return Results.Ok(ProductImageResponse.From(image));
+            }))
+        .WithAccess(Operation.SetProductImage);
+
+        endpoints.MapDelete("/api/admin/products/{id:guid}/image", (
+            Guid id,
+            RemoveProductImage useCase,
+            CancellationToken cancellationToken) =>
+            RunAsync(async () =>
+            {
+                await useCase.ExecuteAsync(id, cancellationToken);
+
+                return Results.NoContent();
+            }))
+        .WithAccess(Operation.RemoveProductImage);
 
         // RF-NEG-02: emitir una factura. El borrador vive solo en el cliente, asi
         // que se guarda ya emitida. Responde 201 con la factura creada.
@@ -362,6 +395,34 @@ public static class EndpointRegistration
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status404NotFound);
         }
+        catch (ProductImageNotFoundException error)
+        {
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (ProductImageTooLargeException error)
+        {
+            // 413: el archivo es una imagen valida pero no cabe.
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status413PayloadTooLarge);
+        }
+        catch (UnsupportedProductImageException error)
+        {
+            // 415: el archivo no es una imagen admitida.
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status415UnsupportedMediaType);
+        }
+        catch (ImageStorageUnavailableException error)
+        {
+            // 503: el bucket no responde. El mensaje no dice nada del bucket,
+            // del endpoint ni de las credenciales (RD-08).
+            return Results.Json(
+                new ErrorResponse(error.Message),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
         catch (ProductInactiveException error)
         {
             return BadRequest(error.Message);
@@ -392,6 +453,83 @@ public static class EndpointRegistration
         Results.Json(
             new ErrorResponse(message),
             statusCode: StatusCodes.Status400BadRequest);
+
+    // Los bytes de sobra que allow_headroom deja para las cabeceras del
+    // formulario multipart. No son imagen: son el nombre del archivo, los
+    // nombres de los campos y los limites.
+    private const long MultipartOverheadBytes = 64 * 1024;
+
+    // La ruta de subida admite mas que el limite general de la aplicacion
+    // (1 MiB): una foto de 5 MiB no cabe en el general. El limite se levanta
+    // solo en esta ruta y solo hasta el maximo configurado mas el margen de
+    // las cabeceras del formulario.
+    private static void RaiseBodyLimit(HttpContext context, ProductImageOptions options)
+    {
+        var feature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+
+        if (feature is null || feature.IsReadOnly)
+        {
+            return;
+        }
+
+        feature.MaxRequestBodySize = options.MaxBytes + MultipartOverheadBytes;
+    }
+
+    // Lee el archivo de la peticion. El cuerpo ya esta acotado por el limite
+    // de la ruta, y aqui se corta la lectura al maximo configurado mas un
+    // byte: si hay mas, el archivo es demasiado grande y no se carga entero en
+    // memoria.
+    private static async Task<byte[]> ReadImageAsync(
+        HttpRequest request,
+        ProductImageOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+        {
+            throw new UnsupportedProductImageException("La peticion debe ser un formulario con el archivo.");
+        }
+
+        var form = await request.ReadFormAsync(cancellationToken);
+
+        if (form.Files.Count != 1)
+        {
+            throw new UnsupportedProductImageException("La peticion debe llevar exactamente un archivo.");
+        }
+
+        var file = form.Files[0];
+
+        if (!string.Equals(file.Name, "file", StringComparison.Ordinal))
+        {
+            throw new UnsupportedProductImageException("El archivo del formulario se llama 'file'.");
+        }
+
+        using var buffer = new MemoryStream();
+        await using var stream = file.OpenReadStream();
+
+        var limite = options.MaxBytes + 1;
+        var chunk = new byte[81920];
+        long total = 0;
+
+        while (total < limite)
+        {
+            var leidos = await stream.ReadAsync(chunk, cancellationToken);
+
+            if (leidos == 0)
+            {
+                break;
+            }
+
+            total += leidos;
+            await buffer.WriteAsync(chunk.AsMemory(0, leidos), cancellationToken);
+        }
+
+        if (total > options.MaxBytes)
+        {
+            throw new ProductImageTooLargeException(options.MaxBytes);
+        }
+
+        return buffer.ToArray();
+    }
 
     private static IReadOnlyCollection<ProductItemInput> ToProductItems(List<InvoiceItemBody>? items) =>
         items?

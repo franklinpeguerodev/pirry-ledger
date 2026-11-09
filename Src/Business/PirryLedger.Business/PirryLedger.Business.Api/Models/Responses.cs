@@ -28,6 +28,27 @@ public sealed record ProductResponse(
         new(product.Id, product.Name, product.Description, product.Price, product.IsActive);
 }
 
+// La imagen vigente de un producto. La clave es la que hay que pedir al
+// bucket; la version es el sha256 de lo guardado, para que el cliente
+// compruebe la descarga (ADR 015).
+public sealed record ProductImageResponse(
+    Guid ProductId,
+    string ImageKey,
+    string Version,
+    string ContentType,
+    int SizeBytes,
+    long Revision)
+{
+    public static ProductImageResponse From(ProductImage image) =>
+        new(
+            image.ProductId,
+            image.ImageKey,
+            image.Version,
+            image.ContentType,
+            image.SizeBytes,
+            image.RevisionAdded);
+}
+
 public sealed record InvoicePaymentResponse(
     Guid Id,
     string Kind,

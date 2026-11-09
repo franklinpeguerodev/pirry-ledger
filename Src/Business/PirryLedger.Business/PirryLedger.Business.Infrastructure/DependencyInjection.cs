@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PirryLedger.Business.Application;
 using PirryLedger.Business.Application.Ports;
 using PirryLedger.Business.Application.UseCases;
 using PirryLedger.Business.Domain.Ports;
@@ -29,6 +30,11 @@ public static class DependencyInjection
         // usar entre varios hilos, asi que hay una sola instancia.
         services.AddSingleton<IImageStore>(_ => new R2ImageStore(imageStorage));
 
+        // Las reglas de la imagen que vienen de la configuracion.
+        services.AddSingleton(new ProductImageOptions(
+            imageStorage.MaxBytes,
+            imageStorage.SignatureMinutes));
+
         // Hoy la notificacion al Administrador es vacia: se encola y un proceso
         // aparte la manda (regla de seguridad). La implementacion real llega en
         // la semana 10 (RF-NEG-07).
@@ -54,6 +60,8 @@ public static class DependencyInjection
         services.AddScoped<ListInvoices>();
         services.AddScoped<GetInvoice>();
         services.AddScoped<ListInvoiceEdits>();
+        services.AddScoped<SetProductImage>();
+        services.AddScoped<RemoveProductImage>();
 
         return services;
     }

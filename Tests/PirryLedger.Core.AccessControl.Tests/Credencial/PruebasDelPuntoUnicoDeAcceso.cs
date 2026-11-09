@@ -70,6 +70,11 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(PirryLedger.Business.Application.UseCases.UpdateProduct),
         typeof(PirryLedger.Business.Application.UseCases.SetProductActive),
         typeof(PirryLedger.Business.Application.UseCases.ListProducts),
+        // Los casos de uso de las imagenes del catalogo (ADR 015) y las
+        // reglas de la imagen que vienen de la configuracion.
+        typeof(PirryLedger.Business.Application.UseCases.SetProductImage),
+        typeof(PirryLedger.Business.Application.UseCases.RemoveProductImage),
+        typeof(PirryLedger.Business.Application.ProductImageOptions),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de
@@ -273,23 +278,25 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.CreateProduct)]
     [InlineData(Operation.UpdateProduct)]
     [InlineData(Operation.SetProductActive)]
+    [InlineData(Operation.SetProductImage)]
+    [InlineData(Operation.RemoveProductImage)]
     public void LasOperacionesDeAdministracionExigenElRolDeAdministrador(Operation operation)
     {
         Assert.Equal(AccessLevel.Administrator, RoleRequirements.RequiredLevel(operation));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(operation));
     }
 
-    // El caso que mas se repite al releer RF-CA-05: las siete rutas de
+    // El caso que mas se repite al releer RF-CA-05: las rutas de
     // administracion declaradas, contadas desde las rutas reales. Si alguien
-    // anade una septima y la deja fuera de administracion, esto salta.
+    // anade una mas y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteCatorceRutasDeAdministrador()
+    public void HayExactamenteDieciseisRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(14, deAdministracion.Count);
+        Assert.Equal(16, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {
