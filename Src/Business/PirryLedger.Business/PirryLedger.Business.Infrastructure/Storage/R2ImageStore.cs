@@ -27,17 +27,36 @@ public sealed class R2ImageStore : IImageStore
 
         _client = new AmazonS3Client(
             new BasicAWSCredentials(configuration.AccessKeyId, configuration.SecretAccessKey),
-            new AmazonS3Config
-            {
-                ServiceURL = configuration.Endpoint,
+            CreateClientConfig(configuration));
+    }
 
-                // R2 no tiene regiones: la region de la firma es "auto".
-                AuthenticationRegion = "auto",
+    // La configuracion con la que se habla con R2.
+    //
+    // R2 no implementa el envio del cuerpo con el checksum en un trailer
+    // (aws-chunked, STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER). El SDK lo
+    // activa por defecto desde la version 4, asi que cada subida se rechazaba
+    // con "not implemented". WHEN_REQUIRED deja el checksum solo en las
+    // operaciones que lo exigen, y subir un objeto no lo exige.
+    //
+    // Es internal para que la prueba compruebe los dos ajustes sin tocar la
+    // red: el cliente se construye igual, pero la prueba no lo usa.
+    internal static AmazonS3Config CreateClientConfig(
+        ImageStorageConfiguration configuration)
+    {
+        return new AmazonS3Config
+        {
+            ServiceURL = configuration.Endpoint,
 
-                // El bucket va en la ruta y no en el subdominio del host: es
-                // lo que espera el endpoint de R2.
-                ForcePathStyle = true,
-            });
+            // R2 no tiene regiones: la region de la firma es "auto".
+            AuthenticationRegion = "auto",
+
+            // El bucket va en la ruta y no en el subdominio del host: es
+            // lo que espera el endpoint de R2.
+            ForcePathStyle = true,
+
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED,
+        };
     }
 
     public async Task PutAsync(
@@ -58,8 +77,19 @@ public sealed class R2ImageStore : IImageStore
                 },
                 cancellationToken);
         }
-        catch (AmazonClientException)
+        catch (Exception error)
+            when (error is AmazonServiceException or AmazonClientException or HttpRequestException)
         {
+            // No se escribe el error del SDK: puede traer el nombre del bucket
+            // o el endpoint, y eso no se imprime (RD-08).
+            //
+            // El SDK v4 deja escapar HttpRequestException cuando no hay
+            // respuesta (bucket caido o sin red), y AmazonS3Exception cuando
+            // el bucket responde con un error. Los dos casos son el mismo:
+            // el almacenamiento no esta disponible.
+            Console.Error.WriteLine(
+                $"No se pudo subir el objeto {key} al almacenamiento de imagenes.");
+
             throw new ImageStorageUnavailableException();
         }
     }
