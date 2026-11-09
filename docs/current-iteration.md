@@ -102,6 +102,15 @@ on 2026-11-09. The decision is ADR 015
 Every new behaviour is shown red for the right reason before it is shown green. The
 suite runs with one command and without a database, an SMTP server or a bucket.
 
+### Logbook
+
+File: `docs/bitacora-imagenes-del-catalogo.md`, a new file. It documents the
+real work of this iteration: what was asked, what the agent returned, the
+design mistake that Franklin caught (the delta depending on what the client
+claimed), the three bugs that the tests found, and what could not be verified
+without a Cloudflare account and a real PostgreSQL. The agent drafts each
+entry; Franklin reviews it before it is pushed.
+
 ## Branch scope extension (2026-11-04)
 
 This hardening also introduces branch scope across user administration and
