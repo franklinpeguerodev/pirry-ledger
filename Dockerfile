@@ -3,10 +3,29 @@
 # Etapa 1 compila y publica con el SDK; etapa 2 solo ejecuta el runtime, asi que
 # la imagen final no lleva compilador ni codigo fuente.
 #
-# La configuracion NO viaja en la imagen (RD-10): la cadena de conexion, las seis
-# SMTP, las tres del primer Administrator y PIRRY_LEDGER_PUBLIC_BASE_URL llegan
-# como variables de entorno al ejecutar el contenedor. El archivo .env no se
-# copia: esta en .dockerignore.
+# La configuracion NO viaja en la imagen (RD-10): llega como variables de
+# entorno al ejecutar el contenedor.
+#
+# Obligatorias (sin una de ellas la aplicacion no arranca): la cadena de
+# conexion (ConnectionStrings__PirryLedger), PIRRY_LEDGER_PUBLIC_BASE_URL y las
+# siete del almacenamiento de imagenes de ADR 015:
+# PIRRY_LEDGER_R2_ACCOUNT_ID, PIRRY_LEDGER_R2_ACCESS_KEY_ID,
+# PIRRY_LEDGER_R2_SECRET_ACCESS_KEY, PIRRY_LEDGER_R2_BUCKET,
+# PIRRY_LEDGER_R2_ENDPOINT, PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES y
+# PIRRY_LEDGER_IMAGE_MAX_BYTES.
+#
+# Opcionales: las seis SMTP (PIRRY_LEDGER_SMTP_HOST, PIRRY_LEDGER_SMTP_PORT,
+# PIRRY_LEDGER_SMTP_SECURITY, PIRRY_LEDGER_SMTP_USER,
+# PIRRY_LEDGER_SMTP_PASSWORD, PIRRY_LEDGER_SMTP_FROM) y las tres del primer
+# Administrator (PIRRY_LEDGER_FIRST_ADMIN_EMAIL,
+# PIRRY_LEDGER_FIRST_ADMIN_PASSWORD, PIRRY_LEDGER_FIRST_ADMIN_NAME).
+#
+# El archivo .env no se copia: esta en .dockerignore.
+#
+# La imagen NO aplica migraciones: la etapa final no lleva el SDK ni la
+# herramienta "dotnet ef". Se ejecutan desde fuera, con
+# "dotnet ef database update" sobre cada modulo (ver README), antes de arrancar
+# el contenedor.
 
 # ---- Etapa 1: compilar y publicar ------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
