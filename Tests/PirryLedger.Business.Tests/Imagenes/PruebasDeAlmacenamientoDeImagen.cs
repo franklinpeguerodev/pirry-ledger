@@ -1,4 +1,5 @@
 using Amazon.Runtime;
+using PirryLedger.Business.Application.Exceptions;
 using PirryLedger.Business.Infrastructure.Storage;
 
 namespace PirryLedger.Business.Tests.Imagenes;
@@ -64,6 +65,19 @@ public sealed class PruebasDeAlmacenamientoDeImagen
         Assert.Equal(
             ResponseChecksumValidation.WHEN_REQUIRED,
             configuracion.ResponseChecksumValidation);
+    }
+
+    [Fact]
+    public async Task ElFalloDelBucketSeDevuelveComoAlmacenamientoNoDisponible()
+    {
+        // Un puerto cerrado de localhost: la subida no sale de la maquina y el
+        // SDK falla igual que cuando el bucket no responde. La prueba no
+        // necesita credenciales reales ni toca la red de Cloudflare.
+        var store = new R2ImageStore(
+            Configuracion() with { Endpoint = "http://127.0.0.1:1" });
+
+        await Assert.ThrowsAsync<ImageStorageUnavailableException>(
+            () => store.PutAsync(Clave, [1, 2, 3], "image/jpeg"));
     }
 
     private static R2ImageStore Store() => new(Configuracion());

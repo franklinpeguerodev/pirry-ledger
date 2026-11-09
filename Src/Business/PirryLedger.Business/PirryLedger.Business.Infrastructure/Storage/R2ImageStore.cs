@@ -77,8 +77,19 @@ public sealed class R2ImageStore : IImageStore
                 },
                 cancellationToken);
         }
-        catch (AmazonClientException)
+        catch (Exception error)
+            when (error is AmazonServiceException or AmazonClientException or HttpRequestException)
         {
+            // No se escribe el error del SDK: puede traer el nombre del bucket
+            // o el endpoint, y eso no se imprime (RD-08).
+            //
+            // El SDK v4 deja escapar HttpRequestException cuando no hay
+            // respuesta (bucket caido o sin red), y AmazonS3Exception cuando
+            // el bucket responde con un error. Los dos casos son el mismo:
+            // el almacenamiento no esta disponible.
+            Console.Error.WriteLine(
+                $"No se pudo subir el objeto {key} al almacenamiento de imagenes.");
+
             throw new ImageStorageUnavailableException();
         }
     }
