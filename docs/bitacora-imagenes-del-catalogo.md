@@ -212,3 +212,63 @@ el client sale totalmente se piense en el backend"*.
 formato de la sincronización, la firma, los límites y el README. La caché
 local del teléfono, el selector de imágenes del administrador y las miniaturas
 en el mostrador quedan para la iteración siguiente, y el README lo dice.
+
+---
+
+### Entrada 7 — La subida de imágenes fallaba contra R2 (2026-11-09)
+
+**Qué se pidió.** Averiguar por qué la subida de una imagen devolvía
+`Fallo no controlado al procesar /api/admin/products/{id}/image` con la
+excepción `Amazon.S3.AmazonS3Exception: STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER
+not implemented`.
+
+**Qué encontré.** Dos defectos, uno detrás del otro:
+
+1. **El SDK de AWS mandaba el cuerpo con el checksum en un trailer.** Desde la
+   versión 4, `AWSSDK.S3` calcula un checksum y lo envía en un trailer
+   (`aws-chunked`) por defecto. R2 no implementa esa variante del protocolo y
+   rechaza la petición. No era el bucket, ni las credenciales, ni el endpoint:
+   era el formato del cuerpo. Se corrigió fijando
+   `RequestChecksumCalculation` y `ResponseChecksumValidation` en
+   `WHEN_REQUIRED` al construir el cliente. No se usó la variable de entorno
+   `AWS_REQUEST_CHECKSUM_CALCULATION` porque dependería de que cada despliegue
+   la defina; el ajuste va en el código y lo cubre una prueba.
+
+2. **El fallo no se convertía en un 503.** El `catch (AmazonClientException)`
+   no cubría `AmazonS3Exception`, que en el SDK v4 es una clase hermana y no
+   una subclase. La excepción escapaba hasta la frontera del API, que la
+   registraba como fallo no controlado y respondía `500` con la traza. Al
+   escribir la prueba apareció un tercer caso que el plan no preveía: cuando
+   el bucket no responde, el SDK deja escapar `HttpRequestException`. El
+   `catch` final cubre las tres: `AmazonServiceException`,
+   `AmazonClientException` y `HttpRequestException`. Las tres se traducen a
+   `ImageStorageUnavailableException`, que el API responde como `503`. El log
+   escribe solo la clave del objeto, nunca el mensaje del SDK (RD-08).
+
+**Qué verifiqué, con la salida real.**
+
+```powershell
+dotnet test pirry-ledger.slnx
+```
+
+```
+Correctas! - Con error:     0, Superado:   204, Omitido:     0, Total:   204 - PirryLedger.Business.Tests.dll
+Correctas! - Con error:     0, Superado:     6, Omitido:     0, Total:     6 - PirryLedger.Core.Notifications.Tests.dll
+Correctas! - Con error:     0, Superado:     4, Omitido:     0, Total:     4 - PirryLedger.Integration.Tests.dll
+Correctas! - Con error:     0, Superado:    52, Omitido:     0, Total:    52 - PirryLedger.Core.Permissions.Tests.dll
+Correctas! - Con error:     0, Superado:   155, Omitido:     0, Total:   155 - PirryLedger.Core.AccessControl.Tests.dll
+```
+
+Son 421 pruebas, dos más que antes de este arreglo.
+
+**Las dos pruebas nuevas se mostraron rojas por la razón correcta:**
+
+| Prueba | Qué se rompió | Qué se puso rojo |
+|---|---|---|
+| `ElClienteNoEnviaElChecksumEnTrailerQueR2NoAcepta` | Los dos ajustes pasaron a `WHEN_SUPPORTED` | `Expected: WHEN_REQUIRED / Actual: WHEN_SUPPORTED` |
+| `ElFalloDelBucketSeDevuelveComoAlmacenamientoNoDisponible` | El `catch` volvió a `AmazonClientException` | `Expected: ImageStorageUnavailableException / Actual: HttpRequestException` |
+
+**Lo que no se pudo verificar.** La subida real contra R2, porque el agente no
+tiene credenciales. Queda como paso manual: con el `.env` real, la misma
+petición debe devolver `200`; con una clave incorrecta, `503` con el mensaje
+genérico y sin el texto del SDK en el log.

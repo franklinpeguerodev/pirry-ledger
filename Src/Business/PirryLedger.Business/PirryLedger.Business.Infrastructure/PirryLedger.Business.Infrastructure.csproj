@@ -17,6 +17,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- La prueba del almacenamiento comprueba que el cliente de S3 se
+         construye con el checksum en trailer apagado, que es lo que R2 no
+         acepta. La construccion es internal: en produccion el unico camino es
+         el constructor del adaptador. -->
+    <InternalsVisibleTo Include="PirryLedger.Business.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
     <ProjectReference Include="..\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
     <ProjectReference Include="..\..\..\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />

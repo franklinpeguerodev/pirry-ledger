@@ -308,3 +308,24 @@ el objeto anterior se borra **después** de confirmar, nunca antes.
 - Eliminar los metadatos re-codificando la imagen.
 - Re-empezar el cálculo del delta desde cero si el cliente pierde su cursor: por
   ahora, el cliente siempre puede pedir una sincronización completa.
+
+## Nota de implementación (2026-11-09)
+
+La primera subida real a R2 falló con `STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER
+not implemented`. El SDK de AWS, desde su versión 4, calcula un checksum y lo
+envía en un trailer (`aws-chunked`) por defecto, y R2 no implementa esa variante
+del protocolo. La decisión de este ADR no cambia: se sigue hablando con R2 por el
+protocolo de S3 y firmando con SigV4. Cambia cómo se configura el cliente:
+
+- `RequestChecksumCalculation` y `ResponseChecksumValidation` se fijan en
+  `WHEN_REQUIRED`, así el checksum viaja solo en las operaciones que lo exigen y
+  subir un objeto no lo exige.
+- Un fallo del almacenamiento se traduce a `ImageStorageUnavailableException`
+  (`503`) tanto si R2 responde con un error (`AmazonServiceException`) como si no
+  responde (`HttpRequestException` o `AmazonClientException`). El log escribe la
+  clave del objeto y nunca el mensaje del SDK, para no exponer el bucket ni el
+  endpoint (RD-08).
+
+No se abre un ADR nuevo porque no se elige entre alternativas de estructura,
+persistencia, protocolo ni seguridad: es la configuración que hace que la
+decisión ya tomada funcione con el proveedor elegido.
