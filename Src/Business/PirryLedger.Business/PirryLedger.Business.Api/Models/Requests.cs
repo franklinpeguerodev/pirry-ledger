@@ -35,6 +35,14 @@ public sealed class ProductActiveBody
     public bool IsActive { get; init; }
 }
 
+// El cursor de la sincronizacion de imagenes (ADR 015). Es el numero que el
+// servidor dio la ultima vez. Si no viene, el cliente pide una
+// sincronizacion completa: borra su cache y la reconstruye con lo que llega.
+public sealed class ProductImageSyncBody
+{
+    public long? Since { get; init; }
+}
+
 public sealed class PaymentBody
 {
     public string? Method { get; init; }

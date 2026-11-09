@@ -136,6 +136,17 @@ public static class RoleRequirements
         [Operation.UpdateProduct] = new(AccessLevel.Administrator),
         [Operation.SetProductActive] = new(AccessLevel.Administrator),
         [Operation.ListProducts] = new(AccessLevel.AnySession),
+
+        // ADR 015: subir, reemplazar y quitar la imagen de un producto es del
+        // Administrador, que es quien administra el catalogo. Un Standard que
+        // lo intente recibe 403.
+        [Operation.SetProductImage] = new(AccessLevel.Administrator),
+        [Operation.RemoveProductImage] = new(AccessLevel.Administrator),
+
+        // ADR 015: la sincronizacion la puede pedir cualquier sesion valida,
+        // porque el mostrador necesita las fotos para cobrar. Solo firma lo
+        // que el cliente no tiene.
+        [Operation.SyncProductImages] = new(AccessLevel.AnySession),
     };
 
     // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui

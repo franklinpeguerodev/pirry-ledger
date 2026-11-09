@@ -90,6 +90,14 @@ public enum Operation
     UpdateProduct,
     SetProductActive,
     ListProducts,
+
+    // Imagenes del catalogo (ADR 015). Subir, reemplazar y quitar son del
+    // Administrador: solo el que administra el catalogo decide que foto
+    // tiene cada producto. Sincronizar es de cualquier sesion valida, porque
+    // el mostrador necesita ver las fotos para cobrar.
+    SetProductImage,
+    RemoveProductImage,
+    SyncProductImages,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica

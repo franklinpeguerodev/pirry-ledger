@@ -192,6 +192,10 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
+                    b.Property<long>("ImageRevision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("image_revision");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
@@ -212,6 +216,85 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("bil_products", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.ProductImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ImageKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("image_key");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<DateTime?>("RemovedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at_utc");
+
+                    b.Property<long>("RevisionAdded")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision_added");
+
+                    b.Property<long?>("RevisionRemoved")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision_removed");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_bil_product_images_vigente")
+                        .HasFilter("revision_removed IS NULL");
+
+                    b.HasIndex("RevisionAdded")
+                        .HasDatabaseName("ix_bil_product_images_revision_added");
+
+                    b.HasIndex("RevisionRemoved")
+                        .HasDatabaseName("ix_bil_product_images_revision_removed");
+
+                    b.ToTable("bil_product_images", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Business.Infrastructure.Persistence.ImageRevisionCounter", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<long>("Value")
+                        .HasColumnType("bigint")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("bil_image_revision", (string)null);
                 });
 
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoiceEdit", b =>
@@ -242,6 +325,15 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                     b.HasOne("PirryLedger.Business.Domain.Entities.Invoice", null)
                         .WithMany("Payments")
                         .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.ProductImage", b =>
+                {
+                    b.HasOne("PirryLedger.Business.Domain.Entities.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

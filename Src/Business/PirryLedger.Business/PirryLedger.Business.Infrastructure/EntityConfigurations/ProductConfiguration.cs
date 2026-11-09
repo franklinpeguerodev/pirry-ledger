@@ -34,6 +34,13 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasColumnName("is_active")
             .IsRequired();
 
+        // La revision del ultimo cambio de activo a inactivo o al reves. Sirve
+        // para que el cliente reciba la imagen cuando el producto se reactiva
+        // (ADR 015).
+        builder.Property(product => product.ImageRevision)
+            .HasColumnName("image_revision")
+            .IsRequired();
+
         builder.HasIndex(product => product.Name)
             .IsUnique();
     }

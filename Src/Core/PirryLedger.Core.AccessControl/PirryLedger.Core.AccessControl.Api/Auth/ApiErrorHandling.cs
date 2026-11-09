@@ -33,6 +33,7 @@ public static class ApiErrorHandling
     // la ruta del fichero, ni el contenido recibido.
     private const string InvalidBodyMessage = "El cuerpo de la peticion no es valido.";
     private const string UnsupportedMediaTypeMessage = "El tipo de contenido debe ser application/json.";
+    private const string PayloadTooLargeMessage = "El cuerpo de la peticion es demasiado grande.";
     private const string UnexpectedMessage = "Se produjo un error inesperado.";
 
     public static async Task HandleErrorsAsync(HttpContext context, RequestDelegate next)
@@ -41,11 +42,25 @@ public static class ApiErrorHandling
         {
             await next(context);
         }
-        catch (BadHttpRequestException)
+        catch (BadHttpRequestException error)
         {
             // El cuerpo no se pudo leer. La excepcion no se registra con su
             // mensaje porque puede contener fragmentos del cuerpo recibido.
-            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, InvalidBodyMessage);
+            //
+            // Si el cuerpo es demasiado grande, el status 413 dice lo que
+            // paso. Un 400 generico seria una respuesta equivocada: el
+            // cliente tiene que saber que su archivo no cabe (ADR 015).
+            if (error.StatusCode == StatusCodes.Status413PayloadTooLarge)
+            {
+                await WriteErrorAsync(
+                    context,
+                    StatusCodes.Status413PayloadTooLarge,
+                    PayloadTooLargeMessage);
+            }
+            else
+            {
+                await WriteErrorAsync(context, StatusCodes.Status400BadRequest, InvalidBodyMessage);
+            }
         }
         catch (OperationNotDeclaredException)
         {

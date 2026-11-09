@@ -1,3 +1,4 @@
+using PirryLedger.Business.Application.UseCases;
 using PirryLedger.Business.Domain.Entities;
 
 namespace PirryLedger.Business.Api.Models;
@@ -22,10 +23,87 @@ public sealed record ProductResponse(
     string Name,
     string? Description,
     decimal Price,
-    bool IsActive)
+    bool IsActive,
+    string? ImageKey,
+    string? ImageVersion)
 {
-    public static ProductResponse From(Product product) =>
-        new(product.Id, product.Name, product.Description, product.Price, product.IsActive);
+    public static ProductResponse From(Product product, ProductImage? image) =>
+        new(
+            product.Id,
+            product.Name,
+            product.Description,
+            product.Price,
+            product.IsActive,
+            image?.ImageKey,
+            image?.Version);
+
+    public static ProductResponse From(ProductCatalogItem item) =>
+        new(
+            item.Id,
+            item.Name,
+            item.Description,
+            item.Price,
+            item.IsActive,
+            item.ImageKey,
+            item.ImageVersion);
+}
+
+// La imagen vigente de un producto. La clave es la que hay que pedir al
+// bucket; la version es el sha256 de lo guardado, para que el cliente
+// compruebe la descarga (ADR 015).
+public sealed record ProductImageResponse(
+    Guid ProductId,
+    string ImageKey,
+    string Version,
+    string ContentType,
+    int SizeBytes,
+    long Revision)
+{
+    public static ProductImageResponse From(ProductImage image) =>
+        new(
+            image.ProductId,
+            image.ImageKey,
+            image.Version,
+            image.ContentType,
+            image.SizeBytes,
+            image.RevisionAdded);
+}
+
+// La sincronizacion de las imagenes: que tiene que descargar el cliente y
+// que tiene que borrar de su cache (ADR 015).
+public sealed record ProductImageSyncResponse(
+    bool FullSync,
+    long Revision,
+    IReadOnlyList<ProductImageUpsertResponse> Upserts,
+    IReadOnlyList<string> Removed)
+{
+    public static ProductImageSyncResponse From(ProductImageSyncResult result) =>
+        new(
+            result.FullSync,
+            result.Revision,
+            [.. result.Upserts.Select(ProductImageUpsertResponse.From)],
+            result.Removed);
+}
+
+// Una imagen con su firma de descarga. La firma caduca en ExpiresAtUtc.
+public sealed record ProductImageUpsertResponse(
+    Guid ProductId,
+    string ImageKey,
+    string Version,
+    string ContentType,
+    int SizeBytes,
+    string SignedUrl,
+    DateTime ExpiresAtUtc)
+{
+    public static ProductImageUpsertResponse From(ProductImageUpsert upsert) =>
+        new(
+            upsert.ProductId,
+            upsert.ImageKey,
+            upsert.Version,
+            upsert.ContentType,
+            upsert.SizeBytes,
+            upsert.SignedUrl,
+            upsert.ExpiresAtUtc);
 }
 
 public sealed record InvoicePaymentResponse(

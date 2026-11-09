@@ -126,10 +126,8 @@ Any change that affects how the project runs must update the README with exact r
 
 ## Open decisions (ask, do not assume)
 
-Franklin will resolve these and update the list. Until then propose options with trade-offs and wait:
-
-1. Frontend (undefined; do not assume Angular). Until decided, the app is consumed as an API.
-2. Whether a `Shared` project exists. Do not create one without approval.
+None. The two entries that were open when this file was written are resolved:
+the frontend and the shared project.
 
 Resolved and therefore no longer listed:
 - the session credential mechanism (`docs/adr/001-session-credential.md`, accepted 2026-09-30);
@@ -141,7 +139,9 @@ Resolved and therefore no longer listed:
 - the listen address coming from `PIRRY_LEDGER_PUBLIC_BASE_URL` (`docs/adr/005-listen-address-from-public-base-url.md`, accepted 2026-10-04);
 - loading local environment variables from a `.env` file with `DotNetEnv` (`docs/adr/006-local-env-configuration.md`, accepted 2026-10-04);
 - permission grants living in their own table (`docs/adr/008-permission-grants-table.md`, accepted 2026-10-20);
-- role changes invalidating sessions through `CredentialVersion` (`docs/adr/009-role-changes-invalidate-sessions.md`, accepted 2026-10-20).
+- role changes invalidating sessions through `CredentialVersion` (`docs/adr/009-role-changes-invalidate-sessions.md`, accepted 2026-10-20);
+- the frontend: the Flutter mobile apps, in three repositories outside this repository (`pirry-ledger-mobile`: `pirry-ledger-core`, `pirry-ledger-standard` and `pirry-ledger-admin`), decided on 2026-11-09;
+- whether a `Shared` project exists: there is none in this solution and none is planned; the shared code of the mobile apps lives in `pirry-ledger-core`, a separate repository, decided on 2026-11-09.
 
 ## Known issues (temporary, delete when fixed)
 

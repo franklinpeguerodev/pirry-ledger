@@ -4,6 +4,7 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Business.Infrastructure.Storage;
 
 namespace PirryLedger.Host;
 
@@ -39,6 +40,101 @@ internal static class EnvironmentConfiguration
     public const string FirstAdminEmailVariable = "PIRRY_LEDGER_FIRST_ADMIN_EMAIL";
     public const string FirstAdminPasswordVariable = "PIRRY_LEDGER_FIRST_ADMIN_PASSWORD";
     public const string FirstAdminNameVariable = "PIRRY_LEDGER_FIRST_ADMIN_NAME";
+
+    // Almacenamiento de imagenes en Cloudflare R2 (ADR 015). Las siete
+    // variables son obligatorias: si falta una, la aplicacion no arranca.
+    public const string R2AccountIdVariable = "PIRRY_LEDGER_R2_ACCOUNT_ID";
+    public const string R2AccessKeyIdVariable = "PIRRY_LEDGER_R2_ACCESS_KEY_ID";
+    public const string R2SecretAccessKeyVariable = "PIRRY_LEDGER_R2_SECRET_ACCESS_KEY";
+    public const string R2BucketVariable = "PIRRY_LEDGER_R2_BUCKET";
+    public const string R2EndpointVariable = "PIRRY_LEDGER_R2_ENDPOINT";
+    public const string ImageSignatureMinutesVariable = "PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES";
+    public const string ImageMaxBytesVariable = "PIRRY_LEDGER_IMAGE_MAX_BYTES";
+
+    // Lee la configuracion del almacenamiento de imagenes.
+    //
+    // TODAS sus variables son obligatorias (ADR 015). Una configuracion a
+    // medias es la fuente clasica de errores que aparecen en produccion y
+    // no en desarrollo: la aplicacion levanta sin almacenamiento y cada
+    // subida falla con un 503 que nadie sabe explicar. Con las variables
+    // obligatorias, el error aparece al arrancar y el mensaje dice cual
+    // falta.
+    //
+    // Devuelve null si falta algo, y dice cual es lo que falta. Los valores
+    // nunca se imprimen: solo el nombre de la variable (RD-08, RD-10).
+    public static ImageStorageConfiguration? ReadImageStorage(
+        IConfiguration configuration,
+        out string missingVariable)
+    {
+        var accountId = configuration[R2AccountIdVariable];
+        var accessKeyId = configuration[R2AccessKeyIdVariable];
+        var secretAccessKey = configuration[R2SecretAccessKeyVariable];
+        var bucket = configuration[R2BucketVariable];
+        var endpoint = configuration[R2EndpointVariable];
+        var signatureMinutes = configuration[ImageSignatureMinutesVariable];
+        var maxBytes = configuration[ImageMaxBytesVariable];
+
+        missingVariable = FirstEmpty(
+            accountId,
+            accessKeyId,
+            secretAccessKey,
+            bucket,
+            endpoint,
+            signatureMinutes,
+            maxBytes);
+
+        if (missingVariable.Length > 0)
+        {
+            return null;
+        }
+
+        if (!int.TryParse(signatureMinutes, out var minutes) || minutes < 1 || minutes > 1440)
+        {
+            missingVariable = ImageSignatureMinutesVariable;
+            return null;
+        }
+
+        if (!long.TryParse(maxBytes, out var limit) || limit < 1)
+        {
+            missingVariable = ImageMaxBytesVariable;
+            return null;
+        }
+
+        return new ImageStorageConfiguration(
+            accountId!.Trim(),
+            accessKeyId!.Trim(),
+            secretAccessKey!.Trim(),
+            bucket!.Trim(),
+            endpoint!.Trim(),
+            minutes,
+            limit);
+    }
+
+    // Devuelve el nombre de la primera variable que este vacia, o una cadena
+    // vacia si estan todas. Los nombres se van en el mismo orden en que se leen.
+    private static string FirstEmpty(params string?[] values)
+    {
+        var names = new[]
+        {
+            R2AccountIdVariable,
+            R2AccessKeyIdVariable,
+            R2SecretAccessKeyVariable,
+            R2BucketVariable,
+            R2EndpointVariable,
+            ImageSignatureMinutesVariable,
+            ImageMaxBytesVariable,
+        };
+
+        for (var index = 0; index < values.Length; index++)
+        {
+            if (string.IsNullOrWhiteSpace(values[index]))
+            {
+                return names[index];
+            }
+        }
+
+        return string.Empty;
+    }
 
     // Devuelve null y no lanza si no hay ninguna variable de Email definida. El
     // emisor decide entonces que avisar, y las demas operaciones ni se enteran:
