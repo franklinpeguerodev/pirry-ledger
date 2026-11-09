@@ -16,3 +16,4 @@ One-line index of the ADRs in this folder. The title and date below come from ea
 - `012-request-permission-from-business.md` (2026-10-31) — Request a permission from a business operation.
 - `013-admin-created-users.md` (2026-11-04) — Users are created by an Administrator, not by a public registration.
 - `014-password-change-permission.md` (2026-11-04) — Every password change of a Standard requires an Administrator's approval.
+- `015-imagenes-del-catalogo.md` (2026-11-09) — Product images: private storage in Cloudflare R2, signed URLs, and synchronization by a revision cursor.

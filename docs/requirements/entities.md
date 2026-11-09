@@ -23,6 +23,10 @@ The course does not define these, so they are Franklin's design decisions. When 
 - Branch scope: `Branch` is the English code name for `Sucursal`; the `Todas`
   row is reserved for Administrators and invoice snapshots preserve the branch
   name and address at issuance.
+- The image of a product: a private object in Cloudflare R2, whose key and version
+  live in `bil_product_images`. The server signs the downloads and the client
+  synchronizes by a revision cursor that the server issues. Delivered,
+  `docs/adr/015-imagenes-del-catalogo.md`.
 
 ## Naming
 

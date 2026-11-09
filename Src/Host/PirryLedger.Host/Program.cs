@@ -11,6 +11,7 @@ using PirryLedger.Business.Api;
 // cada pieza expone los suyos (RD-01).
 using DotNetEnv;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http.Features;
 using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Notifications.Infrastructure;
@@ -65,7 +66,39 @@ builder.Services.AddNotifications(
     connection,
     EnvironmentConfiguration.ReadSmtp(builder.Configuration) ?? SmtpConfiguration.Empty);
 builder.Services.AddPermissions(connection);
-builder.Services.AddBusiness(connection);
+
+// Almacenamiento de imagenes (ADR 015). Las siete variables son obligatorias:
+// si falta una, la aplicacion no arranca y dice cual. Se lee antes de
+// construir el contenedor para no registrar un modulo a medio configurar.
+var imageStorage = EnvironmentConfiguration.ReadImageStorage(
+    builder.Configuration,
+    out var missingImageVariable);
+
+if (imageStorage is null)
+{
+    Console.Error.WriteLine(
+        $"Falta la variable de entorno {missingImageVariable}. " +
+        "El README explica como definirla.");
+    Environment.Exit(1);
+}
+
+// ADR 015: el limite general del cuerpo de una peticion. Kestrel acepta 30
+// MB por defecto y las rutas de JSON del negocio reciben cuerpos pequenos:
+// una foto de 5 MiB no cabe en el general, asi que la ruta de subida levanta
+// el limite solo para ella.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 1024 * 1024;
+});
+
+// El cuerpo de un formulario multipart tiene su propio limite: el maximo de
+// la imagen mas el margen de las cabeceras del formulario.
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = imageStorage.MaxBytes + (64 * 1024);
+});
+
+builder.Services.AddBusiness(connection, imageStorage);
 
 var app = builder.Build();
 
