@@ -27,17 +27,36 @@ public sealed class R2ImageStore : IImageStore
 
         _client = new AmazonS3Client(
             new BasicAWSCredentials(configuration.AccessKeyId, configuration.SecretAccessKey),
-            new AmazonS3Config
-            {
-                ServiceURL = configuration.Endpoint,
+            CreateClientConfig(configuration));
+    }
 
-                // R2 no tiene regiones: la region de la firma es "auto".
-                AuthenticationRegion = "auto",
+    // La configuracion con la que se habla con R2.
+    //
+    // R2 no implementa el envio del cuerpo con el checksum en un trailer
+    // (aws-chunked, STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER). El SDK lo
+    // activa por defecto desde la version 4, asi que cada subida se rechazaba
+    // con "not implemented". WHEN_REQUIRED deja el checksum solo en las
+    // operaciones que lo exigen, y subir un objeto no lo exige.
+    //
+    // Es internal para que la prueba compruebe los dos ajustes sin tocar la
+    // red: el cliente se construye igual, pero la prueba no lo usa.
+    internal static AmazonS3Config CreateClientConfig(
+        ImageStorageConfiguration configuration)
+    {
+        return new AmazonS3Config
+        {
+            ServiceURL = configuration.Endpoint,
 
-                // El bucket va en la ruta y no en el subdominio del host: es
-                // lo que espera el endpoint de R2.
-                ForcePathStyle = true,
-            });
+            // R2 no tiene regiones: la region de la firma es "auto".
+            AuthenticationRegion = "auto",
+
+            // El bucket va en la ruta y no en el subdominio del host: es
+            // lo que espera el endpoint de R2.
+            ForcePathStyle = true,
+
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED,
+        };
     }
 
     public async Task PutAsync(
