@@ -145,13 +145,24 @@ contiene valores reales.
 | `PIRRY_LEDGER_FIRST_ADMIN_EMAIL` | email del primer Administrador. Ver [El primer Administrador](#el-primer-administrador). |
 | `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` | Contraseña del primer Administrador. Cumple la política de RF-CA-14. |
 | `PIRRY_LEDGER_FIRST_ADMIN_NAME` | Nombre que se muestra. Si no se define, es `Administrator`. |
+| `PIRRY_LEDGER_R2_ACCOUNT_ID` | **Obligatoria.** Identificador de la cuenta de Cloudflare del bucket de imágenes. |
+| `PIRRY_LEDGER_R2_ACCESS_KEY_ID` | **Obligatoria.** Clave de acceso del token de API de R2. |
+| `PIRRY_LEDGER_R2_SECRET_ACCESS_KEY` | **Obligatoria.** Secreto del token de API de R2. |
+| `PIRRY_LEDGER_R2_BUCKET` | **Obligatoria.** Nombre del bucket privado donde viven las imágenes. |
+| `PIRRY_LEDGER_R2_ENDPOINT` | **Obligatoria.** Endpoint de R2, por ejemplo `https://<cuenta>.r2.cloudflarestorage.com`. |
+| `PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES` | **Obligatoria.** Minutos que dura la firma de descarga. |
+| `PIRRY_LEDGER_IMAGE_MAX_BYTES` | **Obligatoria.** Bytes máximos de una imagen. |
 
-Las dos obligatorias se necesitan para arrancar la aplicación y para ejecutar el
-enviador de email. Las seis SMTP son opcionales: sin ellas la aplicación y el
-alta de usuarios funcionan igual, pero el enviador no podrá entregar emails
-reales. Las tres del primer Administrador también son opcionales; sin ellas no
-se crea automáticamente ningún Administrador, y sin un Administrador no se
-puede crear ningún usuario (ADR 013).
+Las **nueve** obligatorias (las dos primeras y las siete del almacenamiento de
+imágenes) se necesitan para arrancar la aplicación. Si falta una, la API **no
+arranca** y dice el nombre de la que falta: una configuración a medias es la
+fuente clásica de errores que aparecen en producción y no en desarrollo
+([3.15 Imágenes del catálogo](#315-imágenes-del-catálogo)). Las seis SMTP son
+opcionales: sin ellas la aplicación y el alta de usuarios funcionan igual, pero
+el enviador no podrá entregar emails reales. Las tres del primer Administrador
+también son opcionales; sin ellas no se crea automáticamente ningún
+Administrador, y sin un Administrador no se puede crear ningún usuario
+(ADR 013).
 
 Al arrancar, la aplicación busca un archivo `.env` desde el directorio desde el
 que lanzas el comando hacia arriba y carga sus variables. Ese archivo es la
@@ -175,7 +186,7 @@ Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
   variables en el entorno del sistema, y si tampoco están, avisa por el nombre
   de la que falta y se detiene (RD-08).
 - `.env` está en el `.gitignore`: **nunca** se sube al repositorio. Sí se sube
-  `.env.example`, la plantilla con las once variables, sus descripciones y
+  `.env.example`, la plantilla con las dieciocho variables, sus descripciones y
   valores de ejemplo. Nunca pongas un valor real en `.env.example`.
 - Si un valor tiene espacios o el carácter `#`, ponlo entre comillas dobles.
 - Si una variable ya está definida en el entorno del sistema (por ejemplo, un
@@ -730,6 +741,7 @@ sobre EF Core en memoria.
 | **Operaciones del negocio (facturas)** | **RF-NEG-02, RF-NEG-06**, RF-GP-01, RD-01, RD-02, RD-06 | **[3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06)** |
 | **Integración Business ↔ Permissions** | **RF-NEG-06**, RF-GP-05, RD-03, RD-12 | **[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
+| **Imágenes del catálogo** | ADR 015 | [3.15](#315-imágenes-del-catálogo) |
 
 > **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
 > `PirryLedger.Core.Permissions` (solicitudes de permiso, RF-GP-01 a RF-GP-07) con
@@ -775,6 +787,7 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | La operación de negocio pide el permiso por un contrato de `Core.Contracts`, y el `403`/`409` distingue "recién pedido" de "ya pendiente" | `docs/adr/012-request-permission-from-business.md` |
 | Los usuarios los crea un Administrador; no hay alta pública, y el desbloqueo de una cuenta bloqueada es una operación idempotente | `docs/adr/013-admin-created-users.md` |
 | Todo cambio de contraseña de un Estándar exige aprobación de un Administrador, y la aprobación ocurre antes de que el código llegue al correo | `docs/adr/014-password-change-permission.md` |
+| Imágenes del catálogo: bucket privado en Cloudflare R2, firma de descarga y sincronización por cursor de revisión | `docs/adr/015-imagenes-del-catalogo.md` |
 
 ---
 
@@ -860,8 +873,8 @@ dotnet test pirry-ledger.slnx
 ```
 
 Un solo comando, desde un clon limpio, ejecuta **las cinco** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (147), Notifications (6),
-Permissions (52), Business (134) e Integración (4). Son **343 pruebas** en total.
+necesita base de datos ni servidor SMTP: AccessControl (155), Notifications (6),
+Permissions (52), Business (202) e Integración (4). Son **419 pruebas** en total.
 Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
 uso, los repositorios y la máquina de estados de `Invoice` con una prueba por
 fila de sus tablas. La suite de integración (sección
@@ -1573,10 +1586,10 @@ deciden transiciones: llaman al agregado, que delega en la máquina.
 | RD-04 | Toda transición de `Invoice` pasa por `InvoiceStateMachine`; la lista única `AllowedTransitions` es la única que decide (sección 3.6). |
 | RD-05 | Las contraseñas se almacenan con hash y sal; las consultas SQL de RF-CA-02 muestran hashes, nunca contraseñas. |
 | RD-06 | Las rutas administrativas rechazan con `403` a un usuario Estándar aunque invoque la API manualmente (RF-CA-06). |
-| RD-07 | Toda entrada externa se valida antes de usarse: emails mal formados, contraseñas débiles y estados inválidos producen respuestas Controladas (RF-CA-14, RF-CA-20); un cuerpo JSON ilegible responde `400` y un `Content-Type` no admitido responde `415`, ambos con mensaje controlado (sección 3.9). |
-| RD-08 | Las respuestas de error no exponen trazas, rutas locales, consultas SQL ni la cabecera `Authorization` de la petición, ni en desarrollo ni en producción (sección 3.9). |
-| RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. |
-| RD-10 | La conexión, el primer Administrador y SMTP se configuran mediante variables de entorno (sección 1, paso 4). |
+| RD-07 | Toda entrada externa se valida antes de usarse: emails mal formados, contraseñas débiles y estados inválidos producen respuestas Controladas (RF-CA-14, RF-CA-20); un cuerpo JSON ilegible responde `400` y un `Content-Type` no admitido responde `415`, ambos con mensaje controlado (sección 3.9). La imagen que se sube se valida por sus bytes, no por el `Content-Type` declarado, y un archivo demasiado grande responde `413` (sección 3.15). |
+| RD-08 | Las respuestas de error no exponen trazas, rutas locales, consultas SQL ni la cabecera `Authorization` de la petición, ni en desarrollo ni en producción (sección 3.9). Los errores del bucket de imágenes responden `503` con un mensaje genérico, sin el nombre del bucket ni el endpoint (sección 3.15). |
+| RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. La clave y la versión de cada imagen del catálogo también (sección 3.15). |
+| RD-10 | La conexión, el primer Administrador, SMTP y el bucket de imágenes se configuran mediante variables de entorno (sección 1, paso 4). Las siete del bucket son obligatorias: sin alguna, la aplicación no arranca y dice cuál falta. |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
 | RD-12 | AccessControl, Notifications, Permissions y Business tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
 
@@ -2356,12 +2369,180 @@ minutos se recorre en las pruebas sin esperar.
 dotnet test Tests\PirryLedger.Core.AccessControl.Tests\PirryLedger.Core.AccessControl.Tests.csproj --filter "FullyQualifiedName~PruebasDeLimiteDeSolicitudes"
 ```
 
+### 3.15 Imágenes del catálogo
+
+Cada producto del catálogo puede tener una foto. La foto **no** es un atributo
+del producto: es una fila propia (`bil_product_images`) y los bytes viven en un
+bucket **privado** de Cloudflare R2 (ADR 015).
+
+Lo que resuelve:
+
+- La **clave** y la **versión** de la imagen viven en la base de datos propia.
+  La versión es el `sha256` de los bytes guardados y la calcula el servidor.
+- El bucket es **privado**: no hay URL pública. Para leer una foto hace falta
+  una **firma** que genera el servidor.
+- La firma dura `PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES` (15 por defecto) y
+  **solo se firma lo que el cliente no tiene**.
+- El cliente **no dice qué fotos tiene**: manda el **cursor** que el servidor le
+  dio la última vez y recibe lo que cambió. El delta lo calcula el servidor con
+  su propio historial, así que el backend no depende de lo que afirme el
+  cliente.
+- Al subir la foto se le **quitan los metadatos** (EXIF, XMP, IPTC y texto de
+  PNG): una foto de celular no sale del sistema con las coordenadas GPS.
+- **Solo un Administrador** sube, reemplaza o quita fotos. Cualquier sesión
+  válida las puede ver y sincronizar.
+
+#### Preparación
+
+Hace falta un bucket **privado** en Cloudflare y un token de API de R2 limitado
+a ese bucket, con lectura y escritura de objetos. Las siete variables van en el
+`.env` (paso 4). Sin alguna de ellas la aplicación **no arranca** y dice el
+nombre de la que falta:
+
+```powershell
+dotnet run --project Src\Host\PirryLedger.Host
+```
+
+```
+Falta la variable de entorno PIRRY_LEDGER_R2_ACCOUNT_ID. El README explica como definirla.
+```
+
+Con el bucket listo, la migración añade las dos tablas nuevas:
+
+```powershell
+$env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_ledger;Username=<usuario>;Password=<contrasena>'
+dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedger.Business.Infrastructure
+```
+
+#### Subir una foto
+
+Con el token de un Administrador y la foto en el disco:
+
+```powershell
+curl.exe -X PUT "http://localhost:5243/api/admin/products/$id/image" `
+  -H "Authorization: Bearer $token" `
+  -F "file=@C:\ruta\combo.jpg"
+```
+
+```
+{"productId":"...","imageKey":"products/.../....jpg","version":"9f2c...","contentType":"image/jpeg","sizeBytes":48213,"revision":12}
+```
+
+Lo que se puede ver en cada caso:
+
+| Qué se manda | Qué responde |
+|---|---|
+| Una JPEG, PNG o WebP de hasta 5 MiB | `200` o `201` con la clave y la versión |
+| Un archivo que no es una imagen | `415` |
+| Una imagen con la estructura rota | `415` |
+| Un archivo de más de 5 MiB | `413` |
+| Un producto que no existe | `404` |
+| Un producto inactivo | `409` |
+| La misma foto otra vez | `200` sin cambios: no se sube ni se borra nada |
+| El token de un Estándar | `403` |
+
+Un archivo que no es una imagen se descubre por sus **bytes**, no por el
+`Content-Type` que declara la petición: un texto con `Content-Type: image/jpeg`
+se rechaza con `415`.
+
+#### Ver y sincronizar las fotos
+
+El catálogo lleva la referencia de cada foto, pero **nunca una firma**:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/api/billing/products `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+```json
+[ { "id": "...", "name": "Combo", "description": "...", "price": 500, "isActive": true,
+    "imageKey": "products/.../....jpg", "imageVersion": "9f2c..." } ]
+```
+
+La sincronización devuelve lo que cambió desde el cursor:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:5243/api/billing/product-images/sync `
+  -Method Post -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType 'application/json' -Body '{"since":12}'
+```
+
+```json
+{ "fullSync": false,
+  "revision": 15,
+  "upserts": [ { "productId": "...", "imageKey": "...", "version": "...",
+                 "contentType": "image/jpeg", "sizeBytes": 48213,
+                 "signedUrl": "https://...&X-Amz-Signature=...", "expiresAtUtc": "..." } ],
+  "removed": [ "products/.../....jpg" ] }
+```
+
+- `upserts` son las fotos que el cliente **no** tiene, con su firma. La firma
+  caduca en `expiresAtUtc`.
+- `removed` son las claves que el cliente tiene que **borrar** de su caché: las
+  fotos que se quitaron y las de los productos que se desactivaron.
+- Sin `since` (o con `since` ausente) la respuesta es una **sincronización
+  completa**: `fullSync` vale `true`, vienen todas las fotos de los productos
+  activos y `removed` viene vacío. El cliente borra su caché y la reconstruye.
+- Un `since` posterior a la revisión actual se rechaza con `400`: ese cursor no
+  lo emitió el servidor.
+
+El cursor es un número que emite el servidor. Como el servidor lleva un
+contador global de revisiones y reserva el número **en la misma transacción**
+que escribe el cambio, las revisiones se confirman en orden: el cliente no se
+puede saltar ningún cambio por el camino.
+
+Cuando un producto se desactiva, su foto sale del conjunto y el cliente la
+borra. El archivo **sigue en el bucket**: al reactivarlo, el producto la vuelve
+a necesitar y la foto vuelve a entrar en el conjunto.
+
+#### Quitar una foto
+
+```powershell
+curl.exe -X DELETE "http://localhost:5243/api/admin/products/$id/image" `
+  -H "Authorization: Bearer $token"
+```
+
+Responde `204`. Si el producto no tiene foto, `404`.
+
+#### Límites
+
+| Límite | Valor |
+|---|---|
+| Cuerpo de una petición, en general | 1 MiB |
+| Cuerpo de la subida de una foto | 5 MiB + 64 KiB de cabeceras del formulario |
+| Tamaño de una foto | 5 MiB (`PIRRY_LEDGER_IMAGE_MAX_BYTES`) |
+| Duración de la firma | 15 minutos (`PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES`) |
+
+Los cinco MiB están pensados para una foto de 1920×1080 en JPEG, WebP o PNG
+razonable.
+
+#### Lo que no incluye
+
+- **Los metadatos se quitan, pero la imagen no se re-codifica.** Un archivo
+  pequeño que declara unas dimensiones enormes no se decodifica nunca: se
+  comprueban los bytes mágicos y la estructura, no los píxeles. Un archivo con
+  la estructura correcta pero que no se puede mostrar se guarda igual.
+- **Los objetos huérfanos se quedan en el bucket.** Si el borrado de un objeto
+  falla, el objeto ocupa espacio y nada más: se anota su clave en el log. No
+  hay limpieza automática todavía.
+- **La caché y las miniaturas del teléfono** son trabajo del cliente, que es la
+  siguiente iteración.
+
+#### Las pruebas
+
+```powershell
+dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj --filter "FullyQualifiedName~Imagenes"
+```
+
+Cuentan las reglas del dominio, la limpieza de metadatos, la firma, el
+historial del conjunto, la subida, la activación del producto y la
+sincronización. No necesitan base de datos, ni bucket, ni red (RD-12).
+
 ---
 
 ## 4. Referencia
 
 ### Endpoints de acceso Control
-
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `POST` | `/api/auth/resend-activation` | Reenvía el enlace. La respuesta es idéntica exista o no el email. Limitado a 5 por IP cada 10 minutos (`429` con `Retry-After`). |
@@ -2393,10 +2574,13 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/api/admin/products` | Crea un producto. Cuerpo `{"name":"Combo","description":"...", "price":500}`. Exige `Administrator`. |
+| `POST` | `/api/admin/products` | Crea un producto. Cuerpo `{"name":"Combo","description":"...", "price":500}`. Exige `Administrator`. Responde con la referencia de su imagen si la tiene. |
 | `PUT` | `/api/admin/products/{id}` | Actualiza nombre, descripción y precio. Exige `Administrator`. |
 | `POST` | `/api/admin/products/{id}/active` | Activa o desactiva un producto. Cuerpo `{"isActive":false}`. Exige `Administrator`. |
-| `GET` | `/api/billing/products` | Lista el catálogo. Cualquier sesión válida. |
+| `GET` | `/api/billing/products` | Lista el catálogo. Cualquier sesión válida. Cada producto lleva `imageKey` e `imageVersion`, que son `null` si no tiene foto. Nunca lleva firmas. |
+| `PUT` | `/api/admin/products/{id}/image` | Sube o reemplaza la foto. `multipart/form-data` con la parte `file`. Exige `Administrator`. Responde `201` la primera vez y `200` al reemplazar, con la clave, la versión y la revisión. |
+| `DELETE` | `/api/admin/products/{id}/image` | Quita la foto. Exige `Administrator`. Responde `204` o `404` si no tenía foto. |
+| `POST` | `/api/billing/product-images/sync` | Sincroniza las fotos. Cuerpo `{"since":12}` o vacío para una sincronización completa. Cualquier sesión válida. Responde con `upserts` (las fotos nuevas, con su firma) y `removed` (las claves que hay que borrar). |
 
 ### Endpoints del negocio (facturas)
 
@@ -2436,12 +2620,12 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 Las cuatro piezas comparten la misma base PostgreSQL, pero cada una es dueña de
 sus propias tablas. Las tres tablas de tokens y sesiones pertenecen a
 AccessControl; la cola pertenece a Notifications; las dos de solicitudes y
-concesiones pertenecen a Permissions; las cuatro de facturas pertenecen a
-Business. La cola de email no tiene una clave foránea hacia `ac_users`: el
-vínculo entre ambos módulos ocurre mediante la operación que encola el email, no
-mediante una relación directa entre tablas. Lo mismo pasa con las facturas: no
-hay clave foránea hacia `ac_users`, porque el negocio no puede depender de las
-tablas de otra pieza (RD-03).
+concesiones pertenecen a Permissions; las de facturas, el catálogo y las
+imágenes pertenecen a Business. La cola de email no tiene una clave foránea
+hacia `ac_users`: el vínculo entre ambos módulos ocurre mediante la operación
+que encola el email, no mediante una relación directa entre tablas. Lo mismo
+pasa con las facturas: no hay clave foránea hacia `ac_users`, porque el negocio
+no puede depender de las tablas de otra pieza (RD-03).
 
 ```mermaid
 erDiagram
@@ -2557,12 +2741,40 @@ erDiagram
         int item_count
     }
 
+    bil_products {
+        uuid id PK
+        string name UK
+        string description "nullable"
+        numeric price
+        boolean is_active
+        bigint image_revision
+    }
+
+    bil_product_images {
+        uuid id PK
+        uuid product_id FK
+        string image_key
+        string version
+        string content_type
+        int size_bytes
+        bigint revision_added
+        bigint revision_removed "nullable"
+        datetime created_at_utc
+        datetime removed_at_utc "nullable"
+    }
+
+    bil_image_revision {
+        int id PK
+        bigint value
+    }
+
     ac_users ||--o{ ac_recovery_codes : "tiene"
     ac_users ||--o{ ac_activation_tokens : "tiene"
     ac_users ||--o{ ac_sessions : "tiene"
     bil_invoices ||--o{ bil_invoice_items : "tiene"
     bil_invoices ||--o{ bil_invoice_payments : "tiene"
     bil_invoices ||--o{ bil_invoice_edits : "tiene"
+    bil_products ||--o{ bil_product_images : "tiene"
 ```
 
 `password_hash`, `code_hash` y `token_hash` almacenan hashes, no
@@ -2576,6 +2788,31 @@ sus enums: `0 = Sale, 1 = Debt`; `0 = Cash, 1 = Transfer, 2 = None`;
 `0 = Registered, 1 = Confirmed, 2 = Rejected`. Los cuatro montos
 (`unit_price`, `amount`, `received_amount` y `change_amount`) son
 `numeric(12,2)`: dos decimales exactos, nunca redondeados.
+
+### Tablas de las imágenes del catálogo
+
+| Tabla | Columna | Para qué |
+|---|---|---|
+| `bil_product_images` | `id` | `uuid`, clave primaria. Es también la parte variable de la clave del objeto en el bucket. |
+| | `product_id` | `uuid`, clave foránea a `bil_products` con borrado en cascada. |
+| | `image_key` | `varchar(255)`. La clave del objeto: `products/{productId}/{id}.{ext}`. |
+| | `version` | `varchar(64)`. El `sha256` de los bytes guardados, en hexadecimal minúsculas. |
+| | `content_type` | `varchar(32)`. `image/jpeg`, `image/png` o `image/webp`. |
+| | `size_bytes` | `integer`. Tamaño de los bytes guardados. |
+| | `revision_added` | `bigint`. Revisión global en la que la foto entró al conjunto. |
+| | `revision_removed` | `bigint`, nullable. Revisión en la que salió del conjunto; vacía mientras siga dentro. |
+| | `created_at_utc`, `removed_at_utc` | Del reloj inyectable (RD-11). |
+| `bil_image_revision` | `id` | `integer`, clave primaria. Siempre vale `1`: es una sola fila. |
+| | `value` | `bigint`. El contador global de revisiones. |
+
+El índice único `ux_bil_product_images_vigente` es **parcial**: cubre
+`product_id` donde `revision_removed IS NULL`, así que un producto tiene como
+mucho una foto vigente. Las fotos que ya salieron del conjunto se quedan como
+historial y puede haber varias para el mismo producto.
+
+El historial **es** el dato: cada cambio inserta una fila y la anterior solo
+registra la revisión en la que salió. No hay tabla de auditoría aparte
+(ADR 015).
 
 Las cuatro columnas que apuntan a un usuario (`requester_id`, `approver_id`,
 `user_id` y `granted_by_user_id`) **no tienen clave foránea** en la base: la
@@ -2623,4 +2860,13 @@ todavía no se escribe: llega en la semana 11.
   20). Quedan para la semana 14; la protección de último Administrador active de
   RF-CA-20 es una regla de negocio de esta iteración, no un sustituto de la
   auditoría.
-- **Frontend.** Hasta que se decida, la aplicación se consume como API.
+- **Frontend.** El frontend es la aplicación Flutter, en los repositorios
+  `pirry-ledger-mobile` (fuera de este repositorio). La API sigue siendo el
+  contrato.
+- **Limpieza automática de los objetos huérfanos** del bucket de imágenes. Si el
+  borrado de un objeto falla, el objeto se queda ahí y se anota su clave en el
+  log (ADR 015).
+- **Miniaturas y varios tamaños** de la misma foto, y la re-codificación de la
+  imagen. Se guarda el archivo tal cual, con los metadatos quitados.
+- **La caché del cliente** de las imágenes: es trabajo del teléfono, que es la
+  siguiente iteración.
