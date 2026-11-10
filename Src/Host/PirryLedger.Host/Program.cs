@@ -5,6 +5,10 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Permissions.Api;
 using PirryLedger.Core.Permissions.Infrastructure;
+using PirryLedger.Core.Documents.Api;
+using PirryLedger.Core.Documents.Application;
+using PirryLedger.Core.Documents.Infrastructure;
+using PirryLedger.Core.Documents.Infrastructure.Storage;
 using PirryLedger.Business.Infrastructure;
 using PirryLedger.Business.Api;
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
@@ -100,6 +104,14 @@ builder.Services.Configure<FormOptions>(options =>
 
 builder.Services.AddBusiness(connection, imageStorage);
 
+// Manejador de documentos (RF-DOC-01..04, ADR 017). La configuracion del
+// almacenamiento es opcional: si falta, la aplicacion arranca y las operaciones
+// de documentos responden 503 controlado; el resto del proyecto no se entera.
+builder.Services.AddDocuments(
+    connection,
+    EnvironmentConfiguration.ReadDocumentStorage(builder.Configuration),
+    EnvironmentConfiguration.ReadDocumentUploadOptions(builder.Configuration));
+
 var app = builder.Build();
 
 await EnsureGlobalBranchSeed(app);
@@ -191,6 +203,7 @@ app.MapAccessControl();
 app.MapNotifications();
 app.MapPermissions();
 app.MapBusiness();
+app.MapDocuments();
 
 app.Run();
 

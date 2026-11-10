@@ -147,6 +147,16 @@ public static class RoleRequirements
         // porque el mostrador necesita las fotos para cobrar. Solo firma lo
         // que el cliente no tiene.
         [Operation.SyncProductImages] = new(AccessLevel.AnySession),
+
+        // RF-DOC-01..04 (ADR 017): las cuatro operaciones del Manejador de
+        // documentos exigen solo una session valida. Quien es duenio de un
+        // documento no se puede expresar como nivel de acceso: depende del
+        // documento concreto, asi que el caso de uso compara identidades
+        // (RF-DOC-03). El endpoint no compara roles (RD-06).
+        [Operation.UploadDocument] = new(AccessLevel.AnySession),
+        [Operation.ListDocuments] = new(AccessLevel.AnySession),
+        [Operation.DownloadDocument] = new(AccessLevel.AnySession),
+        [Operation.DeleteDocument] = new(AccessLevel.AnySession),
     };
 
     // RF-GP-05: nombre canonico del unico permiso del catalogo. Vive aqui
