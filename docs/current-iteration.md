@@ -69,6 +69,8 @@ on 2026-11-09. The decision is ADR 015
 | The client synchronizes by revision cursor and the server computes the delta | RD-03, RD-12 | ADR 015 |
 | Uploaded images lose their metadata without being re-encoded | RD-07 | ADR 015 |
 | Request size limits, which the project did not have | RD-07 | ADR 015 |
+| The upload is protected by role over HTTP, and the product is checked before the file is read | RD-06, RD-07 | ADR 015 |
+| The synchronization is limited per IP | RD-07 | ADR 015 |
 
 ### Out of scope
 
@@ -78,7 +80,7 @@ on 2026-11-09. The decision is ADR 015
 - Thumbnails and several sizes of the same photo.
 - Removing the metadata by re-encoding the image.
 - Pruning the revision history.
-- Rate limits on the uploads and on the synchronization.
+- Rate limits on the uploads. The synchronization has one since 2026-11-10.
 - Load tests.
 
 ### Rules this work follows
@@ -96,6 +98,12 @@ on 2026-11-09. The decision is ADR 015
   after the commit, so a live image never points to a missing object.
 - Every environment variable of the storage is mandatory: without one of them the
   application does not start.
+- The product is checked **before** the file is read, so an upload to a product
+  that does not exist or is inactive is rejected without reading the body.
+- The WebP container is respected: only the bytes the RIFF header declares are
+  processed, and a RIFF that declares more bytes than the file holds is rejected.
+- The synchronization is limited to 20 requests per IP every 10 minutes. With one
+  tablet per branch the IP identifies the counter, so no employee blocks another.
 
 ### Verification
 
@@ -116,6 +124,27 @@ with the SDK (a 23 KB file and a 5 MiB file, upload and delete, all
 `200`/`204`), and by uploading through the local API. The decision is ADR 016. Any
 storage failure (an R2 error, no response, or an SDK error) still answers `503`
 instead of `500`. The suite is at 421.
+
+**Hardening (2026-11-10).** An audit of the upload asked four questions: whether
+the upload is protected by role, whether a Standard can do what is not his, and
+whether the credentials are stored safely. The answers were: the role is
+enforced on the server, the tokens are 32 random bytes whose SHA-256 is what
+the database keeps, and the passwords use Argon2id with a salt. Three gaps were
+found and closed:
+
+1. The role was declared in the table but **no test exercised the route over
+   HTTP**. The suite now makes real requests against the real routes, with the
+   real access filter, and checks that a sessionless request gets `401`, that a
+   Standard gets `403`, and that nothing changes when it is rejected.
+2. The **product was checked after the file was read**. Now it is checked
+   first, so an upload to a product that does not exist is rejected without
+   reading five megabytes.
+3. The **WebP container was not respected**: bytes after the RIFF-declared
+   length were kept. Now only the declared bytes are processed, and a RIFF
+   that declares more than the file holds is rejected.
+
+The synchronization also got a rate limit of 20 requests per IP every 10
+minutes. The suite is at 437.
 
 ### Logbook
 

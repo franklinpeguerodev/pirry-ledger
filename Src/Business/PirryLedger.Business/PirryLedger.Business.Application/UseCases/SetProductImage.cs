@@ -48,13 +48,7 @@ public sealed class SetProductImage
         byte[] content,
         CancellationToken cancellationToken = default)
     {
-        var product = await _products.GetByIdAsync(productId, cancellationToken)
-            ?? throw new ProductNotFoundException();
-
-        if (!product.IsActive)
-        {
-            throw new ProductInactiveException();
-        }
+        await EnsureProductAcceptsImageAsync(productId, cancellationToken);
 
         if (content.Length > _options.MaxBytes)
         {
@@ -103,5 +97,26 @@ public sealed class SetProductImage
         }
 
         return image;
+    }
+
+    // Comprueba que el producto existe y que puede recibir una imagen.
+    //
+    // El endpoint la llama ANTES de leer el archivo: una subida a un producto
+    // que no existe se rechaza sin leer el cuerpo entero, que puede pesar
+    // cinco megas. ExecuteAsync vuelve a comprobarlo, porque el caso de uso no
+    // confía en que el endpoint lo haya hecho.
+    public async Task<Product> EnsureProductAcceptsImageAsync(
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await _products.GetByIdAsync(productId, cancellationToken)
+            ?? throw new ProductNotFoundException();
+
+        if (!product.IsActive)
+        {
+            throw new ProductInactiveException();
+        }
+
+        return product;
     }
 }

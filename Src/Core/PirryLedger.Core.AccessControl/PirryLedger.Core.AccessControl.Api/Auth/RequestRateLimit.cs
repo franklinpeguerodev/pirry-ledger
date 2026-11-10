@@ -26,6 +26,17 @@ public sealed class RequestRateLimit
     public static RequestRateLimit ActivationResend { get; } =
         new(5, TimeSpan.FromMinutes(10));
 
+    // La sincronizacion de las imagenes del catalogo (ADR 015). No manda
+    // correo, pero una peticion por peticion firma el catalogo entero, y una
+    // sesion valida puede pedirla en bucle.
+    //
+    // Veinte en diez minutos: con una tablet por sucursal, la IP identifica al
+    // mostrador, asi que el limite no bloquea a otro empleado de la misma
+    // sucursal. Y una tablet que abre la aplicacion unas pocas veces no llega
+    // a ese numero.
+    public static RequestRateLimit ProductImageSync { get; } =
+        new(20, TimeSpan.FromMinutes(10));
+
     public RequestRateLimit(int maxRequests, TimeSpan window)
     {
         if (maxRequests < 1)

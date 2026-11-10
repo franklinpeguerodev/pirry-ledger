@@ -339,3 +339,19 @@ trailer y no el troceado, así que la subida seguía fallando. La subida ahora f
 las alternativas (sobre todo por qué no se usa `UNSIGNED-PAYLOAD`) está en el
 **ADR 016** (`docs/adr/016-full-payload-signing-for-r2-uploads.md`). El resto de
 este ADR sigue vigente.
+
+**Nota de implementación (2026-11-10).** La regla de rechazo de la sección 6 dice
+que se rechaza "una longitud que se sale del archivo", y el WebP la cumplía a
+medias: el recorte recorría el archivo hasta su final, no hasta el tamaño que
+declara la cabecera RIFF, así que los bytes colocados después del contenedor
+se conservaban. Ahora solo se procesan los bytes declarados, y un RIFF que
+declara más de los que tiene se rechaza con `415`. Esto no cambia la decisión:
+es la regla de rechazo ya escrita, aplicada al contenedor que faltaba. La
+decisión de **qué** se limpia y **cómo** se decide el rechazo sigue siendo la
+de la sección 6, sin revisar.
+
+La decisión del acceso por rol tampoco cambia: `PUT` y `DELETE` siguen siendo
+del Administrator. Lo que se añadió es la prueba que faltaba, y el orden de
+las comprobaciones: el producto se comprueba antes de leer el archivo, para
+que una subida a un producto que no exista no cargue cinco megas para responder
+`404`.

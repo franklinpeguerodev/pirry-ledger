@@ -119,6 +119,16 @@ public sealed class PruebasDeMetadatosDeImagen
     }
 
     [Fact]
+    public void LosBytesDespuesDelFinalDelPngSeDescartan()
+    {
+        var original = Png(trailing: Encoding.ASCII.GetBytes("payload escondido"));
+
+        var limpio = ImageMetadataStripper.Strip(original, ImageFormat.Png);
+
+        Assert.DoesNotContain("payload escondido", Encoding.ASCII.GetString(limpio));
+    }
+
+    [Fact]
     public void UnPngSinFinalSeRechaza()
     {
         var original = Png();
@@ -139,6 +149,27 @@ public sealed class PruebasDeMetadatosDeImagen
         Assert.DoesNotContain("EXIF", texto);
         Assert.DoesNotContain(TextoGps, texto);
         Assert.Contains("VP8 ", texto);
+    }
+
+    [Fact]
+    public void LosBytesDespuesDelFinalDelWebPSeDescartan()
+    {
+        // Un fragmento de la lista blanca, pero colocado despues del final que
+        // declara la cabecera RIFF: no pertenece al contenedor.
+        var original = WebP(trailing: WebPChunk("ICCP", Encoding.ASCII.GetBytes("payload escondido")));
+
+        var limpio = ImageMetadataStripper.Strip(original, ImageFormat.WebP);
+
+        Assert.DoesNotContain("payload escondido", Encoding.ASCII.GetString(limpio));
+    }
+
+    [Fact]
+    public void UnWebPQueDeclaraMasBytesDeLosQueTieneSeRechaza()
+    {
+        var original = WebP(oversizedRiff: true);
+
+        Assert.Throws<UnsupportedProductImageException>(
+            () => ImageMetadataStripper.Strip(original, ImageFormat.WebP));
     }
 
     [Fact]
@@ -217,7 +248,8 @@ public sealed class PruebasDeMetadatosDeImagen
         bool withText = false,
         bool withExif = false,
         bool withUnknownAncillary = false,
-        bool withUnknownCritical = false)
+        bool withUnknownCritical = false,
+        byte[]? trailing = null)
     {
         var bytes = new List<byte> { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         bytes.AddRange(Chunk("IHDR", [0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10, 0x08, 0x06, 0x00, 0x00, 0x00]));
@@ -245,6 +277,12 @@ public sealed class PruebasDeMetadatosDeImagen
         bytes.AddRange(Chunk("IDAT", [0x01, 0x02, 0x03]));
         bytes.AddRange(Chunk("IEND", []));
 
+        // Lo que va despues del IEND no pertenece a la imagen.
+        if (trailing is not null)
+        {
+            bytes.AddRange(trailing);
+        }
+
         return [.. bytes];
     }
 
@@ -259,7 +297,11 @@ public sealed class PruebasDeMetadatosDeImagen
         return [.. result];
     }
 
-    private static byte[] WebP(bool withExif = false, bool withVp8x = false)
+    private static byte[] WebP(
+        bool withExif = false,
+        bool withVp8x = false,
+        byte[]? trailing = null,
+        bool oversizedRiff = false)
     {
         var chunks = new List<byte>();
 
@@ -280,11 +322,21 @@ public sealed class PruebasDeMetadatosDeImagen
         body.AddRange(Encoding.ASCII.GetBytes("WEBP"));
         body.AddRange(chunks);
 
+        // El tamaño que declara la cabecera RIFF es el del archivo que se
+        // escribe. "oversizedRiff" declara mas bytes de los que hay, que es un
+        // archivo roto. "trailing" son bytes que quedan fuera del contenedor.
+        var size = oversizedRiff ? body.Count + 64 : body.Count;
+
         var result = new List<byte>();
         result.AddRange(Encoding.ASCII.GetBytes("RIFF"));
-        var size = body.Count;
         result.AddRange([(byte)(size & 0xFF), (byte)((size >> 8) & 0xFF), (byte)((size >> 16) & 0xFF), (byte)((size >> 24) & 0xFF)]);
         result.AddRange(body);
+
+        if (trailing is not null)
+        {
+            result.AddRange(trailing);
+        }
+
         return [.. result];
     }
 
