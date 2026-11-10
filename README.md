@@ -592,6 +592,128 @@ Invoke-RestMethod -Uri 'http://localhost:8090/api/auth/login' -Method Post `
 ```
 
 
+### API externa (SeaweedFS)
+
+La API externa es **SeaweedFS**, un almacenamiento de objetos de código abierto
+(licencia Apache-2.0) que habla el **protocolo S3**. Corre como un servicio más de
+la composición (`seaweedfs`) y es donde viven los bytes de los documentos.
+
+- **Qué operación la usa:** el Manejador de documentos. `POST /api/documents`
+  guarda el archivo en SeaweedFS y `GET /api/documents/{id}/download` lo lee de
+  ahí. No es un reenvío de la respuesta del proveedor: la aplicación decide qué
+  se acepta (tamaño y archivo vacío), genera la clave del objeto (`documents/` +
+  un `Guid` nuevo) y decide quién puede ver cada documento (ADR 017).
+- **La clave:** el par de credenciales de SeaweedFS viaja en variables de
+  entorno desde el `.env` que **no** se versiona. Ningún commit, ni el
+  `Dockerfile`, ni `docker-compose.yml`, ni la imagen contienen la clave: el
+  compose solo referencia `${VARIABLE}`.
+
+| Variable | Para qué | Valor en la composición |
+|---|---|---|
+| `PIRRY_LEDGER_STORAGE_ACCESS_KEY` | Clave de acceso de SeaweedFS | La del `.env` |
+| `PIRRY_LEDGER_STORAGE_SECRET_KEY` | Secreto de SeaweedFS | El del `.env` |
+| `PIRRY_LEDGER_STORAGE_BUCKET` | Bucket de los documentos | `pirry-ledger-documents` |
+| `PIRRY_LEDGER_STORAGE_ENDPOINT` | Endpoint S3 | `http://seaweedfs:8333` (lo fija el compose) |
+| `PIRRY_LEDGER_DOCUMENT_MAX_BYTES` | Tope de una subida | `5242880` (5 MiB) |
+
+#### Los bytes viven en un volumen con nombre
+
+RF-DOC-05: los archivos no están dentro de la imagen. Están en el volumen
+`pirry-ledger-documents`, que la composición monta en `/data` de SeaweedFS:
+
+```bash
+docker volume inspect pirry-ledger-documents
+docker compose exec seaweedfs ls -la /data
+```
+
+`docker compose down` (sin `-v`) no toca ese volumen: al volver a arrancar, el
+documento sigue listado y se descarga.
+
+#### Leer el correo pendiente
+
+La activación y la recuperación de contraseña envían correo a la bandeja de la
+composición, que **no** publica un puerto (ADR 019). Se lee desde dentro de la
+red:
+
+```bash
+docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
+```
+
+De ahí salen el enlace de activación (apunta a `http://localhost:8090`, la
+dirección pública) y el código de recuperación que viaja en el cuerpo.
+
+#### Ejemplo de la respuesta
+
+Subir un documento (el archivo es de prueba; cualquier tipo vale):
+
+```bash
+curl -i -X POST http://localhost:8090/api/documents \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@factura.pdf"
+```
+
+Respuesta `201` con el registro que pide RF-DOC-01: nombre, tipo, tamaño, fecha y
+quién lo subió, más la sucursal de la sesión:
+
+```json
+{
+  "id": "6d1a2c3e-8f4b-4a2e-9c1d-2b3f4a5c6d7e",
+  "name": "factura.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 184320,
+  "uploadedByUserId": "0a1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+  "branchId": "00000000-0000-0000-0000-000000000001",
+  "uploadedAtUtc": "2026-11-10T18:22:41.1234567Z"
+}
+```
+
+Listar (`GET /api/documents`) devuelve un arreglo con esa misma forma. Descargar
+(`GET /api/documents/{id}/download`) devuelve los bytes como adjunto
+(`Content-Type: application/octet-stream` y `Content-Disposition: attachment`).
+Eliminar (`DELETE /api/documents/{id}`) responde `204`.
+
+#### Rechazo controlado: sin clave o con la API caída
+
+La sección 1.4 del enunciado pide que, sin clave o con la API caída, la
+operación devuelva un rechazo comprensible y **el resto del proyecto siga
+funcionando**. Se comprueba con estos dos comandos.
+
+Sin la clave (se borran las dos líneas de `PIRRY_LEDGER_STORAGE_*` del `.env` y
+se recrea la aplicación):
+
+```bash
+docker compose up -d --force-recreate app
+curl -i -X POST http://localhost:8090/api/documents -H "Authorization: Bearer <token>" -F "file=@factura.pdf"
+```
+
+```json
+{"message":"El almacenamiento de documentos no está configurado. Revisa el README."}
+```
+
+Con SeaweedFS parado:
+
+```bash
+docker compose stop seaweedfs
+curl -i -X POST http://localhost:8090/api/documents -H "Authorization: Bearer <token>" -F "file=@factura.pdf"
+```
+
+```json
+{"message":"El almacenamiento de documentos no está disponible en este momento."}
+```
+
+```bash
+docker compose start seaweedfs
+```
+
+En los dos casos el código es `503`, el mensaje no lleva trazas ni rutas (RD-08)
+y el resto de las operaciones del proyecto siguen respondiendo.
+
+> Nota de la entrega: los dos rechazos se deben a que SeaweedFS es un servicio
+> **autoalojado** en la composición. Con la clave de ejemplo de `.env.example` la
+> subida funciona, porque esa misma clave configura el servidor; el rechazo por
+> clave no aparece. Los dos casos de arriba son los que sí existen y los que se
+> verifican en la revisión.
+
 ### Cómo enviar el email pendiente
 
 El enviador es un proceso aparte (RF-NOT-09): no manda emails dentro de la
