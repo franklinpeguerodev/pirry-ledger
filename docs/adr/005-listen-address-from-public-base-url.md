@@ -4,6 +4,7 @@
 - **Fecha:** 2026-10-04
 - **Requisitos:** RD-08, RD-10 (configuración y errores); ningún requisito funcional cambia
 - **Decide:** Franklin. **Redacta:** el agente.
+- **Modificada por:** ADR 020 (2026-11-10), solo en el host de escucha. La fuente única del puerto y de los enlaces se mantiene.
 
 ## Contexto
 
