@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <!-- Proveedor en memoria de EF Core: ejercita el repositorio real sin
+         PostgreSQL. Un doble del repositorio probaria el doble. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Documents\PirryLedger.Core.Documents.Domain\PirryLedger.Core.Documents.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Documents\PirryLedger.Core.Documents.Application\PirryLedger.Core.Documents.Application.csproj" />
+    <!-- Infrastructure aporta el DbContext y la migracion, y se importa porque
+         algunas pruebas verifican el mapeo de EF Core (snake_case, ADR 004) sin
+         levantar la aplicacion. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Documents\PirryLedger.Core.Documents.Infrastructure\PirryLedger.Core.Documents.Infrastructure.csproj" />
+    <!-- Authenticate y los repositorios en memoria de AccessControl: la prueba
+         de los casos de uso valida sesion de verdad, no un fake de la sesion. -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Application\PirryLedger.Core.AccessControl.Application.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
