@@ -64,7 +64,12 @@ var connection = ReadRequiredConnection(builder.Configuration);
 // que se desincronicen (docs/adr/005-listen-address-from-public-base-url.md).
 // Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
 var baseUrl = ReadRequiredBaseUrl(builder.Configuration);
-builder.WebHost.UseUrls(baseUrl);
+
+// ADR 020: la variable sigue siendo la direccion publica (los enlaces) y el
+// puerto, pero el proceso escucha en TODAS las interfaces. Un puerto publicado
+// por Docker llega a la interfaz del contenedor, no a su loopback: atado a
+// localhost, el contenedor no respondería en la direccion del README.
+builder.WebHost.UseUrls(ListenAddressFor(baseUrl));
 
 builder.Services.AddAccessControl(connection, baseUrl);
 builder.Services.AddNotifications(
@@ -216,6 +221,33 @@ app.MapBusiness();
 app.MapDocuments();
 
 app.Run();
+
+// ADR 020: la variable dice la direccion publica y el puerto; el host de
+// escucha es siempre 0.0.0.0, para que un puerto publicado por Docker llegue.
+// Solo se admite http: hoy no hay certificado ni TLS, y aceptar https en la
+// variable produciria un arranque que no responde.
+static string ListenAddressFor(string publicBaseUrl)
+{
+    if (!Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var uri))
+    {
+        Console.Error.WriteLine(
+            $"La variable de entorno {EnvironmentConfiguration.BaseUrlVariable} no es una dirección válida. " +
+            "El README explica el formato.");
+
+        Environment.Exit(1);
+    }
+
+    if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine(
+            $"La variable de entorno {EnvironmentConfiguration.BaseUrlVariable} usa {uri.Scheme}, " +
+            "pero la API solo escucha http. El README explica el formato.");
+
+        Environment.Exit(1);
+    }
+
+    return $"http://0.0.0.0:{uri.Port}";
+}
 
 // ADR 018: recorre los pasos de migracion registrados por las piezas y para en
 // el primero que falla. El Host no conoce el DbContext de ninguna pieza: solo
