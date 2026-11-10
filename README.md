@@ -2390,7 +2390,12 @@ Lo que resuelve:
 - Al subir la foto se le **quitan los metadatos** (EXIF, XMP, IPTC y texto de
   PNG): una foto de celular no sale del sistema con las coordenadas GPS.
 - **Solo un Administrador** sube, reemplaza o quita fotos. Cualquier sesión
-  válida las puede ver y sincronizar.
+  válida las puede ver y sincronizar. El rechazo por rol ocurre **en el
+  servidor**, antes de que la ruta lea el archivo: una petición de un Estándar
+  con una foto de 6 MiB recibe `403` y no `413`.
+- Antes de leer el archivo se comprueba que **el producto existe y está
+  activo**: una subida a un producto que no existe recibe `404` sin leer el
+  cuerpo.
 
 #### Preparación
 
@@ -2432,12 +2437,12 @@ Lo que se puede ver en cada caso:
 
 | Qué se manda | Qué responde |
 |---|---|
-| Una JPEG, PNG o WebP de hasta 5 MiB | `200` o `201` con la clave y la versión |
+| Una JPEG, PNG o WebP de hasta 5 MiB | `200` con la clave y la versión |
 | Un archivo que no es una imagen | `415` |
 | Una imagen con la estructura rota | `415` |
 | Un archivo de más de 5 MiB | `413` |
 | Un producto que no existe | `404` |
-| Un producto inactivo | `409` |
+| Un producto inactivo | `400` |
 | La misma foto otra vez | `200` sin cambios: no se sube ni se borra nada |
 | El token de un Estándar | `403` |
 
@@ -2512,9 +2517,15 @@ Responde `204`. Si el producto no tiene foto, `404`.
 | Cuerpo de la subida de una foto | 5 MiB + 64 KiB de cabeceras del formulario |
 | Tamaño de una foto | 5 MiB (`PIRRY_LEDGER_IMAGE_MAX_BYTES`) |
 | Duración de la firma | 15 minutos (`PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES`) |
+| Sincronizaciones por IP | 20 cada 10 minutos (`429` con `Retry-After`) |
 
 Los cinco MiB están pensados para una foto de 1920×1080 en JPEG, WebP o PNG
 razonable.
+
+El límite de la sincronización va **por IP y por ruta**: con una tablet por
+sucursal, la IP identifica al mostrador, así que el límite no bloquea a otro
+empleado de la misma sucursal. Una tablet que abre la aplicación unas pocas
+veces no llega a veinte.
 
 #### Lo que no incluye
 
@@ -2522,6 +2533,12 @@ razonable.
   pequeño que declara unas dimensiones enormes no se decodifica nunca: se
   comprueban los bytes mágicos y la estructura, no los píxeles. Un archivo con
   la estructura correcta pero que no se puede mostrar se guarda igual.
+- **El contenido de la foto no se revisa.** Se comprueba que sea una imagen
+  estructuralmente válida y se le quitan los metadatos, pero **no** se busca
+  texto ni se decodifica. Los bytes que quedan fuera de la imagen se
+  descartan: en JPEG y en PNG, los que van después del final; en WebP, los que
+  van después del tamaño que declara la cabecera RIFF. Un WebP que declara más
+  bytes de los que tiene se rechaza con `415`.
 - **Los objetos huérfanos se quedan en el bucket.** Si el borrado de un objeto
   falla, el objeto ocupa espacio y nada más: se anota su clave en el log. No
   hay limpieza automática todavía.
@@ -2537,6 +2554,14 @@ dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj -
 Cuentan las reglas del dominio, la limpieza de metadatos, la firma, el
 historial del conjunto, la subida, la activación del producto y la
 sincronización. No necesitan base de datos, ni bucket, ni red (RD-12).
+
+Las pruebas de acceso (`PruebasDeAccesoALasRutasDeImagenes`) sí levantan la
+aplicación, pero en memoria (`TestServer`): hacen peticiones HTTP de verdad
+contra las rutas de verdad, con la cabecera `Authorization` y el filtro de
+acceso de verdad. Comprueban que sin sesión la respuesta es `401`, que el
+token de un Estándar recibe `403`, que el del Administrador sube la foto, y
+que la sincronización se limita a 20 por IP. Tampoco necesitan base de datos,
+ni bucket, ni red.
 
 ---
 
@@ -2578,9 +2603,9 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `PUT` | `/api/admin/products/{id}` | Actualiza nombre, descripción y precio. Exige `Administrator`. |
 | `POST` | `/api/admin/products/{id}/active` | Activa o desactiva un producto. Cuerpo `{"isActive":false}`. Exige `Administrator`. |
 | `GET` | `/api/billing/products` | Lista el catálogo. Cualquier sesión válida. Cada producto lleva `imageKey` e `imageVersion`, que son `null` si no tiene foto. Nunca lleva firmas. |
-| `PUT` | `/api/admin/products/{id}/image` | Sube o reemplaza la foto. `multipart/form-data` con la parte `file`. Exige `Administrator`. Responde `201` la primera vez y `200` al reemplazar, con la clave, la versión y la revisión. |
+| `PUT` | `/api/admin/products/{id}/image` | Sube o reemplaza la foto. `multipart/form-data` con la parte `file`. Exige `Administrator`. Responde `200` con la clave, la versión y la revisión. Si el producto no existe, `404`; si está inactivo, `400`: en los dos casos el archivo no se lee. |
 | `DELETE` | `/api/admin/products/{id}/image` | Quita la foto. Exige `Administrator`. Responde `204` o `404` si no tenía foto. |
-| `POST` | `/api/billing/product-images/sync` | Sincroniza las fotos. Cuerpo `{"since":12}` o vacío para una sincronización completa. Cualquier sesión válida. Responde con `upserts` (las fotos nuevas, con su firma) y `removed` (las claves que hay que borrar). |
+| `POST` | `/api/billing/product-images/sync` | Sincroniza las fotos. Cuerpo `{"since":12}` o vacío para una sincronización completa. Cualquier sesión válida. Responde con `upserts` (las fotos nuevas, con su firma) y `removed` (las claves que hay que borrar). Limitado a 20 por IP cada 10 minutos (`429` con `Retry-After`). |
 
 ### Endpoints del negocio (facturas)
 
