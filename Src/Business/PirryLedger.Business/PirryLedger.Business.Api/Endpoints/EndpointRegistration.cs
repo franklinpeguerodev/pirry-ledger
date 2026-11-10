@@ -106,6 +106,11 @@ public static class EndpointRegistration
             {
                 RaiseBodyLimit(context, options);
 
+                // El producto se comprueba ANTES de leer el archivo: una subida
+                // a un producto que no existe se rechaza sin leer el cuerpo,
+                // que puede pesar cinco megas.
+                await useCase.EnsureProductAcceptsImageAsync(id, cancellationToken);
+
                 var content = await ReadImageAsync(context.Request, options, cancellationToken);
                 var image = await useCase.ExecuteAsync(id, content, cancellationToken);
 
@@ -144,7 +149,8 @@ public static class EndpointRegistration
 
                 return Results.Ok(ProductImageSyncResponse.From(result));
             }))
-        .WithAccess(Operation.SyncProductImages);
+        .WithAccess(Operation.SyncProductImages)
+        .RequireRequestRateLimit(RequestRateLimit.ProductImageSync);
 
         // RF-NEG-02: emitir una factura. El borrador vive solo en el cliente, asi
         // que se guarda ya emitida. Responde 201 con la factura creada.

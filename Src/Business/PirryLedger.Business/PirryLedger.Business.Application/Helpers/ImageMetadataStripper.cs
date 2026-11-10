@@ -274,6 +274,20 @@ public static class ImageMetadataStripper
             throw new UnsupportedProductImageException("El archivo WebP no tiene la cabecera RIFF.");
         }
 
+        // El contenedor RIFF declara en su cabecera cuantos bytes tiene. Solo se
+        // procesa esa parte: lo que venga despues queda fuera del contenedor y
+        // se descarta, igual que los metadatos.
+        //
+        // Un RIFF que declara mas bytes de los que tiene es un archivo roto, y
+        // eso si se rechaza (415): no se sabe donde acaba la imagen.
+        var declaredSize = ReadLittleEndianInt32(content, 4);
+        var limit = 8L + declaredSize;
+
+        if (declaredSize < 4 || limit > content.Length)
+        {
+            throw new UnsupportedProductImageException("El archivo WebP esta danado.");
+        }
+
         var output = new List<byte>(content.Length);
         output.AddRange(Encoding.ASCII.GetBytes("RIFF"));
         output.AddRange([0, 0, 0, 0]);
@@ -282,12 +296,12 @@ public static class ImageMetadataStripper
         var position = 12;
         var sawImage = false;
 
-        while (position + 8 <= content.Length)
+        while (position + 8 <= limit)
         {
             var type = Encoding.ASCII.GetString(content, position, 4);
             var size = ReadLittleEndianInt32(content, position + 4);
 
-            if (size < 0 || position + 8L + size > content.Length)
+            if (size < 0 || position + 8L + size > limit)
             {
                 throw new UnsupportedProductImageException("El archivo WebP esta danado.");
             }

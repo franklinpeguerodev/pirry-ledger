@@ -372,3 +372,85 @@ como estaba.
 desplegado en `main` (`fd8e171`) es anterior a este cambio y sigue fijando
 `WHEN_REQUIRED` sin `UseChunkEncoding`. La verificación en la nube queda para
 después del despliegue.
+
+---
+
+### Entrada 6 — Auditoría de la subida: rol, brechas y credenciales (2026-11-10)
+
+**Qué se pidió.** Auditar si la subida de archivos está protegida por rol, si un
+Estándar puede hacer algo que no le corresponde, y si los tokens de las imágenes
+están seguros y hasheados.
+
+**Qué devolví.** Una revisión del código, sin ejecutar nada, con cinco
+hallazgos. El veredicto sobre el núcleo fue que estaba bien: el rol se declara
+en `RoleRequirements` y lo aplica el filtro de acceso en el servidor, antes del
+caso de uso; el token de sesión son 32 bytes del generador del sistema y lo que
+la base guarda es su SHA-256; los códigos de un solo uso siguen el mismo patrón;
+las contraseñas usan Argon2id con sal; y no existe un token aparte para subir
+imágenes, la subida usa la sesión normal.
+
+Los tres hallazgos que sí había:
+
+1. **El rol estaba declarado pero nadie lo probaba sobre HTTP.** La tabla de
+   roles se comprobaba leyendo la tabla, no haciendo la petición. Un cambio que
+   rompiera el filtro no lo detectaba ninguna prueba.
+2. **El producto se comprobaba después de leer el archivo.** Una subida a un
+   producto que no existe leía los cinco megas y después respondía `404`.
+3. **El contenedor WebP no se respetaba.** Los bytes que van después del final
+   declarado en la cabecera RIFF se conservaban, y un fragmento de la lista
+   blanca colocado ahí pasaba al archivo guardado.
+
+**Lo que decidiste.** Que el punto 2 se corrigiera comprobando primero, que el
+punto 3 se corrigiera **cortando en el tamaño RIFF declarado** (la opción B de
+las que te presenté), que la prueba de rol se hiciera de verdad, que la URL
+firmada de 15 minutos se aceptara como está, y que la sincronización recibiera
+un límite de tasa. También pediste que los tres formatos tuvieran la misma
+prueba de bytes al final.
+
+**Qué se hizo.**
+
+- `SetProductImage` gana `EnsureProductAcceptsImageAsync`, que el endpoint
+  llama **antes** de leer el cuerpo. El caso de uso vuelve a comprobarlo, porque
+  no confía en que el endpoint lo haya hecho.
+- `ImageMetadataStripper.StripWebP` procesa solo los bytes que declara la
+  cabecera RIFF, y rechaza con `415` un RIFF que declara más de los que tiene.
+- La sincronización declara `RequestRateLimit.ProductImageSync`: 20 peticiones
+  cada 10 minutos, por IP y por ruta. Con una tablet por sucursal la IP
+  identifica al mostrador, así que el límite no bloquea a otro empleado de la
+  misma sucursal.
+- Se añadió el proyecto de pruebas `PruebasDeAccesoALasRutasDeImagenes`, que
+  levanta la aplicación en memoria (`Microsoft.AspNetCore.TestHost`, versión
+  10.0.4, la misma que el resto de paquetes de ASP.NET Core) y hace peticiones
+  HTTP de verdad contra las rutas de verdad, con la cabecera `Authorization` y
+  el filtro de acceso de verdad.
+
+**Verificación.** Cada prueba nueva se mostró roja por la razón correcta antes
+de verse verde, rompiendo el código a propósito y revirtiéndolo:
+
+| Prueba | Defecto plantado | Qué se puso rojo |
+|---|---|---|
+| `UnaSubidaDeUnEstandarResponde403YNoCambiaNada` | `SetProductImage` a `AnySession` en la tabla | Las dos pruebas de `403` |
+| `UnaSubidaDeUnEstandarSeRechazaAntesDeLeerElCuerpo` | La misma tabla | La misma prueba |
+| `UnaSubidaAUnProductoQueNoExisteResponde404SinLeerElCuerpo` | Se quitó la comprobación previa del producto | `404` y `400` |
+| `UnaSubidaAUnProductoInactivoResponde400SinLeerElCuerpo` | La misma comprobación | La misma prueba |
+| `LaSincronizacionSeRechazaCon429DespuesDeVeinteSolicitudes` | Se quitó el `RequireRequestRateLimit` | La del `429` |
+| `LosBytesDespuesDelFinalDelWebPSeDescartan` | Sin el corte por el RIFF | La del WebP |
+| `UnWebPQueDeclaraMasBytesDeLosQueTieneSeRechaza` | Sin el corte por el RIFF | La del WebP |
+
+La suite completa: **437 pruebas, todas en verde**, sin base de datos, sin
+bucket y sin SMTP (RD-12). Eran 421.
+
+**Lo que encontró la auditoría y no estaba en el encargo.** El README decía que
+la primera subida responde `201` y que un producto inactivo responde `409`. El
+código responde `200` y `400`, siempre, y la bitácora de la entrada 5 confirma
+que la subida real por la API local devolvió `200`. El README era el único
+documento que afirmaba otra cosa: ni el ADR 015 ni la bitácora mencionan
+`201` ni `409`. Se corrigió el README para que describa lo que el código hace.
+Si la intención era otra, es un cambio de comportamiento y te toca decidirlo.
+
+**Lo que no se pudo verificar.** Nada de esto toca el bucket, así que la subida
+real a R2 no se volvió a probar: no hay credenciales en esta sesión. Lo que sí
+depende del exterior son las pruebas del `TestHost`, que usan `TestServer` en
+memoria y no un Kestrel de verdad: el límite de cuerpo de Kestrel y el
+`Retry-After` del `429` contra un navegador real quedan para cuando haya un
+bucket y un despliegue.
