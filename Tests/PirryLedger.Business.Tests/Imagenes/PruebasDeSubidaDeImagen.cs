@@ -134,6 +134,39 @@ public sealed class PruebasDeSubidaDeImagen
     }
 
     [Fact]
+    public async Task ComprobarElProductoAntesDeSubirRechazaUnProductoQueNoExiste()
+    {
+        var preparado = Preparar();
+
+        await Assert.ThrowsAsync<ProductNotFoundException>(
+            () => preparado.Caso.EnsureProductAcceptsImageAsync(Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Empty(preparado.Store.Uploads);
+    }
+
+    [Fact]
+    public async Task ComprobarElProductoAntesDeSubirRechazaUnProductoInactivo()
+    {
+        var preparado = Preparar();
+        preparado.Producto.SetActive(false);
+
+        await Assert.ThrowsAsync<ProductInactiveException>(
+            () => preparado.Caso.EnsureProductAcceptsImageAsync(preparado.Producto.Id, CancellationToken.None));
+
+        Assert.Empty(preparado.Store.Uploads);
+    }
+
+    [Fact]
+    public async Task ComprobarElProductoAntesDeSubirAceptaUnProductoActivo()
+    {
+        var preparado = Preparar();
+
+        var producto = await preparado.Caso.EnsureProductAcceptsImageAsync(preparado.Producto.Id, CancellationToken.None);
+
+        Assert.Equal(preparado.Producto.Id, producto.Id);
+    }
+
+    [Fact]
     public async Task QuitarLaImagenLaSacaDelConjuntoYBorraElArchivo()
     {
         var preparado = Preparar();
