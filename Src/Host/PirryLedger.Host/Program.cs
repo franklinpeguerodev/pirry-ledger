@@ -22,6 +22,7 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Host;
 
 const string SendMailCommand = "--send-mail";
+const string MigrateCommand = "--migrate";
 
 // Archivo .env de desarrollo local: si existe, se cargan sus variables ANTES de
 // construir la configuracion, que las lee del entorno (RD-10: al final siguen
@@ -113,6 +114,15 @@ builder.Services.AddDocuments(
     EnvironmentConfiguration.ReadDocumentUploadOptions(builder.Configuration));
 
 var app = builder.Build();
+
+// ADR 018: aplica el esquema de todas las piezas y termina. Es el comando que
+// ejecuta el servicio "migrate" de la composicion, antes de que arranque la
+// API y antes de los seeds: el esquema primero, los datos de arranque despues.
+if (args.Any(argument => string.Equals(argument, MigrateCommand, StringComparison.OrdinalIgnoreCase)))
+{
+    await ApplyMigrations(app);
+    return;
+}
 
 await EnsureGlobalBranchSeed(app);
 
@@ -206,6 +216,45 @@ app.MapBusiness();
 app.MapDocuments();
 
 app.Run();
+
+// ADR 018: recorre los pasos de migracion registrados por las piezas y para en
+// el primero que falla. El Host no conoce el DbContext de ninguna pieza: solo
+// pide IModuleMigration y lo ejecuta.
+static async Task ApplyMigrations(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+
+    var migrations = scope.ServiceProvider.GetServices<IModuleMigration>();
+
+    if (!migrations.Any())
+    {
+        Console.Error.WriteLine("No hay pasos de migracion registrados. Código: MIGRATION_MISSING.");
+        Environment.Exit(1);
+    }
+
+    foreach (var migration in migrations)
+    {
+        try
+        {
+            await migration.ApplyAsync(CancellationToken.None);
+
+            Console.WriteLine($"Migraciones aplicadas: {migration.Name}.");
+        }
+
+        catch (Exception error)
+        {
+            // El codigo de salida hace que la composicion no arranque la API.
+            // Se escribe la pieza y un codigo corto, y el mensaje del fallo para
+            // poder diagnosticarlo. Nada de esto sale en una respuesta de la
+            // API (RD-08).
+            Console.Error.WriteLine(
+                $"No se pudieron aplicar las migraciones de {migration.Name}. " +
+                $"Código: MIGRATION_FAILED. {error.Message}");
+
+            Environment.Exit(1);
+        }
+    }
+}
 
 // Busca un .env desde el directorio de trabajo hacia arriba y lo carga en el
 // proceso. No es un error que falte: no encontrarlo significa que las variables

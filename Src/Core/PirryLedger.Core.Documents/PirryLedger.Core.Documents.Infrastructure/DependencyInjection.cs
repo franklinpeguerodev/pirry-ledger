@@ -26,6 +26,9 @@ public static class DependencyInjection
         services.AddDbContext<DocumentDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        // ADR 018: el paso de migracion de la pieza.
+        services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, DocumentsMigration>();
+
         services.AddScoped<IDocumentRepository, DocumentRepository>();
 
         var configuration = storage ?? DocumentStorageConfiguration.Empty;

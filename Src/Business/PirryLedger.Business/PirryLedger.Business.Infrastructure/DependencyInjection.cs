@@ -22,6 +22,9 @@ public static class DependencyInjection
         services.AddDbContext<BusinessDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        // ADR 018: el paso de migracion de la pieza.
+        services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.BusinessMigration>();
+
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IProductImageRepository, ProductImageRepository>();
