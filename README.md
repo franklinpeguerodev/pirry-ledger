@@ -1,15 +1,15 @@
 # Pirry Ledger
 
-ERP para un negocio de comida rápida. Práctica 2 — Una suite que detecta defectos: Gestión de permisos.
+ERP para un negocio de comida rápida. Práctica 4 — El proyecto en un contenedor, el Manejador de documentos y una API externa.
 
 En este punto el repositorio tiene la cola de email con su persistencia y un
 comando para enviar lo pendiente. La API expone el alta de usuarios por el
 Administrador con activación por correo, el inicio de sesión con su tabla de
-sesiones, la recuperación de contraseña con aprobación del Administrador y la
-administración de usuarios. El módulo Permissions expone la gestión de
-solicitudes de permiso con su máquina de estados y su suite de pruebas. El
-módulo Business tiene la máquina de estados de `Invoice` con siete estados, sus
-once transiciones permitidas y su suite de pruebas.
+sesiones, la recuperación de contraseña con aprobación del Administrador, la
+administración de usuarios, la gestión de solicitudes de permiso, el módulo de
+negocio con la máquina de estados de `Invoice` y el Manejador de documentos.
+Todo el proyecto levanta con un solo comando de Docker, y los documentos se
+guardan en SeaweedFS, la API externa, con su clave fuera del repositorio.
 
 La administración de usuarios y facturas está ligada a sucursales. El
 Administrador trabaja con alcance global mediante la sucursal especial
@@ -580,6 +580,11 @@ La primera vez imprime:
 Se creo el primer Administrator desde las variables de entorno.
 ```
 
+Con la composición de Docker, el Administrador de ejemplo se crea en el primer
+arranque con el correo y la contraseña de `.env.example`
+(`admin@pirry.local` / `Admin1234!`). Son valores de ejemplo a la vista: no son
+un secreto, y el README los usa en sus ejemplos.
+
 La segunda vez no imprime nada, porque ya hay uno. Y con esa contraseña puedes
 iniciar sesión y obtener un token (usa el email y la contraseña que definiste
 en `PIRRY_LEDGER_FIRST_ADMIN_*`):
@@ -885,11 +890,14 @@ pirry-ledger/
 ├── global.json                     Fija el SDK .NET 10.0.400 (rollForward: latestFeature)
 ├── pirry-ledger.slnx               Solución con todos los proyectos
 ├── .env.example                    Plantilla de variables de entorno (el .env real no se sube)
+├── docker-compose.yml              Composición: base, SeaweedFS, migración, API, correo (Práctica 4)
+├── Dockerfile                      Imagen de la API (etapa de compilación + etapa de ejecución)
+├── .dockerignore                   Lo que no entra en la imagen (.git, bin/, obj/, Tests/, .env)
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
 │   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
-│   ├── adr/                        Decisiones técnicas 001 a 012: nombre y título en inglés, contenido en español
+│   ├── adr/                        Decisiones técnicas 001 a 020: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -897,14 +905,16 @@ pirry-ledger/
 │   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority, IPermissionRequestGateway)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
 │   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
-│   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
+│   │   ├── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
+│   │   └── PirryLedger.Core.Documents/         Domain, Application, Infrastructure, Api (Práctica 4)
 │   ├── Business/
 │   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application, Infrastructure, Api
 │   └── Host/
-│       └── PirryLedger.Host/                    Composición + comando --send-mail
+│       └── PirryLedger.Host/                    Composición + comandos --send-mail y --migrate
 └── Tests/
     ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
+    ├── PirryLedger.Core.Documents.Tests/        Proyecto de pruebas xUnit (Práctica 4)
     ├── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
     ├── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
     └── PirryLedger.Integration.Tests/           Integración real Business ↔ Permissions (sección 3.13)
@@ -930,6 +940,8 @@ sobre EF Core en memoria.
 | **Integración Business ↔ Permissions** | **RF-NEG-06**, RF-GP-05, RD-03, RD-12 | **[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 | **Imágenes del catálogo** | ADR 015 | [3.15](#315-imágenes-del-catálogo) |
+| **Manejador de documentos** | **RF-DOC-01 … RF-DOC-05**, RD-06, RD-07, RD-09, RD-11, RD-12 | [Contenedor](#contenedor-docker) y [API externa](#api-externa-seaweedfs) |
+| **Proyecto en un contenedor** | Sección 1.2 y 1.3 del enunciado de la Práctica 4; RD-09, RD-10 | [Contenedor](#contenedor-docker) |
 
 > **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
 > `PirryLedger.Core.Permissions` (solicitudes de permiso, RF-GP-01 a RF-GP-07) con
@@ -955,6 +967,14 @@ sobre EF Core en memoria.
 > provocar cada uno, y [3.14](#314-límite-de-solicitudes-por-ip) explica el
 > límite por IP de los dos flujos que mandan correo.
 
+> **Práctica 4** — esta entrega añade el Manejador de documentos (pieza 3 del
+> Core), la composición de Docker con la base y SeaweedFS, la supervivencia de
+> los datos a `docker compose down` y la API externa con su clave fuera del
+> repositorio. Las secciones [Contenedor](#contenedor-docker) y
+> [API externa](#api-externa-seaweedfs) son suyas, y el comportamiento del
+> manejador está en [Endpoints del Manejador de documentos](#endpoints-del-manejador-de-documentos)
+> y en las ADR 017 a 020.
+
 ### Decisiones documentadas
 
 Convención de los ADR: nombre de archivo y título en inglés, contenido en español.
@@ -976,6 +996,11 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Los usuarios los crea un Administrador; no hay alta pública, y el desbloqueo de una cuenta bloqueada es una operación idempotente | `docs/adr/013-admin-created-users.md` |
 | Todo cambio de contraseña de un Estándar exige aprobación de un Administrador, y la aprobación ocurre antes de que el código llegue al correo | `docs/adr/014-password-change-permission.md` |
 | Imágenes del catálogo: bucket privado en Cloudflare R2, firma de descarga y sincronización por cursor de revisión | `docs/adr/015-imagenes-del-catalogo.md` |
+| Firma del cuerpo completo en las subidas a R2, en lugar de la firma por bloques | `docs/adr/016-full-payload-signing-for-r2-uploads.md` |
+| Documentos en SeaweedFS por el protocolo S3: pieza propia del Core, clave generada por el servidor y borrado lógico | `docs/adr/017-document-storage-in-seaweedfs.md` |
+| Las migraciones se aplican dentro de la composición, con el comando `--migrate` y el servicio `migrate` | `docs/adr/018-migrations-inside-the-composition.md` |
+| El correo de la composición: bandeja local sin puerto publicado y enviador en un proceso aparte | `docs/adr/019-email-inside-the-composition.md` |
+| La dirección pública sigue mandando en los enlaces y el puerto; el proceso escucha en `0.0.0.0` | `docs/adr/020-listen-address-inside-a-container.md` |
 
 ---
 
@@ -1060,9 +1085,10 @@ estado y con el checklist de la rúbrica.
 dotnet test pirry-ledger.slnx
 ```
 
-Un solo comando, desde un clon limpio, ejecuta **las cinco** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (155), Notifications (6),
-Permissions (52), Business (220) e Integración (4). Son **437 pruebas** en total.
+Un solo comando, desde un clon limpio, ejecuta **las seis** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (155), Notifications (12),
+Permissions (52), Business (220), Documentos (37) e Integración (4). Son **480
+pruebas** en total.
 Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
 uso, los repositorios y la máquina de estados de `Invoice` con una prueba por
 fila de sus tablas. La suite de integración (sección
@@ -1121,6 +1147,46 @@ Para ver un defecto: `git checkout practica-2-defecto-N`, correr
 `dotnet test pirry-ledger.slnx` y comprobar que falla al menos una de las pruebas
 de su fila. `git diff practica-2 practica-2-defecto-N --stat` muestra que el
 commit solo toca código de Gestión de permisos y ningún archivo de pruebas.
+
+### Recorrido con Docker: los seis frentes
+
+Con `docker compose up --build` no hay SMTP real ni usuario previo. Dos cosas
+cambian respecto de las secciones 3.1 a 3.12 (que usan `dotnet run`):
+
+- **El Administrador de ejemplo ya existe.** `.env.example` trae
+  `PIRRY_LEDGER_FIRST_ADMIN_EMAIL=admin@pirry.local` y
+  `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD=Admin1234!`; el arranque crea esa cuenta
+  (ADR 002). Es un valor de ejemplo, no un secreto: está a la vista en el
+  archivo versionado.
+- **El correo se lee de Mailpit**, no de una cuenta real:
+
+  ```bash
+  docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
+  ```
+
+  De ahí se copian el enlace de activación y el código de recuperación.
+
+El primer paso, con la sesión del Administrador de ejemplo:
+
+```bash
+curl -s -X POST http://localhost:8090/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@pirry.local","password":"Admin1234!"}'
+```
+
+Devuelve `{"token":"..."}`. Ese token es el de los seis frentes:
+
+| Frente | Sección con los cuerpos exactos |
+|---|---|
+| Alta de usuarios y activación por correo | [3.1](#31-alta-de-usuarios-y-activación) |
+| Inicio y cierre de sesión | [3.2](#32-sesión) |
+| Rechazo de un Estándar en una operación de Administrador | [3.4](#34-administración-de-usuarios) |
+| Recuperación de contraseña | [3.3](#33-contraseñas) |
+| Solicitudes de permiso: crear, aprobar, rechazar y transiciones fuera de la tabla | [3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07) |
+| Módulo de negocio: operación válida y transición prohibida | [3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06) |
+
+Los documentos se prueban aparte, con la sección
+[API externa](#api-externa-seaweedfs) y [Endpoints del Manejador de documentos](#endpoints-del-manejador-de-documentos).
 
 ### Preparación común
 
@@ -2795,6 +2861,18 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `DELETE` | `/api/admin/products/{id}/image` | Quita la foto. Exige `Administrator`. Responde `204` o `404` si no tenía foto. |
 | `POST` | `/api/billing/product-images/sync` | Sincroniza las fotos. Cuerpo `{"since":12}` o vacío para una sincronización completa. Cualquier sesión válida. Responde con `upserts` (las fotos nuevas, con su firma) y `removed` (las claves que hay que borrar). Limitado a 20 por IP cada 10 minutos (`429` con `Retry-After`). |
 
+### Endpoints del Manejador de documentos
+
+Pieza 3 del Core. Todas exigen `Authorization: Bearer <token>`; ninguna se abre
+sin sesión.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/documents` | Sube un documento. `multipart/form-data` con una sola parte llamada `file`, de cualquier tipo, hasta 5 MiB. Responde `201` con el registro. `400` sin archivo o con el archivo vacío; `413` si supera el tope; `503` si el almacenamiento no está configurado o no responde. |
+| `GET` | `/api/documents` | Lista. Un Estándar ve solo los suyos; un Administrator ve los de todos. Nunca incluye eliminados. Responde `200`. |
+| `GET` | `/api/documents/{id}/download` | Descarga los bytes como adjunto. Solo el dueño o un Administrator: a otro Estándar se le rechaza con `403`. `404` si no existe o está eliminado; `503` si el almacenamiento falla. |
+| `DELETE` | `/api/documents/{id}` | Eliminación lógica: el registro y el objeto siguen existiendo y el documento sale del listado. Solo el dueño o un Administrator. Responde `204`; `403` a otro Estándar; `404` si no existe. |
+
 ### Endpoints del negocio (facturas)
 
 Estos endpoints llegaron con la fase 4 de la Práctica 3
@@ -2830,15 +2908,16 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 
 ### Esquema de la base de datos
 
-Las cuatro piezas comparten la misma base PostgreSQL, pero cada una es dueña de
+Las cinco piezas comparten la misma base PostgreSQL, pero cada una es dueña de
 sus propias tablas. Las tres tablas de tokens y sesiones pertenecen a
 AccessControl; la cola pertenece a Notifications; las dos de solicitudes y
 concesiones pertenecen a Permissions; las de facturas, el catálogo y las
-imágenes pertenecen a Business. La cola de email no tiene una clave foránea
-hacia `ac_users`: el vínculo entre ambos módulos ocurre mediante la operación
-que encola el email, no mediante una relación directa entre tablas. Lo mismo
-pasa con las facturas: no hay clave foránea hacia `ac_users`, porque el negocio
-no puede depender de las tablas de otra pieza (RD-03).
+imágenes pertenecen a Business; y `doc_documents` pertenece al Manejador de
+documentos. La cola de email no tiene una clave foránea hacia `ac_users`: el
+vínculo entre ambos módulos ocurre mediante la operación que encola el email, no
+mediante una relación directa entre tablas. Lo mismo pasa con las facturas y con
+los documentos: no hay clave foránea hacia `ac_users` ni hacia `ac_branches`,
+porque una pieza no puede depender de las tablas de otra (RD-03).
 
 ```mermaid
 erDiagram
@@ -2981,6 +3060,19 @@ erDiagram
         bigint value
     }
 
+    doc_documents {
+        uuid id PK
+        string name
+        string content_type
+        bigint size_bytes
+        uuid uploaded_by
+        uuid branch_id
+        string storage_key UK
+        datetime uploaded_at_utc
+        datetime deleted_at_utc "nullable"
+        uuid deleted_by "nullable"
+    }
+
     ac_users ||--o{ ac_recovery_codes : "tiene"
     ac_users ||--o{ ac_activation_tokens : "tiene"
     ac_users ||--o{ ac_sessions : "tiene"
@@ -3001,6 +3093,28 @@ sus enums: `0 = Sale, 1 = Debt`; `0 = Cash, 1 = Transfer, 2 = None`;
 `0 = Registered, 1 = Confirmed, 2 = Rejected`. Los cuatro montos
 (`unit_price`, `amount`, `received_amount` y `change_amount`) son
 `numeric(12,2)`: dos decimales exactos, nunca redondeados.
+
+### Tabla de documentos
+
+`doc_documents` (ADR 017): el registro del Manejador de documentos. Los bytes
+**no** están aquí; están en SeaweedFS, en el volumen `pirry-ledger-documents`.
+
+| Columna | Para qué |
+|---|---|
+| `id` | `uuid`, clave primaria. |
+| `name` | `varchar(255)`. El nombre original del archivo. Se guarda para mostrarlo y para la descarga; nunca se usa como ruta. |
+| `content_type` | `varchar(255)`. El tipo declarado por el cliente. Es informativo: no se confía en él al servir el archivo. |
+| `size_bytes` | `bigint`. Tamaño de los bytes guardados. Como máximo 5 MiB. |
+| `uploaded_by` | `uuid`. Quién lo subió. Sin clave foránea (RD-03); la identidad viene de la sesión. |
+| `branch_id` | `uuid`. La sucursal de la sesión. Para un Administrador es la sucursal global `Todas` (`00000000-0000-0000-0000-000000000001`). |
+| `storage_key` | `varchar(255)`, único. La clave del objeto en SeaweedFS: `documents/{guid}`. |
+| `uploaded_at_utc` | `timestamp with time zone`. Del reloj inyectado (RD-11). |
+| `deleted_at_utc` | `timestamp with time zone`, nulo mientras está vigente. La eliminación es lógica (RF-DOC-04). |
+| `deleted_by` | `uuid`, nulo mientras está vigente. Quién lo eliminó. |
+
+Índices: `ux_doc_documents_storage_key` (único), `ix_doc_documents_uploader`
+(`uploaded_by`, `uploaded_at_utc`) para el listado de un Estándar y
+`ix_doc_documents_deleted_at` para excluir los eliminados.
 
 ### Tablas de las imágenes del catálogo
 
@@ -3083,3 +3197,13 @@ todavía no se escribe: llega en la semana 11.
   imagen. Se guarda el archivo tal cual, con los metadatos quitados.
 - **La caché del cliente** de las imágenes: es trabajo del teléfono, que es la
   siguiente iteración.
+- **La auditoría de subidas y eliminaciones de documentos** (RF-DOC-06). Llega
+  con la Pieza 6, en la semana 12; esta práctica no la califica.
+- **Documentos adjuntos a una entidad del negocio** (RF-NEG-10): es opcional y
+  hoy no está en uso.
+- **Firmas de descarga y acceso directo del cliente a SeaweedFS.** La descarga
+  pasa por la API, que es donde se comprueba la propiedad del documento.
+- **Borrado físico de los documentos y limpieza de objetos huérfanos.** La
+  eliminación es lógica: el registro y el objeto siguen existiendo (RF-DOC-04).
+- **Despliegue en la nube.** Esta versión corre en Docker; el despliegue queda
+  fuera de la práctica.
