@@ -32,13 +32,12 @@ public sealed class R2ImageStore : IImageStore
 
     // La configuracion con la que se habla con R2.
     //
-    // R2 no implementa el envio del cuerpo con el checksum en un trailer
-    // (aws-chunked, STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER). El SDK lo
-    // activa por defecto desde la version 4, asi que cada subida se rechazaba
-    // con "not implemented". WHEN_REQUIRED deja el checksum solo en las
-    // operaciones que lo exigen, y subir un objeto no lo exige.
+    // R2 no implementa la firma por bloques (aws-chunked) de SigV4: responde
+    // "STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented". Por eso el cuerpo
+    // de cada subida viaja en una sola pieza y firmado con su sha256, lo que
+    // se fija en la propia peticion (ADR 016), no en el cliente.
     //
-    // Es internal para que la prueba compruebe los dos ajustes sin tocar la
+    // Es internal para que la prueba compruebe la configuracion sin tocar la
     // red: el cliente se construye igual, pero la prueba no lo usa.
     internal static AmazonS3Config CreateClientConfig(
         ImageStorageConfiguration configuration)
@@ -53,9 +52,6 @@ public sealed class R2ImageStore : IImageStore
             // El bucket va en la ruta y no en el subdominio del host: es
             // lo que espera el endpoint de R2.
             ForcePathStyle = true,
-
-            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
-            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED,
         };
     }
 
@@ -68,13 +64,7 @@ public sealed class R2ImageStore : IImageStore
         try
         {
             await _client.PutObjectAsync(
-                new PutObjectRequest
-                {
-                    BucketName = _bucket,
-                    Key = key,
-                    InputStream = new MemoryStream(content, writable: false),
-                    ContentType = contentType,
-                },
+                CreatePutObjectRequest(_bucket, key, content, contentType),
                 cancellationToken);
         }
         catch (Exception error)
@@ -92,6 +82,29 @@ public sealed class R2ImageStore : IImageStore
 
             throw new ImageStorageUnavailableException();
         }
+    }
+
+    // La peticion de subida. Es internal para que la prueba compruebe como
+    // viaja el cuerpo sin tocar la red.
+    //
+    // UseChunkEncoding apaga la firma por bloques: el SDK firma el cuerpo
+    // entero con su sha256 en lugar de trocearlo. R2 solo entiende esa forma.
+    // No se usa DisablePayloadSigning porque deja el cuerpo como
+    // UNSIGNED-PAYLOAD, fuera de la firma (ADR 016).
+    internal static PutObjectRequest CreatePutObjectRequest(
+        string bucket,
+        string key,
+        byte[] content,
+        string contentType)
+    {
+        return new PutObjectRequest
+        {
+            BucketName = bucket,
+            Key = key,
+            InputStream = new MemoryStream(content, writable: false),
+            ContentType = contentType,
+            UseChunkEncoding = false,
+        };
     }
 
     public async Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default)

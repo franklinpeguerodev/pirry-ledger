@@ -329,3 +329,13 @@ protocolo de S3 y firmando con SigV4. Cambia cómo se configura el cliente:
 No se abre un ADR nuevo porque no se elige entre alternativas de estructura,
 persistencia, protocolo ni seguridad: es la configuración que hace que la
 decisión ya tomada funcione con el proveedor elegido.
+
+**Corrección (2026-11-10).** Esta nota describía solo una parte del problema y la
+presentaba como la solución. El error real sigue siendo
+`STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented`, pero esa variante es la
+firma **por bloques**, no el trailer del checksum: `WHEN_REQUIRED` quita el
+trailer y no el troceado, así que la subida seguía fallando. La subida ahora fija
+`UseChunkEncoding = false` y no fija `WHEN_REQUIRED`. La decisión completa, con
+las alternativas (sobre todo por qué no se usa `UNSIGNED-PAYLOAD`) está en el
+**ADR 016** (`docs/adr/016-full-payload-signing-for-r2-uploads.md`). El resto de
+este ADR sigue vigente.

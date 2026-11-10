@@ -17,3 +17,4 @@ One-line index of the ADRs in this folder. The title and date below come from ea
 - `013-admin-created-users.md` (2026-11-04) — Users are created by an Administrator, not by a public registration.
 - `014-password-change-permission.md` (2026-11-04) — Every password change of a Standard requires an Administrator's approval.
 - `015-imagenes-del-catalogo.md` (2026-11-09) — Product images: private storage in Cloudflare R2, signed URLs, and synchronization by a revision cursor.
+- `016-full-payload-signing-for-r2-uploads.md` (2026-11-10) — R2 uploads sign the full payload instead of using chunked signing.

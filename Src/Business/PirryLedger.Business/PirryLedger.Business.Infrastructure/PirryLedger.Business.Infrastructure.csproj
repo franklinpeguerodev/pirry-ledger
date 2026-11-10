@@ -17,10 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- La prueba del almacenamiento comprueba que el cliente de S3 se
-         construye con el checksum en trailer apagado, que es lo que R2 no
-         acepta. La construccion es internal: en produccion el unico camino es
-         el constructor del adaptador. -->
+    <!-- La prueba del almacenamiento comprueba que la peticion de subida no
+         firma el cuerpo por bloques, que es lo que R2 no acepta (ADR 016). La
+         construccion es internal: en produccion el unico camino es el
+         constructor del adaptador. -->
     <InternalsVisibleTo Include="PirryLedger.Business.Tests" />
   </ItemGroup>
 

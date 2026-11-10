@@ -1,4 +1,3 @@
-using Amazon.Runtime;
 using PirryLedger.Business.Application.Exceptions;
 using PirryLedger.Business.Infrastructure.Storage;
 
@@ -52,19 +51,29 @@ public sealed class PruebasDeAlmacenamientoDeImagen
     }
 
     [Fact]
-    public void ElClienteNoEnviaElChecksumEnTrailerQueR2NoAcepta()
+    public void LaSubidaFirmaElCuerpoEnteroYNoPorBloques()
     {
-        var configuracion = R2ImageStore.CreateClientConfig(Configuracion());
+        var peticion = R2ImageStore.CreatePutObjectRequest(
+            Bucket,
+            Clave,
+            [1, 2, 3],
+            "image/jpeg");
 
-        // R2 responde "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER not
-        // implemented" cuando el SDK manda el cuerpo con el checksum en un
-        // trailer, que es lo que hace por defecto desde la version 4.
-        Assert.Equal(
-            RequestChecksumCalculation.WHEN_REQUIRED,
-            configuracion.RequestChecksumCalculation);
-        Assert.Equal(
-            ResponseChecksumValidation.WHEN_REQUIRED,
-            configuracion.ResponseChecksumValidation);
+        // R2 no implementa la firma por bloques (aws-chunked): responde
+        // "STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented" (ADR 016). La
+        // subida va en una sola pieza y firmada con el sha256 del cuerpo; el
+        // cuerpo sin firmar (UNSIGNED-PAYLOAD) no se acepta porque deja el
+        // contenido fuera de la firma.
+        Assert.False(peticion.UseChunkEncoding);
+
+        // DisablePayloadSigning y DisableDefaultChecksumValidation son bool?:
+        // null significa "no desactivado", que es el valor que queremos.
+        Assert.NotEqual(true, peticion.DisablePayloadSigning);
+        Assert.NotEqual(true, peticion.DisableDefaultChecksumValidation);
+        Assert.Equal(Bucket, peticion.BucketName);
+        Assert.Equal(Clave, peticion.Key);
+        Assert.Equal("image/jpeg", peticion.ContentType);
+        Assert.Equal(3, peticion.InputStream.Length);
     }
 
     [Fact]
