@@ -57,11 +57,19 @@ public sealed class PruebasDelAdaptadorDeAlmacenamiento
     }
 
     [Fact]
-    public void LaConfiguracionVaciaConservaElLimitePorDefecto()
+    public void LaConfiguracionVaciaNoEstaConfigurada()
     {
-        Assert.Equal(DocumentRules.DefaultMaxSizeBytes, DocumentStorageConfiguration.Empty.MaxBytes);
+        Assert.False(DocumentStorageConfiguration.Empty.IsConfigured);
+    }
+
+    [Fact]
+    public void LasOpcionesDeSubidaSinValorUsanElLimitePorDefecto()
+    {
+        Assert.Equal(
+            DocumentRules.DefaultMaxSizeBytes,
+            new PirryLedger.Core.Documents.Application.DocumentUploadOptions(0).EffectiveMaxBytes);
     }
 
     private static DocumentStorageConfiguration CreateConfiguration() =>
-        new("http://seaweedfs:8333", "clave-acceso", "clave-secreta", "pirry-ledger-documents", DocumentRules.DefaultMaxSizeBytes);
+        new("http://seaweedfs:8333", "clave-acceso", "clave-secreta", "pirry-ledger-documents");
 }
