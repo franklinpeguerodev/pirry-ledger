@@ -33,6 +33,66 @@ Este README está ordenado como se usa:
 Todos los comandos están escritos para PowerShell en Windows. Sigue los pasos
 en orden solo la primera vez; después, los pasos 5 a 8 son los que se repiten.
 
+### Contenedor (Docker)
+
+La forma recomendada: **no hace falta instalar nada salvo Docker**. Sirve igual
+en Linux (incluido un GitHub Codespace) y en Windows.
+
+1. Clona el repositorio y entra en él.
+2. Copia el archivo de ejemplo. Es el **único** paso previo:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   En PowerShell: `Copy-Item .env.example .env`
+
+3. Arranca todo con un solo comando:
+
+   ```bash
+   docker compose up --build
+   ```
+
+4. La aplicación responde en **<http://localhost:8090>**. En un Codespace, el
+   puerto 8090 se reenvía solo y la misma dirección funciona en tu navegador.
+
+   Para comprobar que está viva:
+
+   ```bash
+   curl -i http://localhost:8090/api/documents
+   ```
+
+   Debe responder `401` con `Sesion no valida.`: la ruta existe y exige sesión.
+
+5. Para detener el proyecto:
+
+   ```bash
+   docker compose down
+   ```
+
+   Sin `-v`, los datos se conservan (los volúmenes `pirry-ledger-documents` y
+   `pirry-ledger-db-data`). Con `docker compose down -v` se borra todo.
+
+Qué levanta la composición y por qué:
+
+| Servicio | Para qué |
+|---|---|
+| `db` | PostgreSQL 17. Solo visible dentro de la composición. |
+| `seaweedfs` | La API externa: guarda los bytes de los documentos (ADR 017). Solo visible dentro. |
+| `migrate` | Aplica el esquema con `--migrate` y termina; la API espera a que salga bien (ADR 018). |
+| `app` | La API. Es el **único** servicio con puerto publicado (`8090`). |
+| `mailer` | Ejecuta `--send-mail` en bucle: el correo se envía en un proceso aparte (ADR 007 y 019). |
+| `mailpit` | La bandeja de correo de la composición. Sin puerto publicado (ADR 019). |
+
+El correo no se publica: se lee desde dentro de la red con el comando que
+explica la sección [API externa](#api-externa-seaweedfs).
+
+> El archivo `.env` no se versiona (RD-10). Este README nunca muestra su
+> contenido; todos los nombres de variables están en `.env.example`.
+
+Los pasos que siguen (Requisitos, Pasos 1 a 8) son el camino **sin** contenedor,
+para trabajar en el código con la base local.
+
 ### Requisitos
 
 - .NET SDK `10.0.400` (o una versión posterior de la misma banda, que
@@ -211,6 +271,10 @@ Resultado esperado: `0 Errores`, `0 Advertencias` y todas las pruebas pasan.
 
 ### Paso 6: aplicar las migraciones
 
+> **Con Docker no hace falta este paso.** La composición lo hace sola: el
+> servicio `migrate` ejecuta `--migrate` y la API espera a que termine
+> (ADR 018). Este paso es para trabajar sin contenedor, con tu base local.
+
 Ejecuta estos comandos **solo la primera vez que prepares esta base de datos**,
 o después de incorporar una migración nueva. EF Core registra las migraciones
 aplicadas, así que volver a ejecutar `database update` no duplica tablas, pero
@@ -227,29 +291,31 @@ $env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_l
 
 Esa línea solo vive en la terminal abierta. En otra terminal hay que repetirla.
 
-Las cuatro piezas, en este orden:
+Las cinco piezas, en este orden:
 
 ```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure
 dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedger.Business.Infrastructure
+dotnet ef database update --project Src/Core/PirryLedger.Core.Documents/PirryLedger.Core.Documents.Infrastructure
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
 `ac_activation_tokens`, `ac_sessions` y `ac_branches`), la cola de Notifications
 (`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`) y las tablas del módulo Business
+`ux_per_permission_grants_user_permission`), las tablas del módulo Business
 (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments`, `bil_invoice_edits`
-y `bil_products`), en la misma base y manteniendo la propiedad de cada módulo.
+y `bil_products`) y la tabla de documentos (`doc_documents`), en la misma base y
+manteniendo la propiedad de cada módulo.
 
-El orden de los cuatro comandos da igual: ninguna de esas tablas declara claves
+El orden de los comandos da igual: ninguna de esas tablas declara claves
 foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
 cuatro de `bil_` sí se referencian entre ellas, pero se crean en la misma
 migración. Está comprobado también ejecutándolos en orden inverso.
 
-Para comprobar que las cuatro se aplicaron:
+Para comprobar que las cinco se aplicaron:
 
 ```sql
 SELECT table_name FROM information_schema.tables
@@ -257,9 +323,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son trece tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
-`per_` y las cinco de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
-es la decimocuarta fila, pero no es de ninguna pieza.
+Son catorce tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
+`per_`, las cinco de `bil_` y `doc_documents`. La tabla `__EFMigrationsHistory`
+que crea EF Core es la decimoquinta fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -324,10 +390,10 @@ Mantén esta terminal abierta. El host y el puerto los fija
 `PIRRY_LEDGER_PUBLIC_BASE_URL` (paso 4): es la misma variable que da la
 dirección de los enlaces de activación, así que **una sola fuente** decide dónde
 escucha la API y qué dirección llevan los enlaces. Con el valor del paso 4, la
-API queda en `http://localhost:5243`. Se comprueba en la salida de la consola:
+API queda en `http://localhost:8090`. Se comprueba en la salida de la consola:
 
 ```
-Now listening on: http://localhost:5243
+Now listening on: http://localhost:8090
 Application started. Press Ctrl+C to shut down.
 ```
 
@@ -344,7 +410,7 @@ termine subiendo al repositorio overrides de configuración pensados solo para
 su máquina. Si necesitas uno, créalo a mano y mantenlo fuera del historial.
 
 Si se va a abrir desde otra tablet o equipo, la variable debe ser la dirección
-de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:5243`: la API
+de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:8090`: la API
 escucha en esa dirección y los enlaces del email salen con ella. Cambia el
 valor en el paso 4 y vuelve a arrancar.
 
@@ -379,7 +445,7 @@ $credencialesAdmin = @{
 } | ConvertTo-Json
 
 $sesionAdmin = Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/auth/login' `
+    -Uri 'http://localhost:8090/api/auth/login' `
     -Method Post `
     -ContentType 'application/json' `
     -Body $credencialesAdmin
@@ -390,7 +456,7 @@ $sucursal = @{
 } | ConvertTo-Json
 
 $branch = Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/admin/branches' `
+    -Uri 'http://localhost:8090/api/admin/branches' `
     -Method Post `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "******" } `
@@ -404,7 +470,7 @@ $cuenta = @{
 } | ConvertTo-Json
 
 Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/admin/users' `
+    -Uri 'http://localhost:8090/api/admin/users' `
     -Method Post `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "Bearer $($sesionAdmin.token)" } `
@@ -419,7 +485,7 @@ El Administrador también puede listar y editar sucursales físicas:
 
 ```powershell
 Invoke-RestMethod `
-    -Uri "http://localhost:5243/api/admin/branches/$($branch.id)" `
+    -Uri "http://localhost:8090/api/admin/branches/$($branch.id)" `
     -Method Put `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "******" } `
@@ -435,7 +501,7 @@ asignar una sucursal física a un usuario Estándar, el Administrador usa:
 
 ```powershell
 Invoke-RestMethod `
-    -Uri "http://localhost:5243/api/admin/users/$($cuenta.id)/branch" `
+    -Uri "http://localhost:8090/api/admin/users/$($cuenta.id)/branch" `
     -Method Post `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "******" } `
@@ -461,7 +527,7 @@ $credenciales = @{
 } | ConvertTo-Json
 
 $sesion = Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/auth/login' `
+    -Uri 'http://localhost:8090/api/auth/login' `
     -Method Post `
     -ContentType 'application/json' `
     -Body $credenciales
@@ -474,7 +540,7 @@ estar activada):
 
 ```powershell
 Invoke-RestMethod `
-    -Uri 'http://localhost:5243/me' `
+    -Uri 'http://localhost:8090/me' `
     -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
@@ -520,7 +586,7 @@ en `PIRRY_LEDGER_FIRST_ADMIN_*`):
 
 ```powershell
 $credenciales = @{ email = '<email-del-administrador>'; password = '<password-del-administrador>' } | ConvertTo-Json
-Invoke-RestMethod -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+Invoke-RestMethod -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/json' `
   -Body $credenciales
 ```
@@ -946,7 +1012,7 @@ Cuando una prueba pide `<token-del-administrador>` o `<token-del-estandar>`,
 obtenlo del login:
 
 ```powershell
-$sesion = Invoke-RestMethod -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+$sesion = Invoke-RestMethod -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/json' -Body (@{ email = '<email>'; password = '<password>' } | ConvertTo-Json)
 
 $adminHeaders = @{ Authorization = "Bearer $($sesion.token)" }
@@ -966,7 +1032,7 @@ $alta = @{
     password = 'abc12345'
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post `
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users -Method Post `
   -Headers $adminHeaders -ContentType 'application/json' -Body $alta
 ```
 
@@ -1017,9 +1083,9 @@ del alcance de esta práctica. La decisión y sus alternativas están en
 
 ```powershell
 # Menos de 8 caracteres -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
 # Solo letras -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
 
 Ambas respuestas son `400` con un mensaje en español; en ningún caso se crea la
@@ -1046,7 +1112,7 @@ exactamente que lo está:
 
 ```powershell
 $credenciales = @{ email = 'ana@ejemplo.com'; password = 'abc12345' } | ConvertTo-Json
-Invoke-WebRequest -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-WebRequest -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
 Resultado esperado: `401` con `{"message":"La cuenta no esta activada."}`.
@@ -1085,7 +1151,7 @@ Compara estas cuatro peticiones: la respuesta debe ser el mismo `202` con el
 mismo body `{"sent":true}` en los cuatro casos.
 
 ```powershell
-$resendActivation = 'http://localhost:5243/api/auth/resend-activation'
+$resendActivation = 'http://localhost:8090/api/auth/resend-activation'
 Invoke-WebRequest $resendActivation -Method Post -Body (@{email='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'    # pendiente de activar
 Invoke-WebRequest $resendActivation -Method Post -Body (@{email='nadie@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json' # ese email no existe
 Invoke-WebRequest $resendActivation -Method Post -Body (@{email='esto-no-es-email'}|ConvertTo-Json) -ContentType 'application/json' # mal formado
@@ -1125,7 +1191,7 @@ Con la aplicación en marcha, en otra terminal:
 
 ```powershell
 $credenciales = @{ email = 'ana@ejemplo.com'; password = 'abc12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
 Resultado esperado: un token de 43 caracteres, sin `+`, `/` ni `=` (32 bytes del
@@ -1135,7 +1201,7 @@ Ahora bien, un email que no existe y una contraseña equivocada tienen que ser
 indistinguibles:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post `
   -Body (@{ email = 'nadie@ejemplo.com'; password = 'abc12345' } | ConvertTo-Json) `
   -ContentType 'application/json'
 ```
@@ -1149,8 +1215,8 @@ caminos ejecutan la misma operación de Argon2.
 #### RF-CA-07 — el usuario autenticado conoce su nombre, email y role
 
 ```powershell
-$sesion = Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
-Invoke-RestMethod -Uri http://localhost:5243/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
+$sesion = Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
 Resultado esperado: `name`, `email` y `role`. Nunca el hash de la contraseña,
@@ -1159,7 +1225,7 @@ ni el token, ni `credencialVersion`.
 Y sin cabecera:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/me
+Invoke-RestMethod -Uri http://localhost:8090/me
 ```
 
 Resultado esperado: `401` con `Sesion no valida.`
@@ -1167,8 +1233,8 @@ Resultado esperado: `401` con `Sesion no valida.`
 #### RF-CA-18 — cerrar sesión invalida esa credencial
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/logout -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" }
-Invoke-RestMethod -Uri http://localhost:5243/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/logout -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" }
+Invoke-RestMethod -Uri http://localhost:8090/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
 El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una
@@ -1180,7 +1246,7 @@ Administrador la desbloquea
 
 ```powershell
 1..5 | ForEach-Object {
-  Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post `
+  Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post `
     -Body (@{ email = 'ana@ejemplo.com'; password = 'malaclave1' } | ConvertTo-Json) `
     -ContentType 'application/json'
 }
@@ -1189,7 +1255,7 @@ Administrador la desbloquea
 Ahora la contraseña correcta se sigue rechazando:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
 Resultado esperado: `401` con **el mismo mensaje** que los intentos fallidos
@@ -1210,7 +1276,7 @@ El bloqueo también se levanta sin esperar, a petición del Administrador
 (ADR 013):
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users/<id>/unlock `
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users/<id>/unlock `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1250,7 +1316,7 @@ peticiones responden `202` con el mismo body.
 
 ```powershell
 $recuperacion = @{ email = 'ana@ejemplo.com' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/recovery `
   -Method Post -Body $recuperacion -ContentType 'application/json'
 ```
 
@@ -1268,7 +1334,7 @@ El Administrador la aprueba con las rutas de la sección
 emite el código y se encola el correo:
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:5243/api/permissions/requests/<id>/approve" `
+Invoke-RestMethod -Uri "http://localhost:8090/api/permissions/requests/<id>/approve" `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1279,7 +1345,7 @@ Ahora sí, ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
 $restablecer = @{ code = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
 
@@ -1322,7 +1388,7 @@ Con el token de Administrador y el `id` del usuario:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/force-reset' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/force-reset' `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1338,7 +1404,7 @@ actualiza y el código anterior queda invalidado.
 
 ```powershell
 $cambio = @{ currentPassword = 'abc12345'; newPassword = 'nueva12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/change-password `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/change-password `
   -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" } `
   -Body $cambio -ContentType 'application/json'
 ```
@@ -1377,7 +1443,7 @@ rutas administrativas. Obtén el token del Administrador y sigue.
 
 ```powershell
 $adminHeaders = @{ Authorization = "Bearer <token-del-administrador>" }
-Invoke-RestMethod -Uri 'http://localhost:5243/api/admin/users' `
+Invoke-RestMethod -Uri 'http://localhost:8090/api/admin/users' `
   -Headers $adminHeaders
 ```
 
@@ -1409,7 +1475,7 @@ administrativa, sin depender de ninguna interfaz:
 
 ```powershell
 Invoke-WebRequest `
-  -Uri 'http://localhost:5243/api/admin/users' `
+  -Uri 'http://localhost:8090/api/admin/users' `
   -Headers @{ Authorization = 'Bearer <token-del-estandar>' }
 ```
 
@@ -1422,7 +1488,7 @@ Usa el `id` de otro usuario obtenido del listado:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/role' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/role' `
   -Method Post -Headers $adminHeaders -ContentType 'application/json' `
   -Body '{"role":"Administrador"}'
 ```
@@ -1441,11 +1507,11 @@ cambiar la contraseña (RF-CA-12) o al desactivar la cuenta (RF-CA-20). Ver
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/deactivate' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/deactivate' `
   -Method Post -Headers $adminHeaders
 
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/reactivate' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/reactivate' `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1606,7 +1672,7 @@ Administrador (sección [El primer Administrador](#el-primer-administrador)).
 #### RF-GP-01 — un Estándar crea una solicitud y nace en Pendiente
 
 ```powershell
-$solicitud = Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests' -Method Post `
+$solicitud = Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/requests' -Method Post `
   -Headers $estHeaders -ContentType 'application/json' `
   -Body (@{ requestedPermission = 'ViewSalesSummary' } | ConvertTo-Json)
 ```
@@ -1627,8 +1693,8 @@ Sin cabecera `Authorization` responde `401` y `{"message":"Sesion no valida."}`.
 #### RF-GP-02 — el Administrador ve las pendientes; el Estándar, no las de otros
 
 ```powershell
-Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/mine' -Headers $estHeaders
-Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/pending' -Headers $adminHeaders
+Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/requests/mine' -Headers $estHeaders
+Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/requests/pending' -Headers $adminHeaders
 ```
 
 El Estándar recibe `200` con **sus** solicitudes y solo las suyas (el filtro por
@@ -1644,7 +1710,7 @@ y el Administrador recibe `200` con todas las que están en `Pending`.
 #### RF-GP-03 — aprobar registra quién y cuándo
 
 ```powershell
-Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$($solicitud.id)/approve" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/permissions/requests/$($solicitud.id)/approve" `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1682,7 +1748,7 @@ Inmediatamente después de la aprobación, el solicitante ya puede ejecutar la
 acción que pidió:
 
 ```powershell
-Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/sales-summary' -Headers $estHeaders
+Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/sales-summary' -Headers $estHeaders
 ```
 
 ```
@@ -1724,20 +1790,20 @@ puede resolverla. La regla compara identidades, no roles.
 ```powershell
 # 1. El Estándar crea la solicitud y se queda con el id.
 # 2. El Administrador lo asciende (RF-CA-08). Esto invalida su sesión (ADR 009).
-Invoke-WebRequest -Uri "http://localhost:5243/api/admin/users/$idEstandar/role" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/admin/users/$idEstandar/role" `
   -Method Post -Headers $adminHeaders -ContentType 'application/json' `
   -Body (@{ role = 'Administrator' } | ConvertTo-Json)
 
 # 3. Con el token viejo ya no hay sesión válida.
-Invoke-WebRequest -Uri 'http://localhost:5243/me' -Headers $estHeaders
+Invoke-WebRequest -Uri 'http://localhost:8090/me' -Headers $estHeaders
 # 401  {"message":"Sesion no valida."}
 
 # 4. Vuelve a iniciar sesión: el token nuevo ya trae el rol nuevo.
-Invoke-RestMethod -Uri 'http://localhost:5243/me' -Headers $estHeadersNuevo
+Invoke-RestMethod -Uri 'http://localhost:8090/me' -Headers $estHeadersNuevo
 # 200  {"name":"Ana","email":"ana@ejemplo.com","role":"Administrator"}
 
 # 5. Intenta aprobar su propia solicitud.
-Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$id/approve" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/permissions/requests/$id/approve" `
   -Method Post -Headers $estHeadersNuevo
 # 400  {"message":"No puede resolver su propia solicitud de permiso."}
 ```
@@ -1749,7 +1815,7 @@ resolverla (`204`).
 para sí mismo e intenta resolverla:
 
 ```powershell
-Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$idPropia/approve" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/permissions/requests/$idPropia/approve" `
   -Method Post -Headers $adminHeaders
 # 400  {"message":"No puede resolver su propia solicitud de permiso."}
 ```
@@ -1808,11 +1874,11 @@ Para comprobarlo con la API levantada (paso 7):
 
 ```powershell
 # Cuerpo JSON que no se puede leer -> 400 controlado
-Invoke-WebRequest -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+Invoke-WebRequest -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/json' -Body '{esto no es json'
 
 # Content-Type que la ruta no admite -> 415 controlado
-Invoke-WebRequest -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+Invoke-WebRequest -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/x-www-form-urlencoded' -Body 'x=1'
 ```
 
@@ -2047,7 +2113,7 @@ Para no repetir `try/catch` en cada llamada, define un ayudante que devuelva el
 código y el cuerpo también cuando la respuesta es un rechazo:
 
 ```powershell
-$base = 'http://localhost:5243'
+$base = 'http://localhost:8090'
 
 function Pedir([string]$metodo, [string]$ruta, $cabeceras, $cuerpo) {
     $peticion = @{ Uri = "$base$ruta"; Method = $metodo; Headers = $cabeceras }
@@ -2342,7 +2408,7 @@ Para verlo con la API levantada, seis peticiones seguidas a la misma ruta:
 
 ```powershell
 1..6 | ForEach-Object {
-  Invoke-WebRequest -Uri http://localhost:5243/api/auth/resend-activation -Method Post `
+  Invoke-WebRequest -Uri http://localhost:8090/api/auth/resend-activation -Method Post `
     -Body (@{ email = 'ana@ejemplo.com' } | ConvertTo-Json) -ContentType 'application/json'
 }
 ```
@@ -2424,7 +2490,7 @@ dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedge
 Con el token de un Administrador y la foto en el disco:
 
 ```powershell
-curl.exe -X PUT "http://localhost:5243/api/admin/products/$id/image" `
+curl.exe -X PUT "http://localhost:8090/api/admin/products/$id/image" `
   -H "Authorization: Bearer $token" `
   -F "file=@C:\ruta\combo.jpg"
 ```
@@ -2455,7 +2521,7 @@ se rechaza con `415`.
 El catálogo lleva la referencia de cada foto, pero **nunca una firma**:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/billing/products `
+Invoke-RestMethod -Uri http://localhost:8090/api/billing/products `
   -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -2467,7 +2533,7 @@ Invoke-RestMethod -Uri http://localhost:5243/api/billing/products `
 La sincronización devuelve lo que cambió desde el cursor:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/billing/product-images/sync `
+Invoke-RestMethod -Uri http://localhost:8090/api/billing/product-images/sync `
   -Method Post -Headers @{ Authorization = "Bearer $token" } `
   -ContentType 'application/json' -Body '{"since":12}'
 ```
@@ -2503,7 +2569,7 @@ a necesitar y la foto vuelve a entrar en el conjunto.
 #### Quitar una foto
 
 ```powershell
-curl.exe -X DELETE "http://localhost:5243/api/admin/products/$id/image" `
+curl.exe -X DELETE "http://localhost:8090/api/admin/products/$id/image" `
   -H "Authorization: Bearer $token"
 ```
 
