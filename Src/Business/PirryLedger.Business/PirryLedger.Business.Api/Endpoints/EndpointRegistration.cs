@@ -149,7 +149,8 @@ public static class EndpointRegistration
 
                 return Results.Ok(ProductImageSyncResponse.From(result));
             }))
-        .WithAccess(Operation.SyncProductImages);
+        .WithAccess(Operation.SyncProductImages)
+        .RequireRequestRateLimit(RequestRateLimit.ProductImageSync);
 
         // RF-NEG-02: emitir una factura. El borrador vive solo en el cliente, asi
         // que se guarda ya emitida. Responde 201 con la factura creada.
