@@ -272,3 +272,103 @@ Son 421 pruebas, dos más que antes de este arreglo.
 tiene credenciales. Queda como paso manual: con el `.env` real, la misma
 petición debe devolver `200`; con una clave incorrecta, `503` con el mensaje
 genérico y sin el texto del SDK en el log.
+
+### Entrada 8 — La causa real era otra, y la corrección de la entrada 7 no resolvía nada (2026-11-10)
+
+**Qué se pidió.** Diagnosticar por qué la subida real seguía fallando con el
+mensaje `No se pudo subir el objeto … al almacenamiento de imagenes`, ya desplegado
+en la nube, y corregirlo.
+
+**Qué se encontró.** El mensaje de la entrada 7 estaba desactualizado. El error real
+no era el trailer del checksum:
+
+```
+Amazon.S3.AmazonS3Exception
+  StatusCode: 501
+  ErrorCode: NotImplemented
+  Mensaje de R2: STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented
+```
+
+Esa variante es la firma **por bloques** de SigV4, no la del trailer. `WHEN_REQUIRED`
+quitaba el trailer pero no el troceado, así que el ajuste de la entrada 7 no podía
+resolver el fallo, y el documento lo presentaba como la solución.
+
+**Qué salió mal en el diagnóstico previo, y cómo se detectó.** Antes de llegar aquí
+el agente dijo que la causa principal era el endpoint con el bucket repetido y que
+el `.env` estaba mal. Las pruebas aisladas lo desmintieron: con el `.env` corregido
+la subida seguía fallando, y una prueba HTTP directa con la misma configuración
+devolvía `200`. La causa estaba dentro del SDK, no en la configuración. El agente
+también probó una variante (`DisablePayloadSigning = true`) que hace pasar la
+subida, pero deja el cuerpo como `UNSIGNED-PAYLOAD`, fuera de la firma. Se descartó
+por seguridad.
+
+**Qué se cambió.** `CreatePutObjectRequest` fija `UseChunkEncoding = false`: el
+cuerpo viaja en una sola pieza y firmado con su sha256. `WHEN_REQUIRED` se retira
+del cliente porque no era la causa. La decisión se registra en el ADR 016 y la nota
+del ADR 015 queda corregida con un puntero a ese ADR.
+
+**Cómo se mostró rojo antes de verde.** La prueba nueva,
+`LaSubidaFirmaElCuerpoEnteroYNoPorBloques`, se ejecutó con el método extraído y sin
+el ajuste, y falló por la razón correcta:
+
+```
+Assert.False() Failure
+Expected: False
+Actual:   True
+```
+
+Era `UseChunkEncoding`, que venía en `True` por defecto. Después del cambio pasó a
+verde.
+
+**Qué se verificó, con la salida real.**
+
+```powershell
+dotnet build pirry-ledger.slnx
+dotnet test pirry-ledger.slnx
+```
+
+```
+Compilación correcta.
+    0 Advertencia(s)
+    0 Errores
+
+Correctas! - Con error: 0, Superado: 204 - PirryLedger.Business.Tests.dll
+Correctas! - Con error: 0, Superado: 155 - PirryLedger.Core.AccessControl.Tests.dll
+Correctas! - Con error: 0, Superado:  52 - PirryLedger.Core.Permissions.Tests.dll
+Correctas! - Con error: 0, Superado:   6 - PirryLedger.Core.Notifications.Tests.dll
+Correctas! - Con error: 0, Superado:   4 - PirryLedger.Integration.Tests.dll
+```
+
+Son 421 pruebas, todas en verde.
+
+**Contra el bucket real,** con las mismas credenciales del `.env` y la
+configuración nueva, usando el SDK:
+
+```
+A. PUT pequeno con UseChunkEncoding=false: OK, HTTP 200
+B. GET del objeto: OK, HTTP 200, 23615 bytes
+C. DELETE del objeto: OK, HTTP 204
+D. PUT de 5 MiB: OK, HTTP 200
+E. DELETE de 5 MiB: OK, HTTP 204
+```
+
+**Por la API local,** como Administrator, subiendo un JPEG a un producto sin imagen
+y después borrándola:
+
+```
+SUBIDA: HTTP 200
+cuerpo: {"productId":"dd63cb39-…","imageKey":"products/dd63cb39-…/0fa95217-….jpg","version":"e0310a4e…","contentType":"image/jpeg","sizeBytes":23579,"revision":1}
+DESCARGA FIRMADA: HTTP 200 | bytes=23579 | tipo=image/jpeg
+BORRADO: HTTP 204
+producto Hot Dog tiene_imagen=False
+```
+
+La descarga firmada se probó con `curl.exe`: PowerShell 5.1 fallaba al negociar TLS
+con el dominio de R2, y no era un problema de la URL. Después se listó el bucket y
+quedaron `0` objetos con el prefijo `diagnostico-sdk/`; el local de pruebas quedó
+como estaba.
+
+**Lo que no se pudo verificar.** Que la corrección llegue a la nube: el código
+desplegado en `main` (`fd8e171`) es anterior a este cambio y sigue fijando
+`WHEN_REQUIRED` sin `UseChunkEncoding`. La verificación en la nube queda para
+después del despliegue.

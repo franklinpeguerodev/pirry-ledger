@@ -103,11 +103,19 @@ Every new behaviour is shown red for the right reason before it is shown green. 
 suite runs with one command and without a database, an SMTP server or a bucket.
 
 **Fix (2026-11-09).** The first real upload to R2 failed with
-`STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER not implemented`: the AWS SDK v4 sends
-the checksum in a trailer that R2 does not implement. The client now sets
-`RequestChecksumCalculation` and `ResponseChecksumValidation` to `WHEN_REQUIRED`, and
-any storage failure (an R2 error, no response, or an SDK error) answers `503`
-instead of `500`. Two tests pin it; the suite is at 421.
+`STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER not implemented`. That reading was
+incomplete and is corrected below.
+
+**Fix (2026-11-10).** The upload kept failing with
+`STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented`, which is SigV4's **chunked**
+signing, not the checksum trailer. `WHEN_REQUIRED` removed the trailer but not the
+chunking, so it never fixed the upload. The request now sets
+`UseChunkEncoding = false`, so the body travels in one piece signed with its
+sha256, and that setting is gone from the client. Verified against the real bucket
+with the SDK (a 23 KB file and a 5 MiB file, upload and delete, all
+`200`/`204`), and by uploading through the local API. The decision is ADR 016. Any
+storage failure (an R2 error, no response, or an SDK error) still answers `503`
+instead of `500`. The suite is at 421.
 
 ### Logbook
 
