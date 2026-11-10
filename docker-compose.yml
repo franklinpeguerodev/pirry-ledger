@@ -128,6 +128,34 @@ services:
         condition: service_completed_successfully
       seaweedfs:
         condition: service_started
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
+  # El enviador de correo (ADR 007 y ADR 019): el mismo comando de siempre, en
+  # bucle, como proceso aparte. La aplicacion nunca envia correo por su cuenta.
+  mailer:
+    build: .
+    image: pirry-ledger-app
+    command:
+      - "sh"
+      - "-c"
+      - "while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
+  # Bandeja SMTP de la composicion (ADR 019). No publica puertos: el revisor
+  # lee los mensajes desde dentro de la red, con el comando que documenta el
+  # README.
+  mailpit:
+    image: axllent/mailpit:v1.33.1
     restart: unless-stopped
 
 volumes:

@@ -34,9 +34,15 @@ public sealed record SmtpConfiguration(
     public static SmtpConfiguration Empty { get; } =
         new(string.Empty, 0, SslMode.StartTls, string.Empty, string.Empty, string.Empty);
 
+    // ADR 019: un servidor local de pruebas (Mailpit en la composicion) no pide
+    // credenciales. Hay credenciales cuando llega al menos una de las dos; si
+    // llega solo una, la configuracion esta a medias y no se usa.
+    public bool HasCredentials =>
+        !string.IsNullOrWhiteSpace(User) || !string.IsNullOrWhiteSpace(Password);
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(Server) &&
-        !string.IsNullOrWhiteSpace(User) &&
-        !string.IsNullOrWhiteSpace(Password) &&
-        !string.IsNullOrWhiteSpace(From);
+        !string.IsNullOrWhiteSpace(From) &&
+        (!HasCredentials ||
+         (!string.IsNullOrWhiteSpace(User) && !string.IsNullOrWhiteSpace(Password)));
 }
