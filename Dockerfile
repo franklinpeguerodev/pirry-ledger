@@ -62,7 +62,7 @@ COPY --from=build /app/publish ./
 # activacion (docs/adr/005-listen-address-from-public-base-url.md). UseUrls gana
 # sobre ASPNETCORE_URLS, asi que definir esta ultima no cambia nada. EXPOSE solo
 # documenta el puerto por defecto; el mapeo real se hace al ejecutar.
-EXPOSE 8080
+EXPOSE 8090
 
 # Usuario sin privilegios que ya trae la imagen (APP_UID). La aplicacion no
 # escribe en disco, asi que con permiso de lectura sobre /app alcanza.
