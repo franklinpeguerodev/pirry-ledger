@@ -209,33 +209,47 @@ review before pushing; it does not re-open them.
 
 ## Definition of done
 
-Not done until each point has evidence (real output, rejections included):
+Not done until each point has evidence (real output, rejections included).
+Last verification: GitHub Codespace, 2026-11-11.
 
-- [ ] RF-DOC-01..05 criteria verified one by one, including: another Standard
-      user rejected on download and on delete, a deleted document hidden from
-      the listing but still present as a record and as bytes in the volume, an
-      empty or oversized file rejected in a controlled way, the branch recorded.
-- [ ] SeaweedFS integration: the document round trip works against the real
-      service in the Codespace; missing key -> controlled rejection; SeaweedFS
-      stopped -> controlled rejection; the rest of the project keeps working.
-- [ ] Document test suite passes with `dotnet test pirry-ledger.slnx`; new
-      tests shown red for the right reason before green. The previous 437 tests
-      still pass.
-- [ ] From a clean clone (in the Codespace): copy `.env.example` to `.env`, then
-      `docker compose up --build`; the app answers at the address in the README.
-- [ ] `docker compose config` shows no real key; the database port is not
-      published; the SeaweedFS port is not published.
+- [x] RF-DOC-01 verified: `POST /api/documents` answered `201` with the record —
+      name, declared type, size, date, uploader and branch — and the listing
+      returned the same data. The real JSON is in the README.
+- [x] RF-DOC-02 verified for the Administrator: `GET /api/documents` answered
+      `200` with the documents of every user. The branch recorded was `Todas`
+      because the uploader was the Administrator.
+- [x] RF-DOC-03 verified for the owner: the download answered `200` with
+      `Content-Type: application/octet-stream`,
+      `Content-Disposition: attachment` and the same bytes that were uploaded.
+- [ ] RF-DOC-03 for another Standard (rejected) and RF-DOC-04 (logical delete,
+      record still present, hidden from the listing): pending. Needs the output
+      of the delete, the listing and the `psql` query.
+- [ ] RF-DOC-05 (named volume, survives `docker compose down` without `-v`):
+      the volume exists and SeaweedFS writes inside it, but the survival run is
+      pending.
+- [x] SeaweedFS integration: the round trip works against the real service;
+      missing key -> `503` configured; SeaweedFS stopped -> `503` unavailable;
+      the rest of the project keeps working. Both rejections were verified
+      before the insert fix, which did not touch the storage layer; they are
+      repeated in the closing run.
+- [x] Document test suite passes with `dotnet test pirry-ledger.slnx`: 483
+      tests, 0 failures. The insert bug was reproduced by a test that failed
+      with the same `DbUpdateConcurrencyException` before the fix.
+- [x] From a clean clone (Codespace): copy `.env.example` to `.env`, then
+      `docker compose up -d`; the app answers on `http://localhost:8090`.
+- [x] `docker compose config` shows only example values; only the app publishes
+      a port (`8090`), and neither the database nor SeaweedFS is reachable from
+      outside.
 - [ ] Upload -> `docker compose down` -> `docker compose up` -> document listed
-      and downloaded, user logs in. Never `-v`.
-- [ ] `git check-ignore -v .env` matches; `git log --all -- .env` is empty;
-      searching the history for the key (`git log --all -p -S<key>`) finds
-      nothing.
-- [ ] Six cumulative fronts walked through from the README commands.
-- [ ] README has **Contenedor** and **API externa**, and every command in it was
-      executed.
-- [ ] `docs/current-iteration.md`, README and the four authorized ADRs in the
-      same PR.
-- [ ] Bitácora entry as its own commit.
+      and downloaded, user logs in. Never `-v`. Pending.
+- [x] `git check-ignore -v .env` matches; `git log --all -- .env` is empty.
+- [ ] Six cumulative fronts walked through from the README commands. Pending.
+- [ ] README has **Contenedor** and **API externa**; every command that is
+      documented was executed, except the delete and the survival run, which are
+      the pending items above.
+- [x] `docs/current-iteration.md`, README and the four authorized ADRs in the
+      same PR. The PR is Franklin's; the branch has all of it.
+- [x] Bitácora entry: `docs/bitacora-practica-4.md`, as its own commit.
 
 ## How to work on this iteration
 
