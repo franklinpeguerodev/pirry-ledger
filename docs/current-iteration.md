@@ -225,32 +225,40 @@ Last verification: GitHub Codespace, 2026-11-11.
       the listing (`200` with the other documents) and the row stayed in
       `doc_documents` with `deleted_at_utc` and `deleted_by` set. The `psql`
       query showed it as `eliminado = t` and `quien = t`.
-- [ ] RF-DOC-03 for another Standard (rejected): pending, it needs a Standard
-      user with a session, which is part of the cumulative fronts.
+- [x] RF-DOC-03 for another Standard (rejected): with two Standards, one got
+      `403` on download and `403` on delete of the other's document, while the
+      Administrator got `200`. The Standard's listing showed only its own
+      document.
 - [x] RF-DOC-05 verified: after `docker compose down` (no `-v`) and
       `docker compose up`, the download answered `200` and returned the same
       content (`sobreviviente`) that had been uploaded before the restart.
 - [x] SeaweedFS integration: the round trip works against the real service;
       missing key -> `503` configured; SeaweedFS stopped -> `503` unavailable;
-      the rest of the project keeps working. Both rejections were verified
-      before the insert fix, which did not touch the storage layer; they are
-      repeated in the closing run.
+      the rest of the project keeps working. Both rejections were repeated in
+      the closing run, after the insert fix.
 - [x] Document test suite passes with `dotnet test pirry-ledger.slnx`: 483
       tests, 0 failures. The insert bug was reproduced by a test that failed
       with the same `DbUpdateConcurrencyException` before the fix.
-- [x] From a clean clone (Codespace): copy `.env.example` to `.env`, then
-      `docker compose up -d`; the app answers on `http://localhost:8090`.
+- [x] From a clean state (Codespace): `docker compose down -v`, copy
+      `.env.example` to `.env`, then `docker compose up --build -d`; the app
+      answers on `http://localhost:8090` and every service comes up.
 - [x] `docker compose config` shows only example values; only the app publishes
       a port (`8090`), and neither the database nor SeaweedFS is reachable from
       outside.
 - [x] Upload -> `docker compose down` -> `docker compose up` -> document listed
       and downloaded, user logs in. Never `-v`. Verified: the download answered
       `200` with the same bytes after the restart.
-- [x] `git check-ignore -v .env` matches; `git log --all -- .env` is empty.
-- [ ] Six cumulative fronts walked through from the README commands. Pending.
-- [ ] README has **Contenedor** and **API externa**; every command that is
-      documented was executed, except the delete and the survival run, which are
-      the pending items above.
+- [x] `git check-ignore -v .env` matches; `git log --all -- .env` is empty; no
+      real key appears in any commit (only the example values of
+      `.env.example`).
+- [x] Six cumulative fronts walked through from the README commands, each with
+      its real output: activation `201` + `200`, session `200`/`204`/`401`,
+      Standard rejected `403`, recovery `202` + `204` + `204`, permissions `202`/
+      `204`/`400`/`204`, business `Issued` -> `Paid` + `400`.
+- [x] README has **Contenedor** and **API externa**, and every command that is
+      documented was executed, including reading the activation email from
+      Mailpit.
+- [x] Closing run: 49 checks, 0 failures (the logbook has the detail).
 - [x] `docs/current-iteration.md`, README and the four authorized ADRs in the
       same PR. The PR is Franklin's; the branch has all of it.
 - [x] Bitácora entry: `docs/bitacora-practica-4.md`, as its own commit.

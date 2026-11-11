@@ -84,6 +84,14 @@ Qué levanta la composición y por qué:
 | `mailer` | Ejecuta `--send-mail` en bucle: el correo se envía en un proceso aparte (ADR 007 y 019). |
 | `mailpit` | La bandeja de correo de la composición. Sin puerto publicado (ADR 019). |
 
+> **El bucle del enviador va en el `entrypoint`, no en el `command`.** La imagen
+> ya trae `ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"]`, y en Compose `command`
+> no reemplaza al entrypoint: se le **agrega** como argumento. Con
+> `command: ["sh","-c","while true; ..."]` el contenedor arrancaba la API en vez
+> del enviador y no se enviaba ningún correo. Por eso el `mailer` usa
+> `entrypoint: ["/bin/sh","-c"]` con el bucle en el `command`, y `migrate` usa
+> `command: ["--migrate"]`. Está en el ADR 019.
+
 El correo no se publica: se lee desde dentro de la red con el comando que
 explica la sección [API externa](#api-externa-seaweedfs).
 
@@ -681,6 +689,10 @@ docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
 
 De ahí salen el enlace de activación (apunta a `http://localhost:8090`, la
 dirección pública) y el código de recuperación que viaja en el cuerpo.
+
+El enviador corre el comando `--send-mail` cada 10 segundos. Por eso, después de
+crear un usuario o pedir una recuperación, hay que **esperar unos segundos** a
+que el correo aparezca en la bandeja.
 
 #### Ejemplo de la respuesta
 
