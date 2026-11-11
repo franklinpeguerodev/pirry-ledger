@@ -4,6 +4,8 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Core.AccessControl.Api;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
+using PirryLedger.Core.Documents.Application;
+using PirryLedger.Core.Documents.Infrastructure.Storage;
 using PirryLedger.Business.Infrastructure.Storage;
 
 namespace PirryLedger.Host;
@@ -50,6 +52,45 @@ internal static class EnvironmentConfiguration
     public const string R2EndpointVariable = "PIRRY_LEDGER_R2_ENDPOINT";
     public const string ImageSignatureMinutesVariable = "PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES";
     public const string ImageMaxBytesVariable = "PIRRY_LEDGER_IMAGE_MAX_BYTES";
+
+    // Almacenamiento de documentos en SeaweedFS (ADR 017). Las cuatro son
+    // OPCIONALES al arrancar: sin ellas la aplicacion levanta y las operaciones
+    // de documentos responden 503 controlado, porque la seccion 1.4 del
+    // enunciado exige que el resto del proyecto siga funcionando.
+    public const string DocumentStorageEndpointVariable = "PIRRY_LEDGER_STORAGE_ENDPOINT";
+    public const string DocumentStorageAccessKeyVariable = "PIRRY_LEDGER_STORAGE_ACCESS_KEY";
+    public const string DocumentStorageSecretKeyVariable = "PIRRY_LEDGER_STORAGE_SECRET_KEY";
+    public const string DocumentStorageBucketVariable = "PIRRY_LEDGER_STORAGE_BUCKET";
+
+    // Tope de una subida. Si falta o no es un numero valido, se usa el de
+    // DocumentRules (5 MiB).
+    public const string DocumentMaxBytesVariable = "PIRRY_LEDGER_DOCUMENT_MAX_BYTES";
+
+    // Lee la configuracion del almacenamiento de documentos. Devuelve una
+    // configuracion vacia si falta algo, y la pieza registra entonces el
+    // almacenamiento que rechaza de forma controlada.
+    public static DocumentStorageConfiguration ReadDocumentStorage(IConfiguration configuration)
+    {
+        return new DocumentStorageConfiguration(
+            configuration[DocumentStorageEndpointVariable] ?? string.Empty,
+            configuration[DocumentStorageAccessKeyVariable] ?? string.Empty,
+            configuration[DocumentStorageSecretKeyVariable] ?? string.Empty,
+            configuration[DocumentStorageBucketVariable] ?? string.Empty);
+    }
+
+    // Lee el tope de subida. Un valor ausente o invalido no es un error de
+    // arranque: se usa el limite por defecto de la pieza.
+    public static DocumentUploadOptions ReadDocumentUploadOptions(IConfiguration configuration)
+    {
+        var text = configuration[DocumentMaxBytesVariable];
+
+        if (!long.TryParse(text, out var maxBytes) || maxBytes < 1)
+        {
+            return DocumentUploadOptions.Default;
+        }
+
+        return new DocumentUploadOptions(maxBytes);
+    }
 
     // Lee la configuracion del almacenamiento de imagenes.
     //

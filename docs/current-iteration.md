@@ -1,341 +1,296 @@
-# Current Iteration
+# Current iteration — Práctica 4: Document Manager, container, external API
 
-Franklin replaces this file at the start of each assignment. The agent reads it before planning any work and treats it as the scope boundary. If it is missing or stale, the agent asks.
-
-## Active assignment
-
-**Práctica 3 — Tu módulo de negocio, sus pruebas y su integración** (Programación III, Bloque 3, Week 8, 8 points, individual). Deadline as published on the virtual platform; late delivery up to 24 hours later at 50 % penalty.
-
-Brief and rubric: `docs/assignments/practica-3.md`, transcribed from the professor's PDF. Two repository notes at its end apply: the rubric says "tres" defects but there are **four** (`practica-3-defecto-1` to `-4`), and the "entre 3 y 5 estados" of RF-NEG-03 does not limit this machine (see decision 2). The defects are described in section 1.3 of the brief itself, over Franklin's own tables, so there is no separate defects annex as in Práctica 2.
-
-**Práctica 3 is delivered** (2026-11-01, closing documented in `docs/practica-3-closing`). It stays in this file because its decisions, its work plan and its delivery checks are still the reference for what was graded. The work that follows is the Core hardening below.
-
-## Core hardening (current work)
-
-Not a course assignment: this is Franklin's own hardening of the Access control piece, decided on 2026-11-04. It closes gaps the professor's requirements do not cover but that the code left open. The two decisions that shape it are ADR 013 (users are created by an Administrator) and ADR 014 (every password change of a Standard needs an Administrator's approval), both authorized by Franklin and accepted.
-
-### In scope
-
-| Area | Requirement IDs | Decision |
-|---|---|---|
-| Users are created by an Administrator; `POST /api/auth/register` no longer exists | RF-CA-01, 15, 21 | ADR 013 |
-| An Administrator unlocks a blocked account, idempotently | RF-CA-19 | ADR 013 |
-| Every password change of a Standard needs an Administrator's approval | RF-CA-09, 12, 13, 22; RF-GP-01, 03, 05, 07 | ADR 014 |
-| The recovery code lasts four hours instead of fifteen minutes | RF-CA-10 | ADR 014, decision 7 |
-| Per-IP rate limit on the two flows that send mail | RF-CA-09, 17 | ADR 014 context; no new ADR needed |
-| No migration for the access-control hardening | — | ADR 013 decision 8, ADR 014 |
-| Product catalog in Business | — | Product entity persisted in `bil_products`; Administrator manages it and invoices use active products |
-
-### Out of scope
-
-- The audit records of the administrative operations (RF-AUD-02, week 14).
-- The notice to the Administrator when a request arrives (RF-NEG-07, week 10).
-- Any change to the business module except the product catalog described above.
-- `created_by_user_id`: who created whom is an audit record, and the audit is a later piece.
-- Full inventory: stock, movements, suppliers, purchases and cost accounting.
-
-### Rules this work follows
-
-- The Administrator is exempt from the approval for its own password. With a single Administrator, RF-GP-07 (nobody resolves their own request) would make the system impossible to administer, so the exemption is the only exit, not a convenience.
-- The approval happens **before** the code reaches the mail. A valid code therefore implies a granted approval, and RF-CA-11 is satisfied as it is written.
-- The two new permission names, `ChangePassword` and `ResetPassword`, are fixed names in the closed catalog. They fit `permission_name varchar(64)`, so there is no migration.
-- The rate limit is hand-rolled in `PirryLedger.Core.AccessControl.Api` with the injectable `IClock`, not a new package: it matches the style of `AccessFilter` and `ApiErrorHandling` and stays testable without starting the application (RD-12).
-- The rate limit is per IP **and** per route, so the recovery flow and the activation resend have independent counters.
-- Product changes keep the invoice item's historical name and price; deactivation affects only future invoices.
-
-### Verification
-
-343 tests, all green, with no database and no SMTP server. Each new behaviour was shown red for the right reason before it was shown green: skipping the Standard gate in `ChangeOwnPassword` turned four tests red, removing the Administrator exemption in `PasswordRecovery` turned four red, and not counting the requests in the rate limiter turned five red.
-
-Branch `feature/admin-created-users`, from `develop`. Seven commits, one change each. No push, no merge and no tag without Franklin's authorization.
-
-### Open decisions
-
-None. Both ADRs are accepted.
-
-## Product images (current work)
-
-Not a course assignment: this is Franklin's own work on the product catalog, decided
-on 2026-11-09. The decision is ADR 015
-(`docs/adr/015-imagenes-del-catalogo.md`).
-
-### In scope
-
-| Area | Requirement IDs | Decision |
-|---|---|---|
-| A product carries an image, stored privately in Cloudflare R2 | RD-06, RD-10 | ADR 015 |
-| The key and the version live in the own table `bil_product_images` | RD-09 | ADR 015 |
-| The server signs the downloads; the bucket stays private | RD-10 | ADR 015 |
-| The client synchronizes by revision cursor and the server computes the delta | RD-03, RD-12 | ADR 015 |
-| Uploaded images lose their metadata without being re-encoded | RD-07 | ADR 015 |
-| Request size limits, which the project did not have | RD-07 | ADR 015 |
-| The upload is protected by role over HTTP, and the product is checked before the file is read | RD-06, RD-07 | ADR 015 |
-| The synchronization is limited per IP | RD-07 | ADR 015 |
-
-### Out of scope
-
-- The mobile client: local cache, image picker and thumbnails. It is the next
-  iteration, and it consumes the contract that ADR 015 fixes.
-- Automatic cleanup of the orphaned objects of the bucket. Assumed for now.
-- Thumbnails and several sizes of the same photo.
-- Removing the metadata by re-encoding the image.
-- Pruning the revision history.
-- Rate limits on the uploads. The synchronization has one since 2026-11-10.
-- Load tests.
-
-### Rules this work follows
-
-- The server computes the version, the key and the delta. The client never sends a
-  version and never says what it already has: it sends a cursor that the server
-  itself issued.
-- Only an Administrator uploads, replaces and removes images. Any valid session
-  reads them.
-- The set of images is exactly the images of the **active** products. Deactivating a
-  product removes its image from the set; reactivating it puts it back.
-- The metadata of the uploaded image is removed before it is stored, and the sha256
-  is taken over the bytes that are stored.
-- The object is uploaded before the transaction and the previous object is deleted
-  after the commit, so a live image never points to a missing object.
-- Every environment variable of the storage is mandatory: without one of them the
-  application does not start.
-- The product is checked **before** the file is read, so an upload to a product
-  that does not exist or is inactive is rejected without reading the body.
-- The WebP container is respected: only the bytes the RIFF header declares are
-  processed, and a RIFF that declares more bytes than the file holds is rejected.
-- The synchronization is limited to 20 requests per IP every 10 minutes. With one
-  tablet per branch the IP identifies the counter, so no employee blocks another.
-
-### Verification
-
-Every new behaviour is shown red for the right reason before it is shown green. The
-suite runs with one command and without a database, an SMTP server or a bucket.
-
-**Fix (2026-11-09).** The first real upload to R2 failed with
-`STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER not implemented`. That reading was
-incomplete and is corrected below.
-
-**Fix (2026-11-10).** The upload kept failing with
-`STREAMING-AWS4-HMAC-SHA256-PAYLOAD not implemented`, which is SigV4's **chunked**
-signing, not the checksum trailer. `WHEN_REQUIRED` removed the trailer but not the
-chunking, so it never fixed the upload. The request now sets
-`UseChunkEncoding = false`, so the body travels in one piece signed with its
-sha256, and that setting is gone from the client. Verified against the real bucket
-with the SDK (a 23 KB file and a 5 MiB file, upload and delete, all
-`200`/`204`), and by uploading through the local API. The decision is ADR 016. Any
-storage failure (an R2 error, no response, or an SDK error) still answers `503`
-instead of `500`. The suite is at 421.
-
-**Hardening (2026-11-10).** An audit of the upload asked four questions: whether
-the upload is protected by role, whether a Standard can do what is not his, and
-whether the credentials are stored safely. The answers were: the role is
-enforced on the server, the tokens are 32 random bytes whose SHA-256 is what
-the database keeps, and the passwords use Argon2id with a salt. Three gaps were
-found and closed:
-
-1. The role was declared in the table but **no test exercised the route over
-   HTTP**. The suite now makes real requests against the real routes, with the
-   real access filter, and checks that a sessionless request gets `401`, that a
-   Standard gets `403`, and that nothing changes when it is rejected.
-2. The **product was checked after the file was read**. Now it is checked
-   first, so an upload to a product that does not exist is rejected without
-   reading five megabytes.
-3. The **WebP container was not respected**: bytes after the RIFF-declared
-   length were kept. Now only the declared bytes are processed, and a RIFF
-   that declares more than the file holds is rejected.
-
-The synchronization also got a rate limit of 20 requests per IP every 10
-minutes. The suite is at 437.
-
-### Logbook
-
-File: `docs/bitacora-imagenes-del-catalogo.md`, a new file. It documents the
-real work of this iteration: what was asked, what the agent returned, the
-design mistake that Franklin caught (the delta depending on what the client
-claimed), the three bugs that the tests found, and what could not be verified
-without a Cloudflare account and a real PostgreSQL. The agent drafts each
-entry; Franklin reviews it before it is pushed.
-
-## Branch scope extension (2026-11-04)
-
-This hardening also introduces branch scope across user administration and
-billing:
-
-- `Branch` is owned by Access Control. The Administrator creates and lists
-  physical branches; the protected special row `Todas` represents global
-  Administrator scope.
-- The Administrator can edit a physical branch's name, address and active
-  status. Names are unique, `Todas` is protected, and a branch with active
-  users cannot be deactivated.
-- The Administrator assigns a physical branch to a Standard through a separate
-  operation; changing the assignment invalidates that user's sessions.
-- Every user stores exactly one branch reference. Standard users must reference
-  an active physical branch; Administrators reference `Todas`.
-- Standard users can operate and query invoices only in their branch.
-  Administrators have global access and choose the physical branch when issuing
-  an invoice.
-- An issued invoice stores the branch name and one free-text address (maximum
-  100 characters) as immutable historical snapshots.
-- The migration refuses to continue when an existing Standard user has no
-  branch assignment; it never silently chooses a default.
-
-## Requirement files to read
-
-`docs/requirements/README.md` (index) first, then `business-module.md`, `design-rules.md` and `permissions.md`. Read `access-control.md` only to protect what is already delivered: section 1.5 of the brief re-verifies access control and permissions.
-
-`business-module.md` only holds RF-NEG-03, 04 and 05. RF-NEG-02, 06 and 09 (text in section 1.1 of the brief) are added to it in the same pull request that needs them, with the index updated. The professor's text of the existing rows is not edited.
+> Replaces the Práctica 3 version. Scope source: `docs/assignments/practica-4.md`
+> (Week 9, 8 pts, individual). If this file and the brief disagree, the brief wins.
+>
+> **RF-DOC-01 to RF-DOC-05 are not in `docs/requirements/`.** Verified 2026-11-10:
+> the index lists access-control, business-module, design-rules, entities,
+> notifications and permissions only. For this iteration the brief is the only
+> source for RF-DOC-01..05, and nothing is reconstructed from memory.
 
 ## Goal
 
-Deliver at the tag `practica-3`: the business module (invoicing) working and protected by Access control, the suite of its state machine, four defects planted by Franklin in his own code, one integration test between the business module and Permissions, and the README sections `Pruebas` and `Defectos`.
+Anyone who clones the repo, copies `.env.example` to `.env` and runs
+`docker compose up --build` gets the whole project running, with documents and
+application data surviving `docker compose down` (no `-v`), plus one real
+external API (SeaweedFS) whose key never enters the repo.
+
+## Decided by Franklin (2026-11-10)
+
+Not open anymore. Do not re-ask; build the plan on these.
+
+- **The external API is SeaweedFS** (open source, Apache-2.0), self-hosted in the
+  composition: it is where the Document Manager writes and reads the bytes, over
+  the S3 API.
+- **Open source version only**, from `chrislusf/seaweedfs`, with the version
+  pinned. No enterprise features. This iteration is Docker only: nothing is
+  deployed to the cloud.
+- **Documents are generic**: any file type, up to **5 MiB** (5 242 880 bytes).
+  No PDF-only rule, no image handling, no content is ever decoded.
+- **Standard users see only their own documents; an Administrator sees all.**
+- **The host port is 8090**, the same number inside and outside the container.
+- **Migrations run inside the composition**: a `migrate` service applies them
+  with a `--migrate` flag and exits; the app waits for it.
+- **Email in the composition**: `mailpit` as the SMTP sink with no published
+  port, plus a `mailer` service that runs `--send-mail` in a loop.
+- **The listen address**: `PIRRY_LEDGER_PUBLIC_BASE_URL` stays the public
+  address (activation links) and the port, and the process binds `0.0.0.0` on
+  that port, because a Docker published port does not reach a process bound to
+  loopback (ADR 020, which amends ADR 005).
+- **Product images keep R2** (ADR 015 unchanged): `.env.example` carries the
+  seven variables with example values, the app starts, and image upload answers
+  a controlled 503. The README says so.
+- **Verification happens in a GitHub Codespace** (Franklin has no local Docker).
+  README commands must work on Linux (bash, case-sensitive paths) and on his
+  Windows machine.
+- **First Administrator variables** (`PIRRY_LEDGER_FIRST_ADMIN_EMAIL` /
+  `..._PASSWORD`) go in `.env.example` with example values.
+- **The logbook is `docs/bitacora-practica-4.md`.**
+- **Franklin decides at the end** where `practica-4` is tagged. The agent does
+  not tag.
 
 ## In scope
 
-| Area | Requirement IDs | Brief |
-|---|---|---|
-| At least five separable features of the invoicing module, each testable on its own and explained in the README | RF-NEG-02 | 1.1 |
-| State machine with its states declared in one place | RF-NEG-03 | 1.1 |
-| At least one explicitly forbidden transition, rejected without changing the state | RF-NEG-04 | 1.1 |
-| At least one terminal state | RF-NEG-05 | 1.1 |
-| Every business operation requires a valid session and a role check | RF-NEG-06 | 1.1 |
-| The business machine is independent from the permission requests machine | RF-NEG-09 | 1.1 |
-| At least one business operation that needs a permission granted by Permissions | — | 1.1 |
-| Suite of the business machine: one test per row of the allowed and forbidden tables, plus the terminal states | — | 1.2 |
-| Four planted defects, one tag each, parent `practica-3` | — | 1.3 |
-| README sections `Pruebas` (one command) and `Defectos` (one line per defect naming the test) | — | 1.2, 1.3 |
-| Integration test with the real Permissions and the real business module, both faces | — | 1.4 |
-| Cumulative review: registration with activation, session, role rejection, password recovery, permission requests | RF-CA, RF-GP (verify only) | 1.5 |
-| `docs/maquina-de-estados.md` documents the new invoice machine | RF-NEG-03, 04, 05, 09 | 1.1 |
+### A. Document Manager (Core piece 3) — 2.0 pts + 1.0 pt (volume)
 
-Business features proposed for RF-NEG-02 (Franklin confirms the final list):
+Requirements: RF-DOC-01 to RF-DOC-05. Also RD-06, RD-07, RD-09.
+All operations require a valid session.
 
-1. Issue the invoice: the client builds the draft and the server creates and persists the invoice already issued, with its items and the delivery mark.
-2. Collect in cash or by transfer: register the payments that cover the total, with the amount received and the change.
-3. Leave the invoice as debt: register it with the name of the person who owes.
-4. Resolve pending transfers (Administrator): confirm or reject a transfer.
-5. Register debt payments (Administrator); the payment that covers the total moves the invoice to `Paid`.
-6. Cancel with a permission, requested by whoever collects and approved by an Administrator.
-7. Mark a delivery invoice as not delivered.
-8. Consult invoices (list and detail, by state). The Administrator also reads the edit history of an invoice.
+| ID | Acceptance criterion (from the brief) |
+|---|---|
+| RF-DOC-01 | "Subir un documento registrando nombre, tipo, tamaño, fecha y quién lo subió." / "El registro queda consultable con todos esos datos." |
+| RF-DOC-02 | "Listar los documentos que el usuario tiene permitido ver." / "El listado no incluye documentos eliminados ni de otros usuarios, salvo para el Administrador." |
+| RF-DOC-03 | "Descargar un documento." / "Solo el dueño o un Administrador lo logran; cualquier otro usuario recibe un rechazo." |
+| RF-DOC-04 | "Eliminar un documento de forma lógica, no física." / "Deja de aparecer en el listado, pero el registro sigue existiendo en el almacenamiento." |
+| RF-DOC-05 | The bytes live in a named volume, outside the image. After `docker compose down` (no `-v`) and `up`, the document is listed and downloads. |
+
+- RF-DOC-05 appears in the brief's section 1.3, not in its table; it is listed
+  here so it is planned and verified like the others.
+- The brief states who may delete only in the rubric: owner or Administrator,
+  and another Standard user is rejected. Apply that.
+- **The record** (`doc_documents`): id, original name, declared type, size in
+  bytes, uploader, branch, upload date, logical-delete date, deleter and the
+  storage key. Dates come from `IClock` (RD-11). The branch is the uploader's
+  branch from the session, never from the request body; for an Administrator it
+  is the global branch `Branch.AllId` ("Todas"), the row the seed already
+  creates. No foreign key to another piece's table: each module owns its data.
+- **Size limit: 5 MiB** (`PIRRY_LEDGER_DOCUMENT_MAX_BYTES`). The application's
+  general body limit is 1 MiB (ADR 015), so the upload route raises it the way
+  the image route already does (route limit = 5 MiB + 64 KiB of multipart
+  overhead). An absent or empty file is rejected in a controlled way (RD-07).
+- **Documents are generic**: no file type is inspected and nothing is decoded.
+  The declared type is stored as data and is not trusted for anything else;
+  downloads are always served as an attachment.
+- The server generates the storage key (a new `Guid`); the original name is
+  kept in the database only.
+- RD-06: authorization is enforced on the server. Declare the operations with
+  `.WithAccess(Operation.X)`; endpoints do not compare roles. Ownership is a
+  use-case rule in Application, compared by identity (like RF-GP-07).
+- Fits the existing architecture: a new Core piece with Domain / Application /
+  Infrastructure / Api, its own `DbContext` and migrations, its own table
+  prefix (`doc_`), `app.MapDocuments()` in the Host and no controllers there
+  (RD-01, RD-02). The Core must still compile without `Src/Business` (RD-03).
+- New module -> **its own test project from day one**: no app, no DB, no
+  network, in-memory doubles and a fake clock (RD-12). Test names in Spanish,
+  three phases each, one behavior each. A rejected operation also verifies that
+  nothing changed.
+
+### B. One-command container — 1.5 pts
+
+- `Dockerfile` (exists), `.dockerignore` (exists), `docker-compose.yml` (to
+  write), `.env.example` (to extend).
+- `docker compose up --build` from a clean clone, with nothing installed but
+  Docker and no manual steps (no creating a database, no running scripts, no
+  `dotnet ef`).
+- Services: `db`, `seaweedfs`, `migrate`, `mailer`, `mailpit`, `app`. They
+  reach each other by service name, not `localhost`.
+- Only the app publishes a port (`8090`); the database and SeaweedFS are not
+  reachable from outside the composition.
+- README section **Contenedor**: the command, the full address
+  (`http://localhost:8090`) and how to stop it. The README is verified by
+  running it, not by reading it.
+- `.dockerignore` leaves out dependencies, build folders (`bin/`, `obj/`) and
+  `.git`.
+
+### C. Data survives — 1.0 pt
+
+- The document bytes live in the named volume `pirry-ledger-documents`, mounted
+  at `/data` in the SeaweedFS service, outside the image (RF-DOC-05).
+- Application data (users, requests, document records) survives too (RD-09);
+  the database data folder goes in the second volume, `pirry-ledger-db-data`.
+- Acceptance test: upload -> `docker compose down` (no `-v`) -> `docker compose
+  up` -> the document is listed and downloads, and the registered user still
+  logs in.
+- The README names both volumes and shows how to see the bytes inside the
+  SeaweedFS volume, so the criterion is demonstrable and not only asserted.
+
+### D. External API with its key as a secret — 1.5 pts (SeaweedFS)
+
+**The operation (decided):** the Document Manager stores and serves the bytes
+through SeaweedFS's S3 API. The app is not a relay: it decides what is
+accepted, generates the key, and decides who may see the document.
+
+- Code in English, following the project's conventions; text the user sees in
+  Spanish; test names in Spanish.
+- The port lives in Application (`IDocumentStore`); the adapter
+  (`SeaweedDocumentStore`) lives in Infrastructure and talks S3 with the
+  existing `AmazonS3Client` pattern of ADR 015/016: `ServiceURL`,
+  `ForcePathStyle = true`, `UseChunkEncoding = false`. Tests run without
+  network using a fake (RD-12).
+- **The key is the SeaweedFS access key and secret key.** They travel in
+  environment variables from the unversioned `.env`; `.gitignore` excludes it.
+  The SeaweedFS service and the application read the same `.env` values, so the
+  bucket and the client always agree. The bucket is created by SeaweedFS at
+  startup (`S3_BUCKET`); the app never creates buckets.
+- `.env.example` is versioned with **every** variable the project needs and an
+  example value for each. Copying it to `.env` is the only step before
+  starting.
+- The key is not in code, `Dockerfile`, `docker-compose.yml`, the image, or any
+  commit of history. The compose file only references `${VARIABLE}`; the values
+  live in `.env`.
+- **No key or SeaweedFS down -> controlled rejection** with an understandable
+  message (RD-07, RD-08) and the rest of the project keeps working. The
+  application starts without the storage key: this differs from ADR 015's "all
+  variables are mandatory", because the brief requires the rest of the project
+  to keep working.
+- README section **API externa**: what SeaweedFS is (open source, Apache-2.0),
+  which operation uses it, the variable names, and a real example response
+  (without the key).
+- **Known risk, and how the README answers it.** The brief's examples are
+  third-party data APIs (weather, exchange rate, geolocation); SeaweedFS is a
+  real external service with a key, but it runs inside the same composition.
+  The brief's "with the example key (controlled rejection)" therefore does not
+  happen literally: the example key works, because the same example key
+  configures the server. The README shows the two rejection paths with the
+  exact commands: the key removed from `.env` (503, storage not configured) and
+  `docker compose stop seaweedfs` (503, storage not available). The storage
+  port is the seam where a third-party service would be added, without touching
+  the domain.
+
+### E. Cumulative review — 2.0 pts
+
+Started from the tag, following the README to the letter, six fronts must work:
+registration with email activation; login and logout; a Standard user rejected
+on an Administrator operation; password recovery; permission requests (create,
+approve, reject, out-of-table transitions rejected); and Business (a valid
+operation works, the prohibited invoice transition is rejected).
 
 ## Out of scope (do not build)
 
-- Notifications and reports of the business module (RF-NEG-07, RF-NEG-08, week 10). That includes the daily sales total and how pending delivery invoices count in it.
-- Attaching documents to an entity (RF-NEG-10, optional).
-- Investment (purchases and expenses), profit and the owner view.
-- A delivery module: customers, addresses, couriers, delivery fee. Delivery exists only as a mark on the invoice.
-- A debtor entity, or any control of several debts of the same person. A debt stores a name and nothing else.
-- Storing a photo or any proof of a transfer. Franklin verifies transfers outside the system.
-- A fiscal receipt (no NCF for now).
-- Audit records (RF-AUD-02, week 14).
-- Any change to the mail queue, and any new functionality of Access control.
-
-## Decisions taken by Franklin
-
-1. **Business entity and states.** `Invoice` carries the machine. Seven states, in English because they are identifiers: `Draft`, `Issued`, `PendingVerification`, `Paid`, `InDebt`, `Cancelled`, `NotDelivered`. `Issued` is shown to the user as "pendiente". Terminal states: `Cancelled` and `NotDelivered`.
-2. **The number of states.** Franklin states that the professor confirmed it: the machine has a minimum of 3 states and **no upper limit**. The brief and the Práctica 1 rubric say "entre 3 y 5". Franklin authorizes writing "from 3 to N states" in the agent documents and keeps the professor's message as evidence. The text of the requirement files and of the professor's brief is not changed; the brief carries a repository note about it, so the rule "the brief wins" does not make the agent stop.
-3. **Allowed transitions.**
-
-   | desde | hacia | quién la ejecuta | condición |
-   |---|---|---|---|
-   | `Draft` | `Issued` | Quien cobra | Tiene al menos un ítem. Aquí se marca si es delivery. |
-   | `Issued` | `Paid` | Quien cobra | Los pagos cubren el total y ninguno es transferencia. |
-   | `Issued` | `PendingVerification` | Quien cobra | Algún pago es transferencia. |
-   | `Issued` | `InDebt` | Quien cobra | Exige el nombre de la persona. |
-   | `Issued` | `Cancelled` | Quien cobra | Sin permiso. |
-   | `Issued` | `NotDelivered` | Quien cobra | La factura es de delivery. |
-   | `PendingVerification` | `Paid` | Administrador | La transferencia llegó. |
-   | `PendingVerification` | `InDebt` | Administrador | Transferencia rechazada. Exige el nombre de la persona. |
-   | `InDebt` | `Paid` | Administrador | Los abonos cubren el total de la deuda. |
-   | `Paid` | `Cancelled` | Quien solicitó el permiso | Existe un permiso aprobado para esa factura; se consume al anular. |
-   | `InDebt` | `Cancelled` | Quien solicitó el permiso | Igual que la anterior. |
-
-   Of the 49 possible pairs, 11 are allowed and 38 are forbidden, including the 7 that leave the state unchanged.
-4. **Forbidden transitions, explicit.** `Issued -> Draft` (the first of the table); `Draft -> Paid`, `InDebt`, `PendingVerification`, `Cancelled`, `NotDelivered`; `PendingVerification -> Draft`, `Issued`, `Cancelled`, `NotDelivered`; `Paid -> Draft`, `Issued`, `PendingVerification`, `InDebt`, `NotDelivered`; `InDebt -> Draft`, `Issued`, `PendingVerification`, `NotDelivered`; every exit from `Cancelled` and `NotDelivered`. `Paid -> Cancelled` used to be the forbidden one in Práctica 1; it is now allowed with a permission, so the table of `docs/maquina-de-estados.md` changes.
-5. **Who is who.** "Quien cobra" is a Standard user, and only a Standard user: an Administrator who tries to issue, collect or edit an invoice is rejected on the server. The Administrator (Franklin) verifies transfers, registers debt payments, approves cancellations and is the only one who can read the edit history. Because the requester is always Standard and the approver always an Administrator, RF-GP-07 never blocks the cancellation flow. Whoever works the counter needs a Standard account.
-6. **Payments.** An invoice may be paid with several payments (split payment), each with a method (`Cash` or `Transfer`) and an amount. If any payment is a transfer, the whole invoice goes to `PendingVerification`. A transfer proof is not stored. Closed while building the rules: every amount has two exact decimals and is never rounded; payments cannot exceed the total; at the counter a cash payment requires the amount received and the change is `received - amount`; a delivery invoice stores only the amount, because nobody at the counter knows what the courier received or returned; a debt payment is never registered as a sale payment.
-7. **Debt.** A debt always carries the name of the person, with no exception, and the name fits the column: 120 characters at most. Only an Administrator registers debt payments (amount and date, no method: `PaymentMethod.None`, no received and no change). A payment is registered only while the invoice is `InDebt` and cannot exceed what is still owed; the one that covers the total moves the invoice to `Paid` in the same operation, and the transition is resolved before the payment is added, so a rejection leaves the invoice untouched. Payments of a debt are records of the invoice, not transitions. A transfer is confirmed or rejected only from `PendingVerification`; a rejected transfer stays `Rejected`, does not count towards the paid amount, and the invoice goes to `InDebt`.
-8. **Delivery.** The invoice is marked as delivery when it is issued. The paper invoice is handed out while the system still shows it as `Issued`; when the courier pays, whoever collects marks it paid. A delivery that cannot be delivered stays `Issued` until it is marked `NotDelivered` (terminal; if the customer shows up again, a new invoice is made). Only delivery invoices can go to `NotDelivered`.
-9. **Editing and the draft.** The draft lives only in the client: nothing is persisted while the invoice is `Draft`, because storing a draft costs a write per touched item and leaves rows that nobody closes. The server receives the complete invoice and persists it already issued, so no row is ever stored in `Draft`. Items can be changed while the invoice is `Issued` and are frozen in every other state; an edit always leaves at least one item. Every edit made while the invoice is `Issued` is recorded with the `Guid` of the Standard user who made it and the instant (injected clock, RD-11); the name is resolved by whoever reads the history, and the history exposes only that `Guid`. The notifier port (`IInvoiceEditedNotifier`) is wired to `NoOpInvoiceEditedNotifier` until week 11, so no notification leaves the operation yet. Only an Administrator can read that history.
-10. **Permission to cancel.** Cancelling an invoice that is `Paid` or `InDebt` requires a permission for that single invoice. It is requested by the user who collects, approved by an Administrator, and consumed when used: each cancellation asks for its own permission. The permission name follows the convention `CancelInvoice:<invoice id>` and fits the `varchar(64)` columns. Permissions gets one new operation in its contract that deletes the grant. No migration (see "Deferred"). **Closed in phase 3 (ADR 011):** the GUID goes in canonical `D` form and lowercase, so one invoice has one name; `IPermissionAuthority.ConsumeAsync(userId, permissionName)` returns `true/false` without throwing when there is no grant; it only deletes the caller's `(user_id, permission_name)` pair; the cancellation resolves the transition in memory, consumes the grant, and then saves the invoice, rejecting before saving if consumption returns `false`. **Closed in phase 4 (ADR 012):** the business operation asks for the permission itself through `IPermissionRequestGateway`, a contract in `Core.Contracts` implemented by Permissions, so `Business.Application` keeps depending only on the Core contracts (RD-03). The caller's identity travels as a `Guid` taken from the session the filter already validated. Only a `Pending` request blocks; a `Rejected` one lets the user ask again. The endpoint answers `403` when the request was just created and `409` when one was already pending, with different messages, and the invoice is not saved in either case.
-11. **Defects in this practice.** (1) Add `Issued -> Draft`. (2) Add `Cancelled -> Issued`, an exit from a terminal state. (3) Remove the check of the condition of `Draft -> Issued` (at least one item). (4) Remove the query to Permissions in the cancellation of a `Paid` or `InDebt` invoice; the integration test must detect it.
-12. **The documentation of the project.** `AGENTS.md` now says delivery is handled only at the invoicing level.
-13. **Defect procedure, the same as Práctica 2.** Each defect is a commit on a branch created from the tag `practica-3`, tagged `practica-3-defecto-N`, and never merged into `develop` or `main`. The branch is deleted; the tag keeps the commit alive. Work happens in `develop`, is merged into `main`, and `practica-3` is tagged there.
-14. **Logbook.** `docs/bitacora-practica-3.md`, a new file. The brief does not grade it; `AGENTS.md` requires it.
-
-## Open decisions (ask, do not assume)
-
-None for this iteration. ADR 011 (consumption of a permission grant, which touches ADR 008) and ADR 012 (the business operation requests the permission through a contract of the Core) were authorized by Franklin and are accepted, on 2026-10-30 and 2026-10-31. The step 0 reconnaissance is done: the real paths are in the pull requests and in the README.
-
-## Work plan
-
-The plan is written by behaviour, not by file name, because file names are confirmed in step 0. The workflow of `AGENTS.md` applies to every step: propose the plan of the step, wait for approval, write the tests and show them failing for the right reason, implement the minimum, run the command and show the real output, check the acceptance criterion point by point, and propose the commit. Every pull request ships its documentation and its entry in `docs/bitacora-practica-3.md` as its own commit, uses the four sections of the template, and is opened by Franklin. No push, merge or tag without his approval.
-
-**Step 0 — Reconnaissance (no code, no pull request).** Read, without changing anything: the business module (entity, states, state machine, persistence, test project), the public contract of Permissions and how it stores the requested permission, the permission request and grant entities, `ApprovePermissionRequest`, `PermissionGrantRepository`, the single place where Access control declares the role of each operation (RF-CA-05), the README and `docs/maquina-de-estados.md`. Report: real paths, what already exists, what is missing, and anything that contradicts this file. Stop and wait.
-
-**Step 1 — The invoice state machine** (RF-NEG-03, 04, 05, 09; RD-04). Seven states and the 11 allowed transitions resolved in one single component; the rest are rejected and leave the state unchanged. Rewrite the invoice part of `docs/maquina-de-estados.md` with the new tables (Spanish headers, English state names). Add RF-NEG-02, 06 and 09 to `business-module.md` and update the index. Tests first: one test per row of the allowed table, one per row of the forbidden table (rejection and unchanged state), one per terminal state. The machine references nothing of Permissions. The checks that belong to a transition (at least one item, delivery, payments) are proposed by the agent; the check of `Draft -> Issued` must be one single verification that can be removed on its own (defect 3).
-
-**Step 2 — The rules of the invoice.** Items editable while the invoice is `Issued` and frozen elsewhere (the draft lives in the client); issuing with at least one item and the delivery mark; payments with method and amount, split payments, amount received and change; any transfer sends the invoice to `PendingVerification`; debt with a mandatory name; debt payments by an Administrator, the one that covers the total moves the invoice to `Paid`; `NotDelivered` only for delivery invoices; the edit history of `Issued`. Persistence in the module's own tables with its own migration, and the data survive a restart (RD-09). Invalid input is a controlled rejection (RD-07). Tests first, one behaviour each.
-
-**Step 3 — Consuming a permission grant in Permissions.** Stop first: present ADR 011 with alternatives and trade-offs, and wait for Franklin. Then one new operation in the Permissions contract that deletes the grant, with tests in the Permissions suite. No migration (see Deferred). The agent proposes what happens when no grant exists and how the cancellation and the consumption stay consistent. The existing tests of Permissions are not weakened.
-
-**Step 4 — The business operations, protected.** Expose the six features as operations protected by session and role (RF-NEG-06, RD-06), with the role of each declared in the single place of Access control. A Standard user is rejected on the operations of the Administrator, and an Administrator is rejected on the operations of whoever collects. The cancellation of a `Paid` or `InDebt` invoice consults Permissions for `CancelInvoice:<invoice id>`; that one line is the target of defect 4. An operation requests that permission on behalf of the user. Tests include requests built by hand. The README explains how to provoke each feature.
-
-**Progress (2026-11-01).** Steps 1 to 5 are implemented and verified: the suite is green (301 tests) and every operation was exercised over HTTP against PostgreSQL, as README section 3.12 shows. Steps 1 to 4 are on `develop`; step 4 was merged in the pull request #63. Step 5, the integration test of section 1.4 of the brief, lives in `Tests/PirryLedger.Integration.Tests` and is explained in README section 3.13: Business and Permissions are real over EF InMemory, and only the two persistence ports of Access control are doubles (decision taken with Franklin on 2026-11-01). Its four tests were shown red for the right reason: removing the consumption of the grant in `CancelInvoice` turns those four and three Business tests red. Step 6, closing and delivery, is next. One real defect found while verifying step 4 over HTTP: the model did not declare that the domain generates the `Guid` keys, so EF took a new child row for an existing one and sent an `UPDATE` that affected zero rows (`500`). It is fixed and pinned by two tests; no migration, because the schema does not change.
-
-**Progress of step 6 (2026-11-01).** Closing is documented in the branch `docs/practica-3-closing`; the merge into `main`, the tag `practica-3` and the four defect tags wait for Franklin's authorization. The README `Defectos` section lists, for each defect, the file and line that are changed and the tests that failed when the defect was planted and then reverted, not tests read from the source. The five fronts of section 1.5 were walked over HTTP against PostgreSQL, running the README snippets as written, with a throwaway account that was deleted afterwards: registration with activation, session, rejection by role in both directions, password recovery and change, and permission requests created, approved, rejected with a mandatory reason and re-requested. Three documented request bodies did not match the API and are fixed: `nombre` for `name` (RF-CA-14), `codigo` for `code` (RF-CA-09) and `passwordActual`/`nuevapassword` for `currentPassword`/`newPassword` (RF-CA-22).
-
-**Step 5 — The integration test** (section 1.4 of the brief). A test project that references the real business module and the real Permissions, with no doubles and no running application. Face one: the cancellation is rejected while the request is not approved. Face two: it succeeds after an Administrator approves it. It also shows that the permission of one invoice does not open another, and that the grant is gone after it is used. Before tagging, break the line of defect 4 by hand and show this test failing.
-
-**Step 6 — Closing and delivery.** README sections `Pruebas` and `Defectos`; documentation checked against the code; the five fronts of section 1.5 verified by following the README. Then, with Franklin's authorization: merge into `main`, tag `practica-3`, plant the four defects from the tag, show each one failing at least one test, tag them, and push. Franklin submits the repository URL and the tag in Moodle.
+- RF-DOC-06, audit of uploads and deletions: arrives with Piece 6 in week 12,
+  not graded. No hooks or half-built audit tables.
+- RF-NEG-10, attaching documents to a business entity (optional, not asked
+  here). The Document Manager has no reference to Business.
+- Any file-type inspection, image processing, PDF parsing and the information
+  card (mobile client).
+- Mobile client (`pirry-ledger-mobile`), reports, administrator notice
+  (RF-NEG-07), investment, full inventory, AI invoice scanning.
+- Cloud deployment (Render/Railway/Neon) and R2 for documents.
+- Changing the existing state machines or weakening any existing test.
 
 ## Deferred
 
-Work and decisions consciously left out of this iteration. Nothing here is waiting for a decision: each item states what it blocks and why it is not being resolved now. Carried over from Práctica 2.
+| Item | What blocks it | Why it is not resolved now |
+|---|---|---|
+| Audit of document operations (RF-DOC-06) | Piece 6 does not exist yet | Scheduled for week 12; building it now would be a guess |
+| Documents attached to entities (RF-NEG-10) | Optional requirement, no decision to use it | Would create a Core -> Business coupling nobody asked for |
+| Third-party API with a real account key | The brief is satisfied by SeaweedFS | Only if the professor rejects a self-hosted external API |
+| Cloud deploy / R2 for documents | Needs a hosting decision | The brief only asks for a local composition |
 
-- **Do not run `dotnet ef migrations add` in the permissions module.** Its model declares no foreign keys to `ac_users`, and its migration snapshot was only generated on 2026-10-20. Until it is settled whether those keys belong in the model (declared by table name) or stay out of the database for good, any new migration would be generated from a model that contradicts how the tables were designed. The alternatives and their consequences are in the logbook of Práctica 2, Entry 8.
-- **The four foreign keys to `ac_users` are not in the database.** `requester_id`, `approver_id`, `user_id` and `granted_by_user_id` carry no referential constraint. Integrity comes from the application, which takes both identities from the authenticated session. It stays that way until the decision above is taken.
-- **Migration metadata is now complete for the branch-scope changes.** EF Core discovers `AddBranchesAndUserBranch` and `AddInvoiceBranchSnapshot`, including their `.Designer.cs` files; the remaining limitation is that no automated check guards future missing metadata.
-- **The business module owns its tables.** Migrations for the tables of the invoicing module are part of this iteration; none touch the permissions module.
-- **Daily sales and pending delivery invoices.** Franklin wants delivery invoices that are still `Issued` to count in the daily sales. It is decided in week 10 with the reports.
+## Decisions already taken (authorized)
 
-## Constraints
+These are closed. The agent writes the ADR, drafts it and waits for Franklin's
+review before pushing; it does not re-open them.
 
-- RD-12: no full application, no database and no SMTP server in the tests of the machine; independent tests; arrange, act and assert; one single command.
-- The integration test uses the real business module and the real Permissions, with no doubles replacing either of them, and without starting the application. It lives in its own test project that references both; `Business.Domain` and `Business.Application` reference only the contracts project of the Core, and `Business.Api` also references `Core.AccessControl.Api` to declare its routes (RD-01, RD-03, RF-NEG-09).
-- The two state machines share no code, types or enums (RF-NEG-09).
-- An Administrator who calls an operation of whoever collects is rejected on the server, and a test proves it. The edit history is readable only by an Administrator, and a test proves it.
-- Transitions are resolved in one single component (RD-04). The role requirement of each operation is declared in one readable place (RF-CA-05).
-- Test names are in Spanish and each one names the behaviour. Every rejection test also verifies that the state did not change.
-- A defect commit modifies only production code and never touches `Tests/`. Its message says which file and which line changed.
-- No existing test is deleted or weakened. If one must change, the pull request says why.
-- Do not break what is delivered: Access control keeps its tests passing (109 at the end of step 4), and the suites of Permissions keep passing.
-- Code is in English; code comments and user-visible messages are in Spanish.
-
-## Tests
-
-- `dotnet test pirry-ledger.slnx` from a clean clone is the single command of the README `Pruebas` section.
-- One test per row of the table of allowed transitions and of the table of forbidden ones of `docs/maquina-de-estados.md`, one test for each terminal state, and the tests of the rules of this iteration (items frozen outside `Issued`, mandatory name of the debt, change, payments).
-- The suite must fail for every planted defect. A defect that leaves the suite green means the suite is incomplete: extend it, re-tag `practica-3` and plant the defect again.
-
-## Logbook
-
-File: `docs/bitacora-practica-3.md`, a new file. It documents at least one real task of this practice delegated to the agent: what was asked, what it returned, and at least one case where the agent was wrong, how it was detected and how it was corrected, with evidence of the real session. Nothing is invented and nothing is reused from the previous logbooks. The agent drafts each entry; Franklin reviews it before it is pushed.
+1. **ADR 017** — Document storage in SeaweedFS over S3.
+2. **ADR 018** — Migrations run inside the composition.
+3. **ADR 019** — Email in the composition.
+4. **ADR 020** — Listen address inside a container (amends ADR 005).
 
 ## Definition of done
 
-- The invoicing module works with at least five separable features, protected by session and role, and the README explains how to provoke each one. Administrators are rejected on the operations of whoever collects.
-- `docs/maquina-de-estados.md` matches the code: tables of allowed and forbidden transitions, terminal states, and the note that the machines are independent.
-- The suite has one test per row of the tables and per terminal state, and passes at the tag with one command.
-- Four defect tags exist, each parent is `practica-3`, each commit touches only production code, and each one makes at least one test fail. The README `Defectos` names the test of each one. Defect 4 is detected by the integration test.
-- The integration test shows the operation rejected while the request is not approved and allowed after an Administrator approves it.
-- Access control and Permissions work in the five fronts of section 1.5, following the README.
-- Documentation updated in the same pull requests, including the requirement files and the index.
-- Tags pushed and the repository URL and tag name submitted in Moodle, after Franklin's authorization.
+Not done until each point has evidence (real output, rejections included).
+Last verification: GitHub Codespace, 2026-11-11.
 
-## How it will be checked
+- [x] RF-DOC-01 verified: `POST /api/documents` answered `201` with the record —
+      name, declared type, size, date, uploader and branch — and the listing
+      returned the same data. The real JSON is in the README.
+- [x] RF-DOC-02 verified for the Administrator: `GET /api/documents` answered
+      `200` with the documents of every user. The branch recorded was `Todas`
+      because the uploader was the Administrator.
+- [x] RF-DOC-03 verified for the owner: the download answered `200` with
+      `Content-Type: application/octet-stream`,
+      `Content-Disposition: attachment` and the same bytes that were uploaded.
+- [x] RF-DOC-04 verified: `DELETE` answered `204`, the document disappeared from
+      the listing (`200` with the other documents) and the row stayed in
+      `doc_documents` with `deleted_at_utc` and `deleted_by` set. The `psql`
+      query showed it as `eliminado = t` and `quien = t`.
+- [x] RF-DOC-03 for another Standard (rejected): with two Standards, one got
+      `403` on download and `403` on delete of the other's document, while the
+      Administrator got `200`. The Standard's listing showed only its own
+      document.
+- [x] RF-DOC-05 verified: after `docker compose down` (no `-v`) and
+      `docker compose up`, the download answered `200` and returned the same
+      content (`sobreviviente`) that had been uploaded before the restart.
+- [x] SeaweedFS integration: the round trip works against the real service;
+      missing key -> `503` configured; SeaweedFS stopped -> `503` unavailable;
+      the rest of the project keeps working. Both rejections were repeated in
+      the closing run, after the insert fix.
+- [x] Document test suite passes with `dotnet test pirry-ledger.slnx`: 483
+      tests, 0 failures. The insert bug was reproduced by a test that failed
+      with the same `DbUpdateConcurrencyException` before the fix.
+- [x] From a clean state (Codespace): `docker compose down -v`, copy
+      `.env.example` to `.env`, then `docker compose up --build -d`; the app
+      answers on `http://localhost:8090` and every service comes up.
+- [x] `docker compose config` shows only example values; only the app publishes
+      a port (`8090`), and neither the database nor SeaweedFS is reachable from
+      outside.
+- [x] Upload -> `docker compose down` -> `docker compose up` -> document listed
+      and downloaded, user logs in. Never `-v`. Verified: the download answered
+      `200` with the same bytes after the restart.
+- [x] `git check-ignore -v .env` matches; `git log --all -- .env` is empty; no
+      real key appears in any commit (only the example values of
+      `.env.example`).
+- [x] Six cumulative fronts walked through from the README commands, each with
+      its real output: activation `201` + `200`, session `200`/`204`/`401`,
+      Standard rejected `403`, recovery `202` + `204` + `204`, permissions `202`/
+      `204`/`400`/`204`, business `Issued` -> `Paid` + `400`.
+- [x] README has **Contenedor** and **API externa**, and every command that is
+      documented was executed, including reading the activation email from
+      Mailpit.
+- [x] Closing run: 49 checks, 0 failures (the logbook has the detail).
+- [x] `docs/current-iteration.md`, README and the four authorized ADRs in the
+      same PR. The PR is Franklin's; the branch has all of it.
+- [x] Bitácora entry: `docs/bitacora-practica-4.md`, as its own commit.
 
-`git clone` and `git checkout practica-3`; the command of the README `Pruebas` section; for each defect, `git diff practica-3 practica-3-defecto-N --stat`, the commit message, and the same command over the tag, which must report at least one failure; the README `Defectos` section against the tests that fail, and how to provoke each feature of the business; `docs/maquina-de-estados.md` against the code and the integration test; and Access control and Permissions started from the README, in their five fronts.
+## Status: concluded
 
-## Delivered earlier
+Práctica 4 is delivered (2026-11-11, GitHub Codespace). The evidence for every
+acceptance criterion is in the checklist above and in
+`docs/bitacora-practica-4.md`.
 
-Práctica 1 (Access control, mail queue and the structure of the business state machine), Asignación 2 (Permissions management and its first suite), Práctica 2 (full Permissions suite and its six planted defects) and Práctica 3 (the business module, its suite, its four planted defects and its integration test) are delivered. Their decisions live in `docs/adr/`; their commands in `README.md`; their briefs in `docs/assignments/`.
+What remains is Franklin's, and it is not code:
+
+- The pull request `develop` -> `main` that promotes the work.
+- The tag `practica-4`, on the merge commit in `main`. The agent does not tag.
+
+This file stays as the record of what the iteration asked and what it
+delivered. The next iteration replaces it.
+
+## How to work on this iteration
+
+- Plan first: files touched, design decisions and alternatives, how each
+  criterion is verified, what will **not** be done. Wait for Franklin's
+  approval.
+- Branch `feature/practica-4-documents-and-container`; never commit to `main`
+  or `develop`; no push, force-push, merge or tag without Franklin's
+  authorization.
+- One change per commit, English imperative subject, requirement ID when it
+  applies (e.g. `Add logical delete for documents (RF-DOC-04)`). Before
+  proposing a commit: `git status` and `git diff --staged`; no `bin/`, `obj/`,
+  generated files or secrets.
+- `git check-ignore -v <path>` before adding any file. Do not "fix" the ignored
+  `appsettings.*.local.json`. Never read or print `.env`; use `.env.example`.
+- PR uses `.github/PULL_REQUEST_TEMPLATE.md` with exactly its four sections.
+- Local shell is PowerShell; the Codespace is bash. Give both forms when a
+  command differs.

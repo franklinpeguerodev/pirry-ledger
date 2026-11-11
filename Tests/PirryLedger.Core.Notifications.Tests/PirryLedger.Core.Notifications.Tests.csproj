@@ -21,6 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Domain\PirryLedger.Core.Notifications.Domain.csproj" />
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Application\PirryLedger.Core.Notifications.Application.csproj" />
+    <!-- La configuracion SMTP vive en Infrastructure y se prueba aqui: ADR 019
+         separa "servidor con credenciales" de "servidor local sin ellas". -->
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Infrastructure\PirryLedger.Core.Notifications.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

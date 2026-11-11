@@ -25,6 +25,9 @@ public static class DependencyInjection
         services.AddDbContext<PermissionsDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        // ADR 018: el paso de migracion de la pieza.
+        services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.PermissionsMigration>();
+
         services.AddScoped<IPermissionRequestRepository, PermissionRequestRepository>();
         services.AddScoped<IPermissionGrantRepository, PermissionGrantRepository>();
 

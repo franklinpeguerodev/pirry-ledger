@@ -5,6 +5,10 @@ using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Permissions.Api;
 using PirryLedger.Core.Permissions.Infrastructure;
+using PirryLedger.Core.Documents.Api;
+using PirryLedger.Core.Documents.Application;
+using PirryLedger.Core.Documents.Infrastructure;
+using PirryLedger.Core.Documents.Infrastructure.Storage;
 using PirryLedger.Business.Infrastructure;
 using PirryLedger.Business.Api;
 // Host: composicion y arranque. Sin logica de negocio (RD-02) y sin controllers:
@@ -18,6 +22,7 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Host;
 
 const string SendMailCommand = "--send-mail";
+const string MigrateCommand = "--migrate";
 
 // Archivo .env de desarrollo local: si existe, se cargan sus variables ANTES de
 // construir la configuracion, que las lee del entorno (RD-10: al final siguen
@@ -59,7 +64,12 @@ var connection = ReadRequiredConnection(builder.Configuration);
 // que se desincronicen (docs/adr/005-listen-address-from-public-base-url.md).
 // Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
 var baseUrl = ReadRequiredBaseUrl(builder.Configuration);
-builder.WebHost.UseUrls(baseUrl);
+
+// ADR 020: la variable sigue siendo la direccion publica (los enlaces) y el
+// puerto, pero el proceso escucha en TODAS las interfaces. Un puerto publicado
+// por Docker llega a la interfaz del contenedor, no a su loopback: atado a
+// localhost, el contenedor no respondería en la direccion del README.
+builder.WebHost.UseUrls(ListenAddressFor(baseUrl));
 
 builder.Services.AddAccessControl(connection, baseUrl);
 builder.Services.AddNotifications(
@@ -100,7 +110,24 @@ builder.Services.Configure<FormOptions>(options =>
 
 builder.Services.AddBusiness(connection, imageStorage);
 
+// Manejador de documentos (RF-DOC-01..04, ADR 017). La configuracion del
+// almacenamiento es opcional: si falta, la aplicacion arranca y las operaciones
+// de documentos responden 503 controlado; el resto del proyecto no se entera.
+builder.Services.AddDocuments(
+    connection,
+    EnvironmentConfiguration.ReadDocumentStorage(builder.Configuration),
+    EnvironmentConfiguration.ReadDocumentUploadOptions(builder.Configuration));
+
 var app = builder.Build();
+
+// ADR 018: aplica el esquema de todas las piezas y termina. Es el comando que
+// ejecuta el servicio "migrate" de la composicion, antes de que arranque la
+// API y antes de los seeds: el esquema primero, los datos de arranque despues.
+if (args.Any(argument => string.Equals(argument, MigrateCommand, StringComparison.OrdinalIgnoreCase)))
+{
+    await ApplyMigrations(app);
+    return;
+}
 
 await EnsureGlobalBranchSeed(app);
 
@@ -191,8 +218,75 @@ app.MapAccessControl();
 app.MapNotifications();
 app.MapPermissions();
 app.MapBusiness();
+app.MapDocuments();
 
 app.Run();
+
+// ADR 020: la variable dice la direccion publica y el puerto; el host de
+// escucha es siempre 0.0.0.0, para que un puerto publicado por Docker llegue.
+// Solo se admite http: hoy no hay certificado ni TLS, y aceptar https en la
+// variable produciria un arranque que no responde.
+static string ListenAddressFor(string publicBaseUrl)
+{
+    if (!Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var uri))
+    {
+        Console.Error.WriteLine(
+            $"La variable de entorno {EnvironmentConfiguration.BaseUrlVariable} no es una dirección válida. " +
+            "El README explica el formato.");
+
+        Environment.Exit(1);
+    }
+
+    if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine(
+            $"La variable de entorno {EnvironmentConfiguration.BaseUrlVariable} usa {uri.Scheme}, " +
+            "pero la API solo escucha http. El README explica el formato.");
+
+        Environment.Exit(1);
+    }
+
+    return $"http://0.0.0.0:{uri.Port}";
+}
+
+// ADR 018: recorre los pasos de migracion registrados por las piezas y para en
+// el primero que falla. El Host no conoce el DbContext de ninguna pieza: solo
+// pide IModuleMigration y lo ejecuta.
+static async Task ApplyMigrations(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+
+    var migrations = scope.ServiceProvider.GetServices<IModuleMigration>();
+
+    if (!migrations.Any())
+    {
+        Console.Error.WriteLine("No hay pasos de migracion registrados. Código: MIGRATION_MISSING.");
+        Environment.Exit(1);
+    }
+
+    foreach (var migration in migrations)
+    {
+        try
+        {
+            await migration.ApplyAsync(CancellationToken.None);
+
+            Console.WriteLine($"Migraciones aplicadas: {migration.Name}.");
+        }
+
+        catch (Exception error)
+        {
+            // El codigo de salida hace que la composicion no arranque la API.
+            // Se escribe la pieza y un codigo corto, y el mensaje del fallo para
+            // poder diagnosticarlo. Nada de esto sale en una respuesta de la
+            // API (RD-08).
+            Console.Error.WriteLine(
+                $"No se pudieron aplicar las migraciones de {migration.Name}. " +
+                $"Código: MIGRATION_FAILED. {error.Message}");
+
+            Environment.Exit(1);
+        }
+    }
+}
 
 // Busca un .env desde el directorio de trabajo hacia arriba y lo carga en el
 // proceso. No es un error que falte: no encontrarlo significa que las variables

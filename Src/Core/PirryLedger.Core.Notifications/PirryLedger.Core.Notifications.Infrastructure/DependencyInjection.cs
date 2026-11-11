@@ -21,6 +21,9 @@ public static class DependencyInjection
         services.AddDbContext<NotificationsDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        // ADR 018: el paso de migracion de la pieza.
+        services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.NotificationsMigration>();
+
         services.AddSingleton(smtp);
         services.AddSingleton<IEmailTransporter, MailKitEmailTransporter>();
         services.AddScoped<IEmailQueueRepository, EmailQueueRepository>();

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- El adaptador de S3 es el mismo SDK que usa el negocio para R2
+         (ADR 015): SeaweedFS habla el mismo protocolo. -->
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.11" />
+    <!-- EF Core Design solo para generar las migraciones; el resto del tiempo
+         queda fuera del runtime. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.4" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- La prueba comprueba como viaja la peticion al almacenamiento sin tocar
+         la red (mismo criterio que el adaptador de R2, ADR 016). -->
+    <InternalsVisibleTo Include="PirryLedger.Core.Documents.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PirryLedger.Core.Documents.Application\PirryLedger.Core.Documents.Application.csproj" />
+    <ProjectReference Include="..\PirryLedger.Core.Documents.Domain\PirryLedger.Core.Documents.Domain.csproj" />
+    <ProjectReference Include="..\..\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

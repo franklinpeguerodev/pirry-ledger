@@ -1,0 +1,175 @@
+# Composicion de Pirry Ledger para la Practica 4 (docs/current-iteration.md).
+#
+# Quien clona el repositorio copia .env.example a .env y ejecuta:
+#
+#     docker compose up --build
+#
+# y la aplicacion responde en http://localhost:8090.
+#
+# Reglas que esta composicion respeta:
+# - Solo la aplicacion publica un puerto. La base de datos y SeaweedFS solo se
+#   alcanzan dentro de la red de la composicion, por el nombre del servicio.
+# - Ninguna clave viaja en este archivo: todo lo sensible se interpola desde
+#   .env, que no se versiona (RD-10).
+# - El esquema se aplica antes de arrancar la API: el servicio "migrate" corre
+#   el comando --migrate y la aplicacion espera a que termine bien (ADR 018).
+#
+# Variables: .env.example trae todas, con un valor de ejemplo para cada una.
+
+name: pirry-ledger
+
+# Entorno comun de los tres procesos que usan la imagen de la aplicacion
+# (migracion, API y enviador de correo). Un solo sitio para que no se
+# desincronicen.
+x-app-environment: &app-environment
+  # La base de datos se alcanza por el nombre del servicio, nunca por localhost.
+  ConnectionStrings__PirryLedger: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+
+  # Direccion publica: arma los enlaces de activacion y fija el puerto donde
+  # escucha la API. El proceso escucha en 0.0.0.0 (ADR 020), asi que el puerto
+  # publicado llega. Sin esta variable la aplicacion no arranca (ADR 005),
+  # asi que aqui se exige con un mensaje claro.
+  PIRRY_LEDGER_PUBLIC_BASE_URL: "${PIRRY_LEDGER_PUBLIC_BASE_URL:?falta PIRRY_LEDGER_PUBLIC_BASE_URL en el archivo .env: copia .env.example a .env}"
+
+  # Primer Administrator (ADR 002). Opcional: sin estas variables no se crea
+  # ninguno y la aplicacion arranca igual.
+  PIRRY_LEDGER_FIRST_ADMIN_EMAIL: "${PIRRY_LEDGER_FIRST_ADMIN_EMAIL}"
+  PIRRY_LEDGER_FIRST_ADMIN_PASSWORD: "${PIRRY_LEDGER_FIRST_ADMIN_PASSWORD}"
+  PIRRY_LEDGER_FIRST_ADMIN_NAME: "${PIRRY_LEDGER_FIRST_ADMIN_NAME}"
+
+  # Correo saliente: apunta a la bandeja de la composicion (ADR 019).
+  PIRRY_LEDGER_SMTP_HOST: "${PIRRY_LEDGER_SMTP_HOST}"
+  PIRRY_LEDGER_SMTP_PORT: "${PIRRY_LEDGER_SMTP_PORT}"
+  PIRRY_LEDGER_SMTP_SECURITY: "${PIRRY_LEDGER_SMTP_SECURITY}"
+  PIRRY_LEDGER_SMTP_USER: "${PIRRY_LEDGER_SMTP_USER}"
+  PIRRY_LEDGER_SMTP_PASSWORD: "${PIRRY_LEDGER_SMTP_PASSWORD}"
+  PIRRY_LEDGER_SMTP_FROM: "${PIRRY_LEDGER_SMTP_FROM}"
+
+  # Almacenamiento de documentos en SeaweedFS (ADR 017). El endpoint es el
+  # nombre del servicio dentro de la red; las claves vienen de .env.
+  PIRRY_LEDGER_STORAGE_ENDPOINT: "http://seaweedfs:8333"
+  PIRRY_LEDGER_STORAGE_ACCESS_KEY: "${PIRRY_LEDGER_STORAGE_ACCESS_KEY}"
+  PIRRY_LEDGER_STORAGE_SECRET_KEY: "${PIRRY_LEDGER_STORAGE_SECRET_KEY}"
+  PIRRY_LEDGER_STORAGE_BUCKET: "${PIRRY_LEDGER_STORAGE_BUCKET}"
+  PIRRY_LEDGER_DOCUMENT_MAX_BYTES: "${PIRRY_LEDGER_DOCUMENT_MAX_BYTES}"
+
+  # Imagenes del catalogo (ADR 015, sin cambios). Las siete siguen siendo
+  # obligatorias para arrancar (la aplicacion se detiene si falta una), asi que
+  # aqui se exigen con un mensaje claro. Con los valores de ejemplo de
+  # .env.example la aplicacion levanta y la subida de imagenes responde 503
+  # controlado.
+  PIRRY_LEDGER_R2_ACCOUNT_ID: "${PIRRY_LEDGER_R2_ACCOUNT_ID:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_ACCESS_KEY_ID: "${PIRRY_LEDGER_R2_ACCESS_KEY_ID:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_SECRET_ACCESS_KEY: "${PIRRY_LEDGER_R2_SECRET_ACCESS_KEY:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_BUCKET: "${PIRRY_LEDGER_R2_BUCKET:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_ENDPOINT: "${PIRRY_LEDGER_R2_ENDPOINT:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES: "${PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_IMAGE_MAX_BYTES: "${PIRRY_LEDGER_IMAGE_MAX_BYTES:?falta este valor en el archivo .env: copia .env.example a .env}"
+
+services:
+  # PostgreSQL. Sin puertos publicados: no es accesible desde fuera de la
+  # composicion.
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?falta POSTGRES_USER en el archivo .env: copia .env.example a .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en el archivo .env: copia .env.example a .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?falta POSTGRES_DB en el archivo .env: copia .env.example a .env}"
+    volumes:
+      # Los datos de la aplicacion sobreviven a "docker compose down" (sin -v).
+      - pirry-ledger-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # SeaweedFS (open source, Apache-2.0) como API externa de almacenamiento
+  # (ADR 017). "mini" es el modo de un solo nodo documentado por el proyecto:
+  # levanta master, volume, filer y la puerta de S3 en un proceso y crea el
+  # bucket de S3_BUCKET al arrancar.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.53
+    command: ["mini", "-dir=/data"]
+    environment:
+      # Las mismas credenciales que usa la aplicacion: vienen de .env y no se
+      # escriben en este archivo.
+      AWS_ACCESS_KEY_ID: "${PIRRY_LEDGER_STORAGE_ACCESS_KEY}"
+      AWS_SECRET_ACCESS_KEY: "${PIRRY_LEDGER_STORAGE_SECRET_KEY}"
+      S3_BUCKET: "${PIRRY_LEDGER_STORAGE_BUCKET}"
+    volumes:
+      # Los bytes de los documentos viven aqui, fuera de la imagen (RF-DOC-05).
+      - pirry-ledger-documents:/data
+    restart: unless-stopped
+
+  # Aplica el esquema de todas las piezas y termina (ADR 018). La API no
+  # arranca hasta que este servicio sale con 0.
+  #
+  # El comando es solo el argumento: la imagen trae el ENTRYPOINT
+  # ["dotnet", "PirryLedger.Host.dll"], y Compose agrega este command despues.
+  migrate:
+    build: .
+    image: pirry-ledger-app
+    command: ["--migrate"]
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # La API. Es el unico servicio que publica un puerto (seccion 1.2 del
+  # enunciado). El puerto del host y el del contenedor son el mismo numero.
+  # Sin command: la imagen ya arranca el Host con su ENTRYPOINT.
+  app:
+    build: .
+    image: pirry-ledger-app
+    environment: *app-environment
+    ports:
+      - "8090:8090"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      seaweedfs:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
+  # El enviador de correo (ADR 007 y ADR 019): el mismo comando de siempre, en
+  # bucle, como proceso aparte. La aplicacion nunca envia correo por su cuenta.
+  #
+  # El bucle va en el ENTRYPOINT: la imagen trae
+  # ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"], asi que un `command` con
+  # "sh -c ..." se le agregaria como argumentos y el contenedor arrancaria la
+  # API en vez del enviador. Con entrypoint /bin/sh -c, el command es el script.
+  mailer:
+    build: .
+    image: pirry-ledger-app
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"]
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
+  # Bandeja SMTP de la composicion (ADR 019). No publica puertos: el revisor
+  # lee los mensajes desde dentro de la red, con el comando que documenta el
+  # README.
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    restart: unless-stopped
+
+volumes:
+  # Nombres fijos: los del README y los de la definicion de terminado.
+  pirry-ledger-documents:
+    name: pirry-ledger-documents
+  pirry-ledger-db-data:
+    name: pirry-ledger-db-data

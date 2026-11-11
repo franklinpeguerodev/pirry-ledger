@@ -98,6 +98,14 @@ public enum Operation
     SetProductImage,
     RemoveProductImage,
     SyncProductImages,
+
+    // Manejador de documentos (RF-DOC-01..04, ADR 017). Las cuatro exigen una
+    // session valida; quien es duenio de cada documento lo decide el caso de
+    // uso, no esta tabla.
+    UploadDocument,
+    ListDocuments,
+    DownloadDocument,
+    DeleteDocument,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica

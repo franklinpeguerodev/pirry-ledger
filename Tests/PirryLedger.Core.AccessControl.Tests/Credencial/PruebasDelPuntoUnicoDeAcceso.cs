@@ -5,6 +5,7 @@ using PirryLedger.Core.AccessControl.Domain.Enums;
 using PirryLedger.Core.AccessControl.Infrastructure;
 using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Business.Api;
+using PirryLedger.Core.Documents.Api;
 using PirryLedger.Core.Permissions.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -77,6 +78,13 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(PirryLedger.Business.Application.UseCases.SyncProductImages),
         typeof(PirryLedger.Business.Application.ProductImageOptions),
         typeof(PirryLedger.Business.Application.Ports.IProductImageRepository),
+        // Casos de uso de la pieza de documentos y sus opciones de subida, que
+        // las rutas de MapDocuments piden por inyeccion.
+        typeof(PirryLedger.Core.Documents.Application.UseCases.UploadDocument),
+        typeof(PirryLedger.Core.Documents.Application.UseCases.ListDocuments),
+        typeof(PirryLedger.Core.Documents.Application.UseCases.DownloadDocument),
+        typeof(PirryLedger.Core.Documents.Application.UseCases.DeleteDocument),
+        typeof(PirryLedger.Core.Documents.Application.DocumentUploadOptions),
     ];
 
     // Las rutas reales, leidas de la aplicacion construida. No hay ningun array de
@@ -97,6 +105,7 @@ public class PruebasDelPuntoUnicoDeAcceso
         app.MapAccessControl();
         app.MapPermissions();
         app.MapBusiness();
+        app.MapDocuments();
 
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(fuente => fuente.Endpoints)

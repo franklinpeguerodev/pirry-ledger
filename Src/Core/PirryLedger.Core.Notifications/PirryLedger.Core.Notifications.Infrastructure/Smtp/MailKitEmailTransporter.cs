@@ -34,7 +34,13 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
                 TranslateSslMode(_configuration.SecurityMode),
                 cancellationToken);
 
-            await client.AuthenticateAsync(_configuration.User, _configuration.Password, cancellationToken);
+            // ADR 019: un servidor local sin credenciales no autentica. Antes
+            // se autenticaba siempre, y con Mailpit (usuario y contrasena
+            // vacios) el intento fallaba y el correo no salia nunca.
+            if (_configuration.HasCredentials)
+            {
+                await client.AuthenticateAsync(_configuration.User, _configuration.Password, cancellationToken);
+            }
 
             var message = new MimeMessage();
             message.From.Add(MailboxAddress.Parse(_configuration.From));
