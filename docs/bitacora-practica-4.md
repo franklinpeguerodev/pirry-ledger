@@ -233,4 +233,141 @@ avisos y un `dependency failed to start`.
 advertencias, 483 pruebas en verde, y la corrida de 49 comprobaciones sin fallos.
 Falta el push, el PR y la etiqueta, que son decisiones mías.
 
+---
+
+### Entrada 8 — La promoción a `main`, la etiqueta y el cierre (2026-11-10)
+
+**Qué se pidió.** Cerrar la Práctica 4: preparar el pull request que promueve
+`develop` a `main`, con el cuerpo completo y la evidencia de cada criterio de
+aceptación, y dejar la práctica cerrada con su bitácora y su iteración marcadas
+como terminadas. La etiqueta `practica-4` la pongo yo, porque la decisión de
+dónde se etiqueta es del dueño del repositorio.
+
+**Qué devolví.** Tres commits en la rama `docs/practica-4-closing`, desde
+`develop`:
+
+1. `69b3f93` — **las cifras del README corregidas contra el código entregado**.
+2. `docs: record the closing of Práctica 4 in the logbook` — esta entrada.
+3. `docs: mark the Práctica 4 iteration as concluded in current-iteration.md`.
+
+Y el cuerpo del pull request `develop` → `main`, con las cuatro secciones de
+`.github/PULL_REQUEST_TEMPLATE.md` y la salida real de cada comprobación.
+
+**Qué se corrigió del README.** El README es lo que el revisor sigue al pie de
+la letra, y en cuatro puntos ya no describía lo entregado:
+
+| Punto | Lo que decía | Lo que hace el código |
+|---|---|---|
+| Variables de entorno | "la plantilla con las dieciocho variables" | `.env.example` tiene **25**: la composición añadió las tres `POSTGRES_*` y las cuatro `PIRRY_LEDGER_STORAGE_*` |
+| Tablas del esquema | "catorce tablas de módulo" y "las cinco de `bil_`" | Son **dieciséis**: faltaban `bil_product_images` y `bil_image_revision`, así que la consulta SQL de esa sección devolvía dos filas más de las que el README prometía |
+| Piezas del Host | "`Program.cs` solo hace `app.MapAccessControl()`, `app.MapPermissions()` y `app.MapNotifications()`" | Hace **cinco**: faltan `app.MapBusiness()` y `app.MapDocuments()`. El diagrama tampoco tenía la pieza Documents |
+| La iteración | "La iteración actual (Práctica 1) entrega la primera pieza funcional del Core" | describe solo el Control de acceso, de la primera práctica |
+
+Un quinto punto era la nota de la dependencia cruzada entre piezas del Core:
+apuntaba a "decisión 5" de `docs/current-iteration.md`, y la reescritura de la
+Práctica 4 ya no tiene esa decisión. Ahora apunta a `docs/bitacora-asignacion-2.md`,
+que es donde vive el razonamiento, y menciona que **Documents** referencia
+`AccessControl` por la misma razón que `Permissions`.
+
+**Dónde se equivocó el agente, y cómo lo detecté.** En el plan de cierre
+afirmé que el README tenía "un markdown roto" en la línea de la dependencia
+cruzada, donde el nombre del archivo quedaba pegado a la palabra anterior.
+**Era falso.** Al leer los bytes del archivo, la línea sí tenía el espacio: lo
+que leí como markdown roto era un artefacto de la herramienta de edición. La
+afirmación real —que el puntero a la "decisión 5" estaba roto— sí era cierta,
+y la corregí. La lección: una suposición sobre el contenido de un archivo se
+comprueba leyendo el archivo, no mirando el resultado de una edición anterior.
+
+En la misma línea, el agente redactó primero "las cuatro de `bil_` sí se
+referencian entre ellas, pero se crean en la misma migración" y, al
+comprobar las migraciones una por una, resultó que no era exacto: hay cinco
+claves foráneas entre las tablas de `bil_` y dos de ellas se crean en
+migraciones distintas (`AddProductCatalog` y `AddProductImages`). La frase
+correcta es que se referencian dentro de la misma pieza y las aplica EF Core
+en el orden de sus migraciones. Se corrigió antes de commitear.
+
+**Qué verifiqué, con la salida real.**
+
+```powershell
+dotnet build pirry-ledger.slnx --configuration Release
+```
+
+```
+Compilación correcta.
+    0 Advertencia(s)
+    0 Errores
+```
+
+```powershell
+dotnet test pirry-ledger.slnx --configuration Release
+```
+
+| Suite | Pruebas |
+|---|---|
+| `PirryLedger.Core.AccessControl.Tests` | 155 |
+| `PirryLedger.Business.Tests` | 220 |
+| `PirryLedger.Core.Documents.Tests` | 40 |
+| `PirryLedger.Core.Permissions.Tests` | 52 |
+| `PirryLedger.Core.Notifications.Tests` | 12 |
+| `PirryLedger.Integration.Tests` | 4 |
+
+**483 superadas, 0 con error.** Los mismos números que la entrada 7.
+
+La clave fuera del repositorio, comprobado en local:
+
+```powershell
+git check-ignore -v .env
+git log --all -- .env
+```
+
+La primera devuelve `.gitignore:153:.env .env`; la segunda **no devuelve
+nada**: no hay ningún `.env` en el historial, ni en ninguna rama.
+
+**Lo que no se pudo verificar.** Docker no está instalado en esta máquina
+(`docker` no está en el `PATH`), así que **la parte de contenedor y de API
+externa no se pudo volver a correr hoy**. La evidencia de esa parte es la de
+la entrada 7, en el Codespace del 2026-11-11: la corrida de 49 comprobaciones
+sin fallos, con salida real por criterio. La revisión acumulada de los seis
+frentes está en la entrada 6, con su salida real. Lo que sí se verificó hoy en
+local es la suite completa y el build.
+
+**Qué tiene que verificar Franklin.**
+
+```powershell
+git log --oneline origin/main..develop
+git diff --shortstat origin/main..develop
+```
+
+Debe decir **30 commits** y **79 archivos, +5010 / −429**: exactamente lo que
+el pull request `develop` → `main` lleva a `main`.
+
+```powershell
+dotnet build pirry-ledger.slnx --configuration Release
+dotnet test pirry-ledger.slnx --configuration Release
+```
+
+Debe decir 0 advertencias, 0 errores y **483 superadas, 0 con error**.
+
+Y, para la parte que esta máquina no tiene, la ruta del README en el Codespace:
+`cp .env.example .env`, `docker compose up --build`, y los seis frentes con sus
+cuerpos exactos.
+
+**Lo que queda pendiente, y es decisión de Franklin.** El pull request
+`develop` → `main` lo abro y lo mergeo yo. Después, la etiqueta:
+
+```powershell
+git tag -a practica-4 -m "Practice 4: document manager, container composition and external API"
+git push origin --tags
+```
+
+La etiqueta va sobre el commit de merge en `main`, como la `practica-3`. El
+agente no la crea: `docs/current-iteration.md` deja explícita esa decisión como
+del dueño del repositorio.
+
+**Lo que este pull request NO incluye.** La auditoría de subidas y eliminaciones
+(RF-DOC-06, Pieza 6, semana 12), adjuntar documentos a una entidad del negocio
+(RF-NEG-10, opcional), despliegue en la nube, mover las imágenes del catálogo a
+SeaweedFS (siguen en R2, ADR 015), y cualquier cambio en las máquinas de
+estados existentes. Ninguna prueba se debilitó ni se eliminó.
+
 
