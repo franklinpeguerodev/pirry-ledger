@@ -28,6 +28,9 @@ public static class DependencyInjection
         services.AddDbContext<AccessControlDbContext>(options =>
             options.UseNpgsql(connectionString));
 
+        // ADR 018: el paso de migracion de la pieza.
+        services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.AccessControlMigration>();
+
         // RF-CA-02: una sola implementacion de hash en el sistema. La registrada
         // aqui es la unica capa que ve el paquete de Argon2id.
         services.AddSingleton<Argon2Parameters>();

@@ -23,6 +23,12 @@
     <Project Path="Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure/PirryLedger.Core.Permissions.Infrastructure.csproj" />
     <Project Path="Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Api/PirryLedger.Core.Permissions.Api.csproj" />
   </Folder>
+  <Folder Name="/Src/Core/PirryLedger.Core.Documents/">
+    <Project Path="Src/Core/PirryLedger.Core.Documents/PirryLedger.Core.Documents.Domain/PirryLedger.Core.Documents.Domain.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Documents/PirryLedger.Core.Documents.Application/PirryLedger.Core.Documents.Application.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Documents/PirryLedger.Core.Documents.Infrastructure/PirryLedger.Core.Documents.Infrastructure.csproj" />
+    <Project Path="Src/Core/PirryLedger.Core.Documents/PirryLedger.Core.Documents.Api/PirryLedger.Core.Documents.Api.csproj" />
+  </Folder>
   <Folder Name="/Src/Business/">
     <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/PirryLedger.Business.Domain.csproj" />
     <Project Path="Src/Business/PirryLedger.Business/PirryLedger.Business.Application/PirryLedger.Business.Application.csproj" />
@@ -32,6 +38,7 @@
   <Folder Name="/Tests/">
     <Project Path="Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj" />
+    <Project Path="Tests/PirryLedger.Core.Documents.Tests/PirryLedger.Core.Documents.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Core.Permissions.Tests/PirryLedger.Core.Permissions.Tests.csproj" />
     <Project Path="Tests/PirryLedger.Integration.Tests/PirryLedger.Integration.Tests.csproj" />

@@ -1,15 +1,15 @@
 # Pirry Ledger
 
-ERP para un negocio de comida rápida. Práctica 2 — Una suite que detecta defectos: Gestión de permisos.
+ERP para un negocio de comida rápida. Práctica 4 — El proyecto en un contenedor, el Manejador de documentos y una API externa.
 
 En este punto el repositorio tiene la cola de email con su persistencia y un
 comando para enviar lo pendiente. La API expone el alta de usuarios por el
 Administrador con activación por correo, el inicio de sesión con su tabla de
-sesiones, la recuperación de contraseña con aprobación del Administrador y la
-administración de usuarios. El módulo Permissions expone la gestión de
-solicitudes de permiso con su máquina de estados y su suite de pruebas. El
-módulo Business tiene la máquina de estados de `Invoice` con siete estados, sus
-once transiciones permitidas y su suite de pruebas.
+sesiones, la recuperación de contraseña con aprobación del Administrador, la
+administración de usuarios, la gestión de solicitudes de permiso, el módulo de
+negocio con la máquina de estados de `Invoice` y el Manejador de documentos.
+Todo el proyecto levanta con un solo comando de Docker, y los documentos se
+guardan en SeaweedFS, la API externa, con su clave fuera del repositorio.
 
 La administración de usuarios y facturas está ligada a sucursales. El
 Administrador trabaja con alcance global mediante la sucursal especial
@@ -32,6 +32,74 @@ Este README está ordenado como se usa:
 
 Todos los comandos están escritos para PowerShell en Windows. Sigue los pasos
 en orden solo la primera vez; después, los pasos 5 a 8 son los que se repiten.
+
+### Contenedor (Docker)
+
+La forma recomendada: **no hace falta instalar nada salvo Docker**. Sirve igual
+en Linux (incluido un GitHub Codespace) y en Windows.
+
+1. Clona el repositorio y entra en él.
+2. Copia el archivo de ejemplo. Es el **único** paso previo:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   En PowerShell: `Copy-Item .env.example .env`
+
+3. Arranca todo con un solo comando:
+
+   ```bash
+   docker compose up --build
+   ```
+
+4. La aplicación responde en **<http://localhost:8090>**. En un Codespace, el
+   puerto 8090 se reenvía solo y la misma dirección funciona en tu navegador.
+
+   Para comprobar que está viva:
+
+   ```bash
+   curl -i http://localhost:8090/api/documents
+   ```
+
+   Debe responder `401` con `Sesion no valida.`: la ruta existe y exige sesión.
+
+5. Para detener el proyecto:
+
+   ```bash
+   docker compose down
+   ```
+
+   Sin `-v`, los datos se conservan (los volúmenes `pirry-ledger-documents` y
+   `pirry-ledger-db-data`). Con `docker compose down -v` se borra todo.
+
+Qué levanta la composición y por qué:
+
+| Servicio | Para qué |
+|---|---|
+| `db` | PostgreSQL 17. Solo visible dentro de la composición. |
+| `seaweedfs` | La API externa: guarda los bytes de los documentos (ADR 017). Solo visible dentro. |
+| `migrate` | Aplica el esquema con `--migrate` y termina; la API espera a que salga bien (ADR 018). |
+| `app` | La API. Es el **único** servicio con puerto publicado (`8090`). |
+| `mailer` | Ejecuta `--send-mail` en bucle: el correo se envía en un proceso aparte (ADR 007 y 019). |
+| `mailpit` | La bandeja de correo de la composición. Sin puerto publicado (ADR 019). |
+
+> **El bucle del enviador va en el `entrypoint`, no en el `command`.** La imagen
+> ya trae `ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"]`, y en Compose `command`
+> no reemplaza al entrypoint: se le **agrega** como argumento. Con
+> `command: ["sh","-c","while true; ..."]` el contenedor arrancaba la API en vez
+> del enviador y no se enviaba ningún correo. Por eso el `mailer` usa
+> `entrypoint: ["/bin/sh","-c"]` con el bucle en el `command`, y `migrate` usa
+> `command: ["--migrate"]`. Está en el ADR 019.
+
+El correo no se publica: se lee desde dentro de la red con el comando que
+explica la sección [API externa](#api-externa-seaweedfs).
+
+> El archivo `.env` no se versiona (RD-10). Este README nunca muestra su
+> contenido; todos los nombres de variables están en `.env.example`.
+
+Los pasos que siguen (Requisitos, Pasos 1 a 8) son el camino **sin** contenedor,
+para trabajar en el código con la base local.
 
 ### Requisitos
 
@@ -211,6 +279,10 @@ Resultado esperado: `0 Errores`, `0 Advertencias` y todas las pruebas pasan.
 
 ### Paso 6: aplicar las migraciones
 
+> **Con Docker no hace falta este paso.** La composición lo hace sola: el
+> servicio `migrate` ejecuta `--migrate` y la API espera a que termine
+> (ADR 018). Este paso es para trabajar sin contenedor, con tu base local.
+
 Ejecuta estos comandos **solo la primera vez que prepares esta base de datos**,
 o después de incorporar una migración nueva. EF Core registra las migraciones
 aplicadas, así que volver a ejecutar `database update` no duplica tablas, pero
@@ -227,29 +299,31 @@ $env:ConnectionStrings__PirryLedger = 'Host=localhost;Port=5432;Database=pirry_l
 
 Esa línea solo vive en la terminal abierta. En otra terminal hay que repetirla.
 
-Las cuatro piezas, en este orden:
+Las cinco piezas, en este orden:
 
 ```powershell
 dotnet ef database update --project Src/Core/PirryLedger.Core.AccessControl/PirryLedger.Core.AccessControl.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Notifications/PirryLedger.Core.Notifications.Infrastructure
 dotnet ef database update --project Src/Core/PirryLedger.Core.Permissions/PirryLedger.Core.Permissions.Infrastructure
 dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedger.Business.Infrastructure
+dotnet ef database update --project Src/Core/PirryLedger.Core.Documents/PirryLedger.Core.Documents.Infrastructure
 ```
 
 Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
 `ac_activation_tokens`, `ac_sessions` y `ac_branches`), la cola de Notifications
 (`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`) y las tablas del módulo Business
+`ux_per_permission_grants_user_permission`), las tablas del módulo Business
 (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments`, `bil_invoice_edits`
-y `bil_products`), en la misma base y manteniendo la propiedad de cada módulo.
+y `bil_products`) y la tabla de documentos (`doc_documents`), en la misma base y
+manteniendo la propiedad de cada módulo.
 
-El orden de los cuatro comandos da igual: ninguna de esas tablas declara claves
+El orden de los comandos da igual: ninguna de esas tablas declara claves
 foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
 cuatro de `bil_` sí se referencian entre ellas, pero se crean en la misma
 migración. Está comprobado también ejecutándolos en orden inverso.
 
-Para comprobar que las cuatro se aplicaron:
+Para comprobar que las cinco se aplicaron:
 
 ```sql
 SELECT table_name FROM information_schema.tables
@@ -257,9 +331,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son trece tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
-`per_` y las cinco de `bil_`. La tabla `__EFMigrationsHistory` que crea EF Core
-es la decimocuarta fila, pero no es de ninguna pieza.
+Son catorce tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
+`per_`, las cinco de `bil_` y `doc_documents`. La tabla `__EFMigrationsHistory`
+que crea EF Core es la decimoquinta fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -324,10 +398,10 @@ Mantén esta terminal abierta. El host y el puerto los fija
 `PIRRY_LEDGER_PUBLIC_BASE_URL` (paso 4): es la misma variable que da la
 dirección de los enlaces de activación, así que **una sola fuente** decide dónde
 escucha la API y qué dirección llevan los enlaces. Con el valor del paso 4, la
-API queda en `http://localhost:5243`. Se comprueba en la salida de la consola:
+API queda en `http://localhost:8090`. Se comprueba en la salida de la consola:
 
 ```
-Now listening on: http://localhost:5243
+Now listening on: http://localhost:8090
 Application started. Press Ctrl+C to shut down.
 ```
 
@@ -344,7 +418,7 @@ termine subiendo al repositorio overrides de configuración pensados solo para
 su máquina. Si necesitas uno, créalo a mano y mantenlo fuera del historial.
 
 Si se va a abrir desde otra tablet o equipo, la variable debe ser la dirección
-de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:5243`: la API
+de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:8090`: la API
 escucha en esa dirección y los enlaces del email salen con ella. Cambia el
 valor en el paso 4 y vuelve a arrancar.
 
@@ -379,7 +453,7 @@ $credencialesAdmin = @{
 } | ConvertTo-Json
 
 $sesionAdmin = Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/auth/login' `
+    -Uri 'http://localhost:8090/api/auth/login' `
     -Method Post `
     -ContentType 'application/json' `
     -Body $credencialesAdmin
@@ -390,7 +464,7 @@ $sucursal = @{
 } | ConvertTo-Json
 
 $branch = Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/admin/branches' `
+    -Uri 'http://localhost:8090/api/admin/branches' `
     -Method Post `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "******" } `
@@ -404,7 +478,7 @@ $cuenta = @{
 } | ConvertTo-Json
 
 Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/admin/users' `
+    -Uri 'http://localhost:8090/api/admin/users' `
     -Method Post `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "Bearer $($sesionAdmin.token)" } `
@@ -419,7 +493,7 @@ El Administrador también puede listar y editar sucursales físicas:
 
 ```powershell
 Invoke-RestMethod `
-    -Uri "http://localhost:5243/api/admin/branches/$($branch.id)" `
+    -Uri "http://localhost:8090/api/admin/branches/$($branch.id)" `
     -Method Put `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "******" } `
@@ -435,7 +509,7 @@ asignar una sucursal física a un usuario Estándar, el Administrador usa:
 
 ```powershell
 Invoke-RestMethod `
-    -Uri "http://localhost:5243/api/admin/users/$($cuenta.id)/branch" `
+    -Uri "http://localhost:8090/api/admin/users/$($cuenta.id)/branch" `
     -Method Post `
     -ContentType 'application/json' `
     -Headers @{ Authorization = "******" } `
@@ -461,7 +535,7 @@ $credenciales = @{
 } | ConvertTo-Json
 
 $sesion = Invoke-RestMethod `
-    -Uri 'http://localhost:5243/api/auth/login' `
+    -Uri 'http://localhost:8090/api/auth/login' `
     -Method Post `
     -ContentType 'application/json' `
     -Body $credenciales
@@ -474,7 +548,7 @@ estar activada):
 
 ```powershell
 Invoke-RestMethod `
-    -Uri 'http://localhost:5243/me' `
+    -Uri 'http://localhost:8090/me' `
     -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
@@ -498,6 +572,13 @@ Cómo se comporta:
 
 - **Es idempotente.** Si ya existe algún Administrador, no hace nada y la
   aplicación arranca igual. Puedes arrancar la aplicación las veces que quieras.
+- **No cambia la contraseña de un Administrador que ya existe.** Cambiar
+  `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` en el `.env` **no** cambia la contraseña
+  de la cuenta creada: la semilla no la toca. Para empezar de nuevo con otra
+  contraseña hay que borrar el volumen de la base
+  (`docker compose down -v`, solo cuando no hay nada que conservar) y volver a
+  arrancar. Con la composición, la contraseña de la cuenta de ejemplo es la de
+  `.env.example`.
 - **El Administrador nace active.** No llega por email, así que no hay enlace
   de activación que abrir.
 - **No promueve cuentas que ya existen.** Si el email de la semilla ya está
@@ -514,17 +595,205 @@ La primera vez imprime:
 Se creo el primer Administrator desde las variables de entorno.
 ```
 
+Con la composición de Docker, el Administrador de ejemplo se crea en el primer
+arranque con el correo y la contraseña de `.env.example`
+(`admin@pirry.local` / `Admin1234!`). Son valores de ejemplo a la vista: no son
+un secreto, y el README los usa en sus ejemplos.
+
 La segunda vez no imprime nada, porque ya hay uno. Y con esa contraseña puedes
 iniciar sesión y obtener un token (usa el email y la contraseña que definiste
 en `PIRRY_LEDGER_FIRST_ADMIN_*`):
 
 ```powershell
 $credenciales = @{ email = '<email-del-administrador>'; password = '<password-del-administrador>' } | ConvertTo-Json
-Invoke-RestMethod -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+Invoke-RestMethod -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/json' `
   -Body $credenciales
 ```
 
+
+### API externa (SeaweedFS)
+
+La API externa es **SeaweedFS**, un almacenamiento de objetos de código abierto
+(licencia Apache-2.0) que habla el **protocolo S3**. Corre como un servicio más de
+la composición (`seaweedfs`) y es donde viven los bytes de los documentos.
+
+- **Qué operación la usa:** el Manejador de documentos. `POST /api/documents`
+  guarda el archivo en SeaweedFS y `GET /api/documents/{id}/download` lo lee de
+  ahí. No es un reenvío de la respuesta del proveedor: la aplicación decide qué
+  se acepta (tamaño y archivo vacío), genera la clave del objeto (`documents/` +
+  un `Guid` nuevo) y decide quién puede ver cada documento (ADR 017).
+- **La clave:** el par de credenciales de SeaweedFS viaja en variables de
+  entorno desde el `.env` que **no** se versiona. Ningún commit, ni el
+  `Dockerfile`, ni `docker-compose.yml`, ni la imagen contienen la clave: el
+  compose solo referencia `${VARIABLE}`.
+
+| Variable | Para qué | Valor en la composición |
+|---|---|---|
+| `PIRRY_LEDGER_STORAGE_ACCESS_KEY` | Clave de acceso de SeaweedFS | La del `.env` |
+| `PIRRY_LEDGER_STORAGE_SECRET_KEY` | Secreto de SeaweedFS | El del `.env` |
+| `PIRRY_LEDGER_STORAGE_BUCKET` | Bucket de los documentos | `pirry-ledger-documents` |
+| `PIRRY_LEDGER_STORAGE_ENDPOINT` | Endpoint S3 | `http://seaweedfs:8333` (lo fija el compose) |
+| `PIRRY_LEDGER_DOCUMENT_MAX_BYTES` | Tope de una subida | `5242880` (5 MiB) |
+
+#### Los bytes viven en un volumen con nombre
+
+RF-DOC-05: los archivos no están dentro de la imagen. Están en el volumen
+`pirry-ledger-documents`, que la composición monta en `/data` de SeaweedFS:
+
+```bash
+docker volume inspect pirry-ledger-documents
+docker compose exec seaweedfs ls -la /data
+docker compose exec seaweedfs du -ah /data | sort -h | tail -12
+```
+
+Para ver el contenido de un documento directamente desde el almacenamiento, la
+API de archivos de SeaweedFS (el filer) contesta por HTTP dentro de la red:
+
+```bash
+# el objeto: bucket + clave (documents/{guid})
+docker compose exec seaweedfs wget -qO- \
+  "http://localhost:8888/pirry-ledger-documents/documents/<guid>"
+
+# el contenido del bucket
+docker compose exec seaweedfs wget -qO- "http://localhost:8888/pirry-ledger-documents/?pretty=y"
+```
+
+Para explorar con un cliente interactivo (dentro del shell: `ls /`,
+`ls /pirry-ledger-documents`, `cat /pirry-ledger-documents/documents/<guid>`):
+
+```bash
+docker compose exec seaweedfs weed shell -filer=localhost:8888
+```
+
+> `weed filer` no sirve para mirar: es el comando que **arranca** un filer, y
+> dentro del contenedor choca con el que ya está corriendo
+> (`resource temporarily unavailable` sobre el LevelDB). El cliente es
+> `weed shell`.
+
+La descarga por la API y la lectura directa devuelven lo mismo: el objeto se
+guarda tal cual, sin transformar.
+
+`docker compose down` (sin `-v`) no toca ese volumen: al volver a arrancar, el
+documento sigue listado y se descarga.
+
+#### Leer el correo pendiente
+
+La activación y la recuperación de contraseña envían correo a la bandeja de la
+composición, que **no** publica un puerto (ADR 019). Se lee desde dentro de la
+red:
+
+```bash
+docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
+```
+
+De ahí salen el enlace de activación (apunta a `http://localhost:8090`, la
+dirección pública) y el código de recuperación que viaja en el cuerpo.
+
+El enviador corre el comando `--send-mail` cada 10 segundos. Por eso, después de
+crear un usuario o pedir una recuperación, hay que **esperar unos segundos** a
+que el correo aparezca en la bandeja.
+
+#### Ejemplo de la respuesta
+
+Subir un documento (el archivo es de prueba; cualquier tipo vale):
+
+```bash
+echo "hola desde el codespace" > prueba.txt
+curl -i -X POST http://localhost:8090/api/documents \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@prueba.txt"
+```
+
+Respuesta `201` **obtenida en el Codespace el 2026-11-11**, con el registro que
+pide RF-DOC-01: nombre, tipo, tamaño, fecha y quién lo subió, más la sucursal de
+la sesión. La sucursal es `Todas` porque quien subió es el Administrador:
+
+```json
+{
+  "id": "e22f5459-371e-46db-ac8d-f4d9e6e15ca6",
+  "name": "prueba.txt",
+  "contentType": "text/plain",
+  "sizeBytes": 24,
+  "uploadedByUserId": "f5b90f48-ca06-48f1-884a-e6ec99bde964",
+  "branchId": "00000000-0000-0000-0000-000000000001",
+  "uploadedAtUtc": "2026-11-11T00:54:59.6800718Z"
+}
+```
+
+Listar (`GET /api/documents`) devuelve un arreglo con esa misma forma:
+
+```json
+[
+  {
+    "id": "e22f5459-371e-46db-ac8d-f4d9e6e15ca6",
+    "name": "prueba.txt",
+    "contentType": "text/plain",
+    "sizeBytes": 24,
+    "uploadedByUserId": "f5b90f48-ca06-48f1-884a-e6ec99bde964",
+    "branchId": "00000000-0000-0000-0000-000000000001",
+    "uploadedAtUtc": "2026-11-11T00:54:59.680071Z"
+  }
+]
+```
+
+Descargar (`GET /api/documents/{id}/download`) devuelve los bytes como adjunto,
+también verificado en el Codespace:
+
+```http
+HTTP/1.1 200 OK
+Content-Length: 24
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename=prueba.txt; filename*=UTF-8''prueba.txt
+```
+
+y el cuerpo es `hola desde el codespace`, el mismo texto que se subió. Eliminar
+(`DELETE /api/documents/{id}`) responde `204`.
+
+> La fecha de la lista trae seis decimales y la de la subida siete: PostgreSQL
+> guarda microsegundos. Es la misma fecha, redondeada al guardarse.
+
+#### Rechazo controlado: sin clave o con la API caída
+
+La sección 1.4 del enunciado pide que, sin clave o con la API caída, la
+operación devuelva un rechazo comprensible y **el resto del proyecto siga
+funcionando**. Se comprueba con estos dos comandos.
+
+Sin la clave (se borran las dos líneas de `PIRRY_LEDGER_STORAGE_*` del `.env` y
+se recrea la aplicación):
+
+```bash
+docker compose up -d --force-recreate app
+curl -i -X POST http://localhost:8090/api/documents -H "Authorization: Bearer <token>" -F "file=@factura.pdf"
+```
+
+```json
+{"message":"El almacenamiento de documentos no está configurado. Revisa el README."}
+```
+
+Con SeaweedFS parado:
+
+```bash
+docker compose stop seaweedfs
+curl -i -X POST http://localhost:8090/api/documents -H "Authorization: Bearer <token>" -F "file=@factura.pdf"
+```
+
+```json
+{"message":"El almacenamiento de documentos no está disponible en este momento."}
+```
+
+```bash
+docker compose start seaweedfs
+```
+
+En los dos casos el código es `503`, el mensaje no lleva trazas ni rutas (RD-08)
+y el resto de las operaciones del proyecto siguen respondiendo.
+
+> Nota de la entrega: los dos rechazos se deben a que SeaweedFS es un servicio
+> **autoalojado** en la composición. Con la clave de ejemplo de `.env.example` la
+> subida funciona, porque esa misma clave configura el servidor; el rechazo por
+> clave no aparece. Los dos casos de arriba son los que sí existen y los que se
+> verifican en la revisión.
 
 ### Cómo enviar el email pendiente
 
@@ -697,11 +966,14 @@ pirry-ledger/
 ├── global.json                     Fija el SDK .NET 10.0.400 (rollForward: latestFeature)
 ├── pirry-ledger.slnx               Solución con todos los proyectos
 ├── .env.example                    Plantilla de variables de entorno (el .env real no se sube)
+├── docker-compose.yml              Composición: base, SeaweedFS, migración, API, correo (Práctica 4)
+├── Dockerfile                      Imagen de la API (etapa de compilación + etapa de ejecución)
+├── .dockerignore                   Lo que no entra en la imagen (.git, bin/, obj/, Tests/, .env)
 ├── docs/
 │   ├── current-iteration.md        Alcance de la iteración actual
 │   ├── maquina-de-estados.md       Tabla de transiciones de Invoice (requerida por la práctica)
 │   ├── assignments/                Briefs de las asignaciones (qué se entrega, rúbrica, cómo se entrega)
-│   ├── adr/                        Decisiones técnicas 001 a 012: nombre y título en inglés, contenido en español
+│   ├── adr/                        Decisiones técnicas 001 a 020: nombre y título en inglés, contenido en español
 │   ├── bitacoras/                  Bitácoras de trabajo
 │   └── requirements/               Requisitos originales
 ├── Src/
@@ -709,14 +981,16 @@ pirry-ledger/
 │   │   ├── PirryLedger.Core.Contracts/          Persistencia, IClock, notificaciones, Auth (Operation, AccessLevel), Permissions (IPermissionAuthority, IPermissionRequestGateway)
 │   │   ├── PirryLedger.Core.AccessControl/      Domain, Application, Infrastructure, Api
 │   │   ├── PirryLedger.Core.Notifications/      Domain, Application, Infrastructure, Api
-│   │   └── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
+│   │   ├── PirryLedger.Core.Permissions/       Domain, Application, Infrastructure, Api (Asignación 2)
+│   │   └── PirryLedger.Core.Documents/         Domain, Application, Infrastructure, Api (Práctica 4)
 │   ├── Business/
 │   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application, Infrastructure, Api
 │   └── Host/
-│       └── PirryLedger.Host/                    Composición + comando --send-mail
+│       └── PirryLedger.Host/                    Composición + comandos --send-mail y --migrate
 └── Tests/
     ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
+    ├── PirryLedger.Core.Documents.Tests/        Proyecto de pruebas xUnit (Práctica 4)
     ├── PirryLedger.Core.Notifications.Tests/    Proyecto de pruebas xUnit
     ├── PirryLedger.Core.Permissions.Tests/      Proyecto de pruebas xUnit
     └── PirryLedger.Integration.Tests/           Integración real Business ↔ Permissions (sección 3.13)
@@ -742,6 +1016,8 @@ sobre EF Core en memoria.
 | **Integración Business ↔ Permissions** | **RF-NEG-06**, RF-GP-05, RD-03, RD-12 | **[3.13](#313-integración-real-entre-business-y-permissions-rf-neg-06)** |
 | Reglas de diseño transversales | RD-05 … RD-12 | [3.7](#37-trazabilidad-de-reglas-de-diseño) |
 | **Imágenes del catálogo** | ADR 015 | [3.15](#315-imágenes-del-catálogo) |
+| **Manejador de documentos** | **RF-DOC-01 … RF-DOC-05**, RD-06, RD-07, RD-09, RD-11, RD-12 | [Contenedor](#contenedor-docker) y [API externa](#api-externa-seaweedfs) |
+| **Proyecto en un contenedor** | Sección 1.2 y 1.3 del enunciado de la Práctica 4; RD-09, RD-10 | [Contenedor](#contenedor-docker) |
 
 > **Asignación 2** — además de Práctica 1, esta iteración entrega la pieza
 > `PirryLedger.Core.Permissions` (solicitudes de permiso, RF-GP-01 a RF-GP-07) con
@@ -767,6 +1043,14 @@ sobre EF Core en memoria.
 > provocar cada uno, y [3.14](#314-límite-de-solicitudes-por-ip) explica el
 > límite por IP de los dos flujos que mandan correo.
 
+> **Práctica 4** — esta entrega añade el Manejador de documentos (pieza 3 del
+> Core), la composición de Docker con la base y SeaweedFS, la supervivencia de
+> los datos a `docker compose down` y la API externa con su clave fuera del
+> repositorio. Las secciones [Contenedor](#contenedor-docker) y
+> [API externa](#api-externa-seaweedfs) son suyas, y el comportamiento del
+> manejador está en [Endpoints del Manejador de documentos](#endpoints-del-manejador-de-documentos)
+> y en las ADR 017 a 020.
+
 ### Decisiones documentadas
 
 Convención de los ADR: nombre de archivo y título en inglés, contenido en español.
@@ -788,6 +1072,11 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Los usuarios los crea un Administrador; no hay alta pública, y el desbloqueo de una cuenta bloqueada es una operación idempotente | `docs/adr/013-admin-created-users.md` |
 | Todo cambio de contraseña de un Estándar exige aprobación de un Administrador, y la aprobación ocurre antes de que el código llegue al correo | `docs/adr/014-password-change-permission.md` |
 | Imágenes del catálogo: bucket privado en Cloudflare R2, firma de descarga y sincronización por cursor de revisión | `docs/adr/015-imagenes-del-catalogo.md` |
+| Firma del cuerpo completo en las subidas a R2, en lugar de la firma por bloques | `docs/adr/016-full-payload-signing-for-r2-uploads.md` |
+| Documentos en SeaweedFS por el protocolo S3: pieza propia del Core, clave generada por el servidor y borrado lógico | `docs/adr/017-document-storage-in-seaweedfs.md` |
+| Las migraciones se aplican dentro de la composición, con el comando `--migrate` y el servicio `migrate` | `docs/adr/018-migrations-inside-the-composition.md` |
+| El correo de la composición: bandeja local sin puerto publicado y enviador en un proceso aparte | `docs/adr/019-email-inside-the-composition.md` |
+| La dirección pública sigue mandando en los enlaces y el puerto; el proceso escucha en `0.0.0.0` | `docs/adr/020-listen-address-inside-a-container.md` |
 
 ---
 
@@ -872,9 +1161,10 @@ estado y con el checklist de la rúbrica.
 dotnet test pirry-ledger.slnx
 ```
 
-Un solo comando, desde un clon limpio, ejecuta **las cinco** suites y ninguna
-necesita base de datos ni servidor SMTP: AccessControl (155), Notifications (6),
-Permissions (52), Business (220) e Integración (4). Son **437 pruebas** en total.
+Un solo comando, desde un clon limpio, ejecuta **las seis** suites y ninguna
+necesita base de datos ni servidor SMTP: AccessControl (155), Notifications (12),
+Permissions (52), Business (220), Documentos (40) e Integración (4). Son **483
+pruebas** en total.
 Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
 uso, los repositorios y la máquina de estados de `Invoice` con una prueba por
 fila de sus tablas. La suite de integración (sección
@@ -934,6 +1224,46 @@ Para ver un defecto: `git checkout practica-2-defecto-N`, correr
 de su fila. `git diff practica-2 practica-2-defecto-N --stat` muestra que el
 commit solo toca código de Gestión de permisos y ningún archivo de pruebas.
 
+### Recorrido con Docker: los seis frentes
+
+Con `docker compose up --build` no hay SMTP real ni usuario previo. Dos cosas
+cambian respecto de las secciones 3.1 a 3.12 (que usan `dotnet run`):
+
+- **El Administrador de ejemplo ya existe.** `.env.example` trae
+  `PIRRY_LEDGER_FIRST_ADMIN_EMAIL=admin@pirry.local` y
+  `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD=Admin1234!`; el arranque crea esa cuenta
+  (ADR 002). Es un valor de ejemplo, no un secreto: está a la vista en el
+  archivo versionado.
+- **El correo se lee de Mailpit**, no de una cuenta real:
+
+  ```bash
+  docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
+  ```
+
+  De ahí se copian el enlace de activación y el código de recuperación.
+
+El primer paso, con la sesión del Administrador de ejemplo:
+
+```bash
+curl -s -X POST http://localhost:8090/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@pirry.local","password":"Admin1234!"}'
+```
+
+Devuelve `{"token":"..."}`. Ese token es el de los seis frentes:
+
+| Frente | Sección con los cuerpos exactos |
+|---|---|
+| Alta de usuarios y activación por correo | [3.1](#31-alta-de-usuarios-y-activación) |
+| Inicio y cierre de sesión | [3.2](#32-sesión) |
+| Rechazo de un Estándar en una operación de Administrador | [3.4](#34-administración-de-usuarios) |
+| Recuperación de contraseña | [3.3](#33-contraseñas) |
+| Solicitudes de permiso: crear, aprobar, rechazar y transiciones fuera de la tabla | [3.8](#38-gestión-de-permisos-rf-gp-01-a-rf-gp-07) |
+| Módulo de negocio: operación válida y transición prohibida | [3.12](#312-operaciones-del-negocio-protegidas-por-acceso-rf-neg-02-rf-neg-06-rf-gp-01-rd-06) |
+
+Los documentos se prueban aparte, con la sección
+[API externa](#api-externa-seaweedfs) y [Endpoints del Manejador de documentos](#endpoints-del-manejador-de-documentos).
+
 ### Preparación común
 
 Casi todas las pruebas manuales necesitan lo mismo:
@@ -946,7 +1276,7 @@ Cuando una prueba pide `<token-del-administrador>` o `<token-del-estandar>`,
 obtenlo del login:
 
 ```powershell
-$sesion = Invoke-RestMethod -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+$sesion = Invoke-RestMethod -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/json' -Body (@{ email = '<email>'; password = '<password>' } | ConvertTo-Json)
 
 $adminHeaders = @{ Authorization = "Bearer $($sesion.token)" }
@@ -966,7 +1296,7 @@ $alta = @{
     password = 'abc12345'
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post `
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users -Method Post `
   -Headers $adminHeaders -ContentType 'application/json' -Body $alta
 ```
 
@@ -1017,9 +1347,9 @@ del alcance de esta práctica. La decisión y sus alternativas están en
 
 ```powershell
 # Menos de 8 caracteres -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='a@ejemplo.com'; password='abc12' } | ConvertTo-Json) -ContentType 'application/json'
 # Solo letras -> 400
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users -Method Post -Headers $adminHeaders -Body (@{ name='A'; email='b@ejemplo.com'; password='abcdefgh' } | ConvertTo-Json) -ContentType 'application/json'
 ```
 
 Ambas respuestas son `400` con un mensaje en español; en ningún caso se crea la
@@ -1046,7 +1376,7 @@ exactamente que lo está:
 
 ```powershell
 $credenciales = @{ email = 'ana@ejemplo.com'; password = 'abc12345' } | ConvertTo-Json
-Invoke-WebRequest -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-WebRequest -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
 Resultado esperado: `401` con `{"message":"La cuenta no esta activada."}`.
@@ -1085,7 +1415,7 @@ Compara estas cuatro peticiones: la respuesta debe ser el mismo `202` con el
 mismo body `{"sent":true}` en los cuatro casos.
 
 ```powershell
-$resendActivation = 'http://localhost:5243/api/auth/resend-activation'
+$resendActivation = 'http://localhost:8090/api/auth/resend-activation'
 Invoke-WebRequest $resendActivation -Method Post -Body (@{email='ana@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json'    # pendiente de activar
 Invoke-WebRequest $resendActivation -Method Post -Body (@{email='nadie@ejemplo.com'}|ConvertTo-Json) -ContentType 'application/json' # ese email no existe
 Invoke-WebRequest $resendActivation -Method Post -Body (@{email='esto-no-es-email'}|ConvertTo-Json) -ContentType 'application/json' # mal formado
@@ -1125,7 +1455,7 @@ Con la aplicación en marcha, en otra terminal:
 
 ```powershell
 $credenciales = @{ email = 'ana@ejemplo.com'; password = 'abc12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
 Resultado esperado: un token de 43 caracteres, sin `+`, `/` ni `=` (32 bytes del
@@ -1135,7 +1465,7 @@ Ahora bien, un email que no existe y una contraseña equivocada tienen que ser
 indistinguibles:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post `
   -Body (@{ email = 'nadie@ejemplo.com'; password = 'abc12345' } | ConvertTo-Json) `
   -ContentType 'application/json'
 ```
@@ -1149,8 +1479,8 @@ caminos ejecutan la misma operación de Argon2.
 #### RF-CA-07 — el usuario autenticado conoce su nombre, email y role
 
 ```powershell
-$sesion = Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
-Invoke-RestMethod -Uri http://localhost:5243/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
+$sesion = Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
 Resultado esperado: `name`, `email` y `role`. Nunca el hash de la contraseña,
@@ -1159,7 +1489,7 @@ ni el token, ni `credencialVersion`.
 Y sin cabecera:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/me
+Invoke-RestMethod -Uri http://localhost:8090/me
 ```
 
 Resultado esperado: `401` con `Sesion no valida.`
@@ -1167,8 +1497,8 @@ Resultado esperado: `401` con `Sesion no valida.`
 #### RF-CA-18 — cerrar sesión invalida esa credencial
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/logout -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" }
-Invoke-RestMethod -Uri http://localhost:5243/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/logout -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" }
+Invoke-RestMethod -Uri http://localhost:8090/me -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
 El `logout` responde `204` y la segunda llamada responde `401`. Cerrar una
@@ -1180,7 +1510,7 @@ Administrador la desbloquea
 
 ```powershell
 1..5 | ForEach-Object {
-  Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post `
+  Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post `
     -Body (@{ email = 'ana@ejemplo.com'; password = 'malaclave1' } | ConvertTo-Json) `
     -ContentType 'application/json'
 }
@@ -1189,7 +1519,7 @@ Administrador la desbloquea
 Ahora la contraseña correcta se sigue rechazando:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/login -Method Post -Body $credenciales -ContentType 'application/json'
 ```
 
 Resultado esperado: `401` con **el mismo mensaje** que los intentos fallidos
@@ -1210,7 +1540,7 @@ El bloqueo también se levanta sin esperar, a petición del Administrador
 (ADR 013):
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/admin/users/<id>/unlock `
+Invoke-RestMethod -Uri http://localhost:8090/api/admin/users/<id>/unlock `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1250,7 +1580,7 @@ peticiones responden `202` con el mismo body.
 
 ```powershell
 $recuperacion = @{ email = 'ana@ejemplo.com' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/recovery `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/recovery `
   -Method Post -Body $recuperacion -ContentType 'application/json'
 ```
 
@@ -1268,7 +1598,7 @@ El Administrador la aprueba con las rutas de la sección
 emite el código y se encola el correo:
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:5243/api/permissions/requests/<id>/approve" `
+Invoke-RestMethod -Uri "http://localhost:8090/api/permissions/requests/<id>/approve" `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1279,7 +1609,7 @@ Ahora sí, ejecuta el enviador (`--send-mail`) y usa el código recibido en:
 
 ```powershell
 $restablecer = @{ code = '<codigo recibido>'; password = 'nueva12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/reset-password `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/reset-password `
   -Method Post -Body $restablecer -ContentType 'application/json'
 ```
 
@@ -1322,7 +1652,7 @@ Con el token de Administrador y el `id` del usuario:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/force-reset' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/force-reset' `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1338,7 +1668,7 @@ actualiza y el código anterior queda invalidado.
 
 ```powershell
 $cambio = @{ currentPassword = 'abc12345'; newPassword = 'nueva12345' } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:5243/api/auth/change-password `
+Invoke-RestMethod -Uri http://localhost:8090/api/auth/change-password `
   -Method Post -Headers @{ Authorization = "Bearer $($sesion.token)" } `
   -Body $cambio -ContentType 'application/json'
 ```
@@ -1377,7 +1707,7 @@ rutas administrativas. Obtén el token del Administrador y sigue.
 
 ```powershell
 $adminHeaders = @{ Authorization = "Bearer <token-del-administrador>" }
-Invoke-RestMethod -Uri 'http://localhost:5243/api/admin/users' `
+Invoke-RestMethod -Uri 'http://localhost:8090/api/admin/users' `
   -Headers $adminHeaders
 ```
 
@@ -1409,7 +1739,7 @@ administrativa, sin depender de ninguna interfaz:
 
 ```powershell
 Invoke-WebRequest `
-  -Uri 'http://localhost:5243/api/admin/users' `
+  -Uri 'http://localhost:8090/api/admin/users' `
   -Headers @{ Authorization = 'Bearer <token-del-estandar>' }
 ```
 
@@ -1422,7 +1752,7 @@ Usa el `id` de otro usuario obtenido del listado:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/role' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/role' `
   -Method Post -Headers $adminHeaders -ContentType 'application/json' `
   -Body '{"role":"Administrador"}'
 ```
@@ -1441,11 +1771,11 @@ cambiar la contraseña (RF-CA-12) o al desactivar la cuenta (RF-CA-20). Ver
 
 ```powershell
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/deactivate' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/deactivate' `
   -Method Post -Headers $adminHeaders
 
 Invoke-RestMethod `
-  -Uri 'http://localhost:5243/api/admin/users/<id>/reactivate' `
+  -Uri 'http://localhost:8090/api/admin/users/<id>/reactivate' `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1606,7 +1936,7 @@ Administrador (sección [El primer Administrador](#el-primer-administrador)).
 #### RF-GP-01 — un Estándar crea una solicitud y nace en Pendiente
 
 ```powershell
-$solicitud = Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests' -Method Post `
+$solicitud = Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/requests' -Method Post `
   -Headers $estHeaders -ContentType 'application/json' `
   -Body (@{ requestedPermission = 'ViewSalesSummary' } | ConvertTo-Json)
 ```
@@ -1627,8 +1957,8 @@ Sin cabecera `Authorization` responde `401` y `{"message":"Sesion no valida."}`.
 #### RF-GP-02 — el Administrador ve las pendientes; el Estándar, no las de otros
 
 ```powershell
-Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/mine' -Headers $estHeaders
-Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/requests/pending' -Headers $adminHeaders
+Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/requests/mine' -Headers $estHeaders
+Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/requests/pending' -Headers $adminHeaders
 ```
 
 El Estándar recibe `200` con **sus** solicitudes y solo las suyas (el filtro por
@@ -1644,7 +1974,7 @@ y el Administrador recibe `200` con todas las que están en `Pending`.
 #### RF-GP-03 — aprobar registra quién y cuándo
 
 ```powershell
-Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$($solicitud.id)/approve" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/permissions/requests/$($solicitud.id)/approve" `
   -Method Post -Headers $adminHeaders
 ```
 
@@ -1682,7 +2012,7 @@ Inmediatamente después de la aprobación, el solicitante ya puede ejecutar la
 acción que pidió:
 
 ```powershell
-Invoke-RestMethod -Uri 'http://localhost:5243/api/permissions/sales-summary' -Headers $estHeaders
+Invoke-RestMethod -Uri 'http://localhost:8090/api/permissions/sales-summary' -Headers $estHeaders
 ```
 
 ```
@@ -1724,20 +2054,20 @@ puede resolverla. La regla compara identidades, no roles.
 ```powershell
 # 1. El Estándar crea la solicitud y se queda con el id.
 # 2. El Administrador lo asciende (RF-CA-08). Esto invalida su sesión (ADR 009).
-Invoke-WebRequest -Uri "http://localhost:5243/api/admin/users/$idEstandar/role" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/admin/users/$idEstandar/role" `
   -Method Post -Headers $adminHeaders -ContentType 'application/json' `
   -Body (@{ role = 'Administrator' } | ConvertTo-Json)
 
 # 3. Con el token viejo ya no hay sesión válida.
-Invoke-WebRequest -Uri 'http://localhost:5243/me' -Headers $estHeaders
+Invoke-WebRequest -Uri 'http://localhost:8090/me' -Headers $estHeaders
 # 401  {"message":"Sesion no valida."}
 
 # 4. Vuelve a iniciar sesión: el token nuevo ya trae el rol nuevo.
-Invoke-RestMethod -Uri 'http://localhost:5243/me' -Headers $estHeadersNuevo
+Invoke-RestMethod -Uri 'http://localhost:8090/me' -Headers $estHeadersNuevo
 # 200  {"name":"Ana","email":"ana@ejemplo.com","role":"Administrator"}
 
 # 5. Intenta aprobar su propia solicitud.
-Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$id/approve" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/permissions/requests/$id/approve" `
   -Method Post -Headers $estHeadersNuevo
 # 400  {"message":"No puede resolver su propia solicitud de permiso."}
 ```
@@ -1749,7 +2079,7 @@ resolverla (`204`).
 para sí mismo e intenta resolverla:
 
 ```powershell
-Invoke-WebRequest -Uri "http://localhost:5243/api/permissions/requests/$idPropia/approve" `
+Invoke-WebRequest -Uri "http://localhost:8090/api/permissions/requests/$idPropia/approve" `
   -Method Post -Headers $adminHeaders
 # 400  {"message":"No puede resolver su propia solicitud de permiso."}
 ```
@@ -1808,11 +2138,11 @@ Para comprobarlo con la API levantada (paso 7):
 
 ```powershell
 # Cuerpo JSON que no se puede leer -> 400 controlado
-Invoke-WebRequest -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+Invoke-WebRequest -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/json' -Body '{esto no es json'
 
 # Content-Type que la ruta no admite -> 415 controlado
-Invoke-WebRequest -Uri 'http://localhost:5243/api/auth/login' -Method Post `
+Invoke-WebRequest -Uri 'http://localhost:8090/api/auth/login' -Method Post `
   -ContentType 'application/x-www-form-urlencoded' -Body 'x=1'
 ```
 
@@ -2047,7 +2377,7 @@ Para no repetir `try/catch` en cada llamada, define un ayudante que devuelva el
 código y el cuerpo también cuando la respuesta es un rechazo:
 
 ```powershell
-$base = 'http://localhost:5243'
+$base = 'http://localhost:8090'
 
 function Pedir([string]$metodo, [string]$ruta, $cabeceras, $cuerpo) {
     $peticion = @{ Uri = "$base$ruta"; Method = $metodo; Headers = $cabeceras }
@@ -2342,7 +2672,7 @@ Para verlo con la API levantada, seis peticiones seguidas a la misma ruta:
 
 ```powershell
 1..6 | ForEach-Object {
-  Invoke-WebRequest -Uri http://localhost:5243/api/auth/resend-activation -Method Post `
+  Invoke-WebRequest -Uri http://localhost:8090/api/auth/resend-activation -Method Post `
     -Body (@{ email = 'ana@ejemplo.com' } | ConvertTo-Json) -ContentType 'application/json'
 }
 ```
@@ -2424,7 +2754,7 @@ dotnet ef database update --project Src/Business/PirryLedger.Business/PirryLedge
 Con el token de un Administrador y la foto en el disco:
 
 ```powershell
-curl.exe -X PUT "http://localhost:5243/api/admin/products/$id/image" `
+curl.exe -X PUT "http://localhost:8090/api/admin/products/$id/image" `
   -H "Authorization: Bearer $token" `
   -F "file=@C:\ruta\combo.jpg"
 ```
@@ -2455,7 +2785,7 @@ se rechaza con `415`.
 El catálogo lleva la referencia de cada foto, pero **nunca una firma**:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/billing/products `
+Invoke-RestMethod -Uri http://localhost:8090/api/billing/products `
   -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -2467,7 +2797,7 @@ Invoke-RestMethod -Uri http://localhost:5243/api/billing/products `
 La sincronización devuelve lo que cambió desde el cursor:
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5243/api/billing/product-images/sync `
+Invoke-RestMethod -Uri http://localhost:8090/api/billing/product-images/sync `
   -Method Post -Headers @{ Authorization = "Bearer $token" } `
   -ContentType 'application/json' -Body '{"since":12}'
 ```
@@ -2503,7 +2833,7 @@ a necesitar y la foto vuelve a entrar en el conjunto.
 #### Quitar una foto
 
 ```powershell
-curl.exe -X DELETE "http://localhost:5243/api/admin/products/$id/image" `
+curl.exe -X DELETE "http://localhost:8090/api/admin/products/$id/image" `
   -H "Authorization: Bearer $token"
 ```
 
@@ -2607,6 +2937,18 @@ uno de sus criterios. Los tokens son los mismos que en la sección anterior.
 | `DELETE` | `/api/admin/products/{id}/image` | Quita la foto. Exige `Administrator`. Responde `204` o `404` si no tenía foto. |
 | `POST` | `/api/billing/product-images/sync` | Sincroniza las fotos. Cuerpo `{"since":12}` o vacío para una sincronización completa. Cualquier sesión válida. Responde con `upserts` (las fotos nuevas, con su firma) y `removed` (las claves que hay que borrar). Limitado a 20 por IP cada 10 minutos (`429` con `Retry-After`). |
 
+### Endpoints del Manejador de documentos
+
+Pieza 3 del Core. Todas exigen `Authorization: Bearer <token>`; ninguna se abre
+sin sesión.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/api/documents` | Sube un documento. `multipart/form-data` con una sola parte llamada `file`, de cualquier tipo, hasta 5 MiB. Responde `201` con el registro. `400` sin archivo o con el archivo vacío; `413` si supera el tope; `503` si el almacenamiento no está configurado o no responde. |
+| `GET` | `/api/documents` | Lista. Un Estándar ve solo los suyos; un Administrator ve los de todos. Nunca incluye eliminados. Responde `200`. |
+| `GET` | `/api/documents/{id}/download` | Descarga los bytes como adjunto. Solo el dueño o un Administrator: a otro Estándar se le rechaza con `403`. `404` si no existe o está eliminado; `503` si el almacenamiento falla. |
+| `DELETE` | `/api/documents/{id}` | Eliminación lógica: el registro y el objeto siguen existiendo y el documento sale del listado. Solo el dueño o un Administrator. Responde `204`; `403` a otro Estándar; `404` si no existe. |
+
 ### Endpoints del negocio (facturas)
 
 Estos endpoints llegaron con la fase 4 de la Práctica 3
@@ -2642,15 +2984,16 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 
 ### Esquema de la base de datos
 
-Las cuatro piezas comparten la misma base PostgreSQL, pero cada una es dueña de
+Las cinco piezas comparten la misma base PostgreSQL, pero cada una es dueña de
 sus propias tablas. Las tres tablas de tokens y sesiones pertenecen a
 AccessControl; la cola pertenece a Notifications; las dos de solicitudes y
 concesiones pertenecen a Permissions; las de facturas, el catálogo y las
-imágenes pertenecen a Business. La cola de email no tiene una clave foránea
-hacia `ac_users`: el vínculo entre ambos módulos ocurre mediante la operación
-que encola el email, no mediante una relación directa entre tablas. Lo mismo
-pasa con las facturas: no hay clave foránea hacia `ac_users`, porque el negocio
-no puede depender de las tablas de otra pieza (RD-03).
+imágenes pertenecen a Business; y `doc_documents` pertenece al Manejador de
+documentos. La cola de email no tiene una clave foránea hacia `ac_users`: el
+vínculo entre ambos módulos ocurre mediante la operación que encola el email, no
+mediante una relación directa entre tablas. Lo mismo pasa con las facturas y con
+los documentos: no hay clave foránea hacia `ac_users` ni hacia `ac_branches`,
+porque una pieza no puede depender de las tablas de otra (RD-03).
 
 ```mermaid
 erDiagram
@@ -2793,6 +3136,19 @@ erDiagram
         bigint value
     }
 
+    doc_documents {
+        uuid id PK
+        string name
+        string content_type
+        bigint size_bytes
+        uuid uploaded_by
+        uuid branch_id
+        string storage_key UK
+        datetime uploaded_at_utc
+        datetime deleted_at_utc "nullable"
+        uuid deleted_by "nullable"
+    }
+
     ac_users ||--o{ ac_recovery_codes : "tiene"
     ac_users ||--o{ ac_activation_tokens : "tiene"
     ac_users ||--o{ ac_sessions : "tiene"
@@ -2813,6 +3169,28 @@ sus enums: `0 = Sale, 1 = Debt`; `0 = Cash, 1 = Transfer, 2 = None`;
 `0 = Registered, 1 = Confirmed, 2 = Rejected`. Los cuatro montos
 (`unit_price`, `amount`, `received_amount` y `change_amount`) son
 `numeric(12,2)`: dos decimales exactos, nunca redondeados.
+
+### Tabla de documentos
+
+`doc_documents` (ADR 017): el registro del Manejador de documentos. Los bytes
+**no** están aquí; están en SeaweedFS, en el volumen `pirry-ledger-documents`.
+
+| Columna | Para qué |
+|---|---|
+| `id` | `uuid`, clave primaria. |
+| `name` | `varchar(255)`. El nombre original del archivo. Se guarda para mostrarlo y para la descarga; nunca se usa como ruta. |
+| `content_type` | `varchar(255)`. El tipo declarado por el cliente. Es informativo: no se confía en él al servir el archivo. |
+| `size_bytes` | `bigint`. Tamaño de los bytes guardados. Como máximo 5 MiB. |
+| `uploaded_by` | `uuid`. Quién lo subió. Sin clave foránea (RD-03); la identidad viene de la sesión. |
+| `branch_id` | `uuid`. La sucursal de la sesión. Para un Administrador es la sucursal global `Todas` (`00000000-0000-0000-0000-000000000001`). |
+| `storage_key` | `varchar(255)`, único. La clave del objeto en SeaweedFS: `documents/{guid}`. |
+| `uploaded_at_utc` | `timestamp with time zone`. Del reloj inyectado (RD-11). |
+| `deleted_at_utc` | `timestamp with time zone`, nulo mientras está vigente. La eliminación es lógica (RF-DOC-04). |
+| `deleted_by` | `uuid`, nulo mientras está vigente. Quién lo eliminó. |
+
+Índices: `ux_doc_documents_storage_key` (único), `ix_doc_documents_uploader`
+(`uploaded_by`, `uploaded_at_utc`) para el listado de un Estándar y
+`ix_doc_documents_deleted_at` para excluir los eliminados.
 
 ### Tablas de las imágenes del catálogo
 
@@ -2895,3 +3273,13 @@ todavía no se escribe: llega en la semana 11.
   imagen. Se guarda el archivo tal cual, con los metadatos quitados.
 - **La caché del cliente** de las imágenes: es trabajo del teléfono, que es la
   siguiente iteración.
+- **La auditoría de subidas y eliminaciones de documentos** (RF-DOC-06). Llega
+  con la Pieza 6, en la semana 12; esta práctica no la califica.
+- **Documentos adjuntos a una entidad del negocio** (RF-NEG-10): es opcional y
+  hoy no está en uso.
+- **Firmas de descarga y acceso directo del cliente a SeaweedFS.** La descarga
+  pasa por la API, que es donde se comprueba la propiedad del documento.
+- **Borrado físico de los documentos y limpieza de objetos huérfanos.** La
+  eliminación es lógica: el registro y el objeto siguen existiendo (RF-DOC-04).
+- **Despliegue en la nube.** Esta versión corre en Docker; el despliegue queda
+  fuera de la práctica.

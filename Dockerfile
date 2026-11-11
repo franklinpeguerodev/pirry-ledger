@@ -22,10 +22,10 @@
 #
 # El archivo .env no se copia: esta en .dockerignore.
 #
-# La imagen NO aplica migraciones: la etapa final no lleva el SDK ni la
-# herramienta "dotnet ef". Se ejecutan desde fuera, con
-# "dotnet ef database update" sobre cada modulo (ver README), antes de arrancar
-# el contenedor.
+# La imagen NO aplica migraciones por si sola: el esquema lo aplica el comando
+# "dotnet PirryLedger.Host.dll --migrate", que ejecuta el servicio "migrate" de
+# la composicion antes de arrancar la API (docs/adr/018-migrations-inside-the-composition.md).
+# El comando vive en la misma imagen, asi que no hace falta el SDK ni "dotnet ef".
 
 # ---- Etapa 1: compilar y publicar ------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -62,7 +62,7 @@ COPY --from=build /app/publish ./
 # activacion (docs/adr/005-listen-address-from-public-base-url.md). UseUrls gana
 # sobre ASPNETCORE_URLS, asi que definir esta ultima no cambia nada. EXPOSE solo
 # documenta el puerto por defecto; el mapeo real se hace al ejecutar.
-EXPOSE 8080
+EXPOSE 8090
 
 # Usuario sin privilegios que ya trae la imagen (APP_UID). La aplicacion no
 # escribe en disco, asi que con permiso de lectura sobre /app alcanza.
