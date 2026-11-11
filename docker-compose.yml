@@ -105,10 +105,13 @@ services:
 
   # Aplica el esquema de todas las piezas y termina (ADR 018). La API no
   # arranca hasta que este servicio sale con 0.
+  #
+  # El comando es solo el argumento: la imagen trae el ENTRYPOINT
+  # ["dotnet", "PirryLedger.Host.dll"], y Compose agrega este command despues.
   migrate:
     build: .
     image: pirry-ledger-app
-    command: ["dotnet", "PirryLedger.Host.dll", "--migrate"]
+    command: ["--migrate"]
     environment: *app-environment
     depends_on:
       db:
@@ -117,10 +120,10 @@ services:
 
   # La API. Es el unico servicio que publica un puerto (seccion 1.2 del
   # enunciado). El puerto del host y el del contenedor son el mismo numero.
+  # Sin command: la imagen ya arranca el Host con su ENTRYPOINT.
   app:
     build: .
     image: pirry-ledger-app
-    command: ["dotnet", "PirryLedger.Host.dll"]
     environment: *app-environment
     ports:
       - "8090:8090"
@@ -137,13 +140,16 @@ services:
 
   # El enviador de correo (ADR 007 y ADR 019): el mismo comando de siempre, en
   # bucle, como proceso aparte. La aplicacion nunca envia correo por su cuenta.
+  #
+  # El bucle va en el ENTRYPOINT: la imagen trae
+  # ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"], asi que un `command` con
+  # "sh -c ..." se le agregaria como argumentos y el contenedor arrancaria la
+  # API en vez del enviador. Con entrypoint /bin/sh -c, el command es el script.
   mailer:
     build: .
     image: pirry-ledger-app
-    command:
-      - "sh"
-      - "-c"
-      - "while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"]
     environment: *app-environment
     depends_on:
       db:

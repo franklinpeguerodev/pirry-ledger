@@ -62,7 +62,8 @@ La composición arranca un segundo proceso con la **misma imagen**:
 ```
 mailer:
   build: .
-  command: ["sh", "-c", "while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"]
+  entrypoint: ["/bin/sh", "-c"]
+  command: ["while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"]
   depends_on:
     db:
       condition: service_healthy
@@ -155,3 +156,24 @@ El README documenta el camino real como opción, no como requisito.
 - Métricas de entrega o panel de correos dentro de la API.
 - TLS entre la aplicación y la bandeja: viajan en la red interna de la
   composición.
+
+## Nota de implementación (2026-11-11)
+
+La primera versión del servicio de correo usaba
+`command: ["sh", "-c", "while true; ..."]` y **no enviaba nada**. La imagen
+termina con `ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"]`, y en Compose
+`command` **no reemplaza** al `ENTRYPOINT`: se le agrega como argumentos. El
+proceso que arrancaba era la API con `sh`, `-c` y el texto del bucle como
+argumentos; no encontraba `--send-mail` y se quedaba sirviendo, con lo que el
+correo nunca salía de la cola.
+
+La decisión no cambia: el envío sigue siendo un comando en un proceso aparte. Lo
+que cambia es cómo se pide: el bucle va en el **entrypoint** (`/bin/sh -c`) y el
+`command` es el script. Por el mismo motivo, `migrate` quedó con
+`command: ["--migrate"]` y la API no lleva `command`: los dos confían en el
+`ENTRYPOINT` de la imagen. `migrate` funcionaba antes solo porque su `command`
+repetía `--migrate` como argumento suelto.
+
+Lo detectó el `docker compose ps`: la columna COMMAND del servicio `mailer`
+mostraba `dotnet PirryLedger.…` en vez de `sh -c …`. La bandeja de Mailpit
+apareció vacía con el correo pendiente en `not_email_queue`.
