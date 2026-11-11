@@ -43,6 +43,6 @@ public sealed class DeleteDocument
 
         document.Delete(caller.Id, _clock.UtcNow);
 
-        await _repository.SaveAsync(document, cancellationToken);
+        await _repository.UpdateAsync(document, cancellationToken);
     }
 }

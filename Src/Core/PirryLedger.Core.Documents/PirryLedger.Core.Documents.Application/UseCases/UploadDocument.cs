@@ -61,7 +61,7 @@ public sealed class UploadDocument
             _options.EffectiveMaxBytes);
 
         await _store.PutAsync(storageKey, content, document.ContentType, cancellationToken);
-        await _repository.SaveAsync(document, cancellationToken);
+        await _repository.AddAsync(document, cancellationToken);
 
         return DocumentViewMapper.From(document);
     }

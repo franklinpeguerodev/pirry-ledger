@@ -16,10 +16,20 @@ internal sealed class DocumentRepository : IDocumentRepository
         _context = context;
     }
 
-    public async Task SaveAsync(Document document, CancellationToken cancellationToken = default)
+    public async Task AddAsync(Document document, CancellationToken cancellationToken = default)
     {
-        // Update sirve para la subida y para la eliminacion logica: la entidad
-        // ya trae su Id y el contexto la marca entera.
+        // El alta se marca como Added. Con Update, EF cree que la fila ya
+        // existe y lanza un UPDATE que afecta 0 filas: DbUpdateConcurrencyException
+        // (era el 500 de la primera subida real).
+        _context.Documents.Add(document);
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
+    {
+        // El cambio (la eliminacion logica) si es un UPDATE de una fila que
+        // existe: el documento se cargo antes con FindAsync.
         _context.Documents.Update(document);
 
         await _context.SaveChangesAsync(cancellationToken);

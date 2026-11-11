@@ -1087,7 +1087,7 @@ dotnet test pirry-ledger.slnx
 
 Un solo comando, desde un clon limpio, ejecuta **las seis** suites y ninguna
 necesita base de datos ni servidor SMTP: AccessControl (155), Notifications (12),
-Permissions (52), Business (220), Documentos (37) e Integración (4). Son **480
+Permissions (52), Business (220), Documentos (40) e Integración (4). Son **483
 pruebas** en total.
 Las cuatro primeras cubren la máquina de estados de la solicitud, los casos de
 uso, los repositorios y la máquina de estados de `Invoice` con una prueba por

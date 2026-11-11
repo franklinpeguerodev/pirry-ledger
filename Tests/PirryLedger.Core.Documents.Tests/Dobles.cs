@@ -138,8 +138,22 @@ internal sealed class FakeDocumentRepository : IDocumentRepository
 
     public int SaveCount { get; private set; }
 
-    public Task SaveAsync(Document document, CancellationToken cancellationToken = default)
+    public Task AddAsync(Document document, CancellationToken cancellationToken = default)
     {
+        _documents[document.Id] = document;
+        SaveCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
+    {
+        if (!_documents.ContainsKey(document.Id))
+        {
+            // Mismo criterio que el repositorio real: un cambio de una fila que
+            // no existe es un error, no un alta silenciosa.
+            throw new InvalidOperationException("El documento no existe en la base.");
+        }
+
         _documents[document.Id] = document;
         SaveCount++;
         return Task.CompletedTask;
