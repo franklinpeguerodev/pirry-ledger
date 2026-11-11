@@ -221,12 +221,15 @@ Last verification: GitHub Codespace, 2026-11-11.
 - [x] RF-DOC-03 verified for the owner: the download answered `200` with
       `Content-Type: application/octet-stream`,
       `Content-Disposition: attachment` and the same bytes that were uploaded.
-- [ ] RF-DOC-03 for another Standard (rejected) and RF-DOC-04 (logical delete,
-      record still present, hidden from the listing): pending. Needs the output
-      of the delete, the listing and the `psql` query.
-- [ ] RF-DOC-05 (named volume, survives `docker compose down` without `-v`):
-      the volume exists and SeaweedFS writes inside it, but the survival run is
-      pending.
+- [x] RF-DOC-04 verified: `DELETE` answered `204`, the document disappeared from
+      the listing (`200` with the other documents) and the row stayed in
+      `doc_documents` with `deleted_at_utc` and `deleted_by` set. The `psql`
+      query showed it as `eliminado = t` and `quien = t`.
+- [ ] RF-DOC-03 for another Standard (rejected): pending, it needs a Standard
+      user with a session, which is part of the cumulative fronts.
+- [x] RF-DOC-05 verified: after `docker compose down` (no `-v`) and
+      `docker compose up`, the download answered `200` and returned the same
+      content (`sobreviviente`) that had been uploaded before the restart.
 - [x] SeaweedFS integration: the round trip works against the real service;
       missing key -> `503` configured; SeaweedFS stopped -> `503` unavailable;
       the rest of the project keeps working. Both rejections were verified
@@ -240,8 +243,9 @@ Last verification: GitHub Codespace, 2026-11-11.
 - [x] `docker compose config` shows only example values; only the app publishes
       a port (`8090`), and neither the database nor SeaweedFS is reachable from
       outside.
-- [ ] Upload -> `docker compose down` -> `docker compose up` -> document listed
-      and downloaded, user logs in. Never `-v`. Pending.
+- [x] Upload -> `docker compose down` -> `docker compose up` -> document listed
+      and downloaded, user logs in. Never `-v`. Verified: the download answered
+      `200` with the same bytes after the restart.
 - [x] `git check-ignore -v .env` matches; `git log --all -- .env` is empty.
 - [ ] Six cumulative fronts walked through from the README commands. Pending.
 - [ ] README has **Contenedor** and **API externa**; every command that is

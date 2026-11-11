@@ -105,11 +105,48 @@ Los dos rechazos controlados se verificaron en la corrida anterior al arreglo: v
 
 ---
 
-### Entrada 5 — Pendiente de cierre
+### Entrada 5 — La eliminación lógica y la supervivencia de los datos (2026-11-11)
 
-Falta, con salida real:
+**Qué se pidió.** Completar los dos criterios que faltaban: RF-DOC-04 (eliminar sin
+borrar) y RF-DOC-05 (los datos sobreviven a `docker compose down`).
 
-- Eliminar un documento: `204`, el listado sin él y la fila viva en `doc_documents` con `deleted_at_utc`.
-- Supervivencia: subir, `docker compose down` (sin `-v`), `up` y descargar el mismo documento.
-- Los dos rechazos controlados repetidos después del arreglo.
-- Los seis frentes de la revisión acumulada, recorridos desde el README.
+**Qué verifiqué.**
+
+Eliminación lógica:
+
+```text
+== eliminar (logico) ==
+eliminar=204
+listar=200            (el documento eliminado ya no aparece)
+```
+
+y en la base, el registro sigue:
+
+```text
+    name    | eliminado | quien
+------------+-----------+-------
+ otro.txt   | t         | t
+```
+
+`eliminado = t` es `deleted_at_utc` no nulo y `quien = t` es `deleted_by` no nulo:
+la fila existe, el objeto sigue en SeaweedFS y el listado no lo muestra.
+
+Supervivencia:
+
+```text
+[+] down 7/7
+[+] up 7/7
+✔ Container pirry-ledger-db-1  Healthy
+✔ Container pirry-ledger-migrate-1  Exited
+sobreviviente
+superviviente=200
+```
+
+El cuerpo `sobreviviente` es el contenido del documento que se subió **antes** del
+`down`: el archivo estaba en el volumen `pirry-ledger-documents` y la base en
+`pirry-ledger-db-data`, así que reiniciar la composición sin `-v` no perdió nada.
+
+**Qué quedó pendiente en esta entrada.** Los seis frentes de la revisión
+acumulada, que además demuestran el trozo de RF-DOC-02 y RF-DOC-03 que falta: que
+otro usuario Estándar sea rechazado al descargar y al eliminar un documento ajeno.
+
