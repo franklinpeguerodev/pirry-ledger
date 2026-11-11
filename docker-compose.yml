@@ -27,8 +27,9 @@ x-app-environment: &app-environment
 
   # Direccion publica: arma los enlaces de activacion y fija el puerto donde
   # escucha la API. El proceso escucha en 0.0.0.0 (ADR 020), asi que el puerto
-  # publicado llega.
-  PIRRY_LEDGER_PUBLIC_BASE_URL: "${PIRRY_LEDGER_PUBLIC_BASE_URL}"
+  # publicado llega. Sin esta variable la aplicacion no arranca (ADR 005),
+  # asi que aqui se exige con un mensaje claro.
+  PIRRY_LEDGER_PUBLIC_BASE_URL: "${PIRRY_LEDGER_PUBLIC_BASE_URL:?falta PIRRY_LEDGER_PUBLIC_BASE_URL en el archivo .env: copia .env.example a .env}"
 
   # Primer Administrator (ADR 002). Opcional: sin estas variables no se crea
   # ninguno y la aplicacion arranca igual.
@@ -53,15 +54,17 @@ x-app-environment: &app-environment
   PIRRY_LEDGER_DOCUMENT_MAX_BYTES: "${PIRRY_LEDGER_DOCUMENT_MAX_BYTES}"
 
   # Imagenes del catalogo (ADR 015, sin cambios). Las siete siguen siendo
-  # obligatorias para arrancar; con los valores de ejemplo de .env.example la
-  # aplicacion levanta y la subida de imagenes responde 503 controlado.
-  PIRRY_LEDGER_R2_ACCOUNT_ID: "${PIRRY_LEDGER_R2_ACCOUNT_ID}"
-  PIRRY_LEDGER_R2_ACCESS_KEY_ID: "${PIRRY_LEDGER_R2_ACCESS_KEY_ID}"
-  PIRRY_LEDGER_R2_SECRET_ACCESS_KEY: "${PIRRY_LEDGER_R2_SECRET_ACCESS_KEY}"
-  PIRRY_LEDGER_R2_BUCKET: "${PIRRY_LEDGER_R2_BUCKET}"
-  PIRRY_LEDGER_R2_ENDPOINT: "${PIRRY_LEDGER_R2_ENDPOINT}"
-  PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES: "${PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES}"
-  PIRRY_LEDGER_IMAGE_MAX_BYTES: "${PIRRY_LEDGER_IMAGE_MAX_BYTES}"
+  # obligatorias para arrancar (la aplicacion se detiene si falta una), asi que
+  # aqui se exigen con un mensaje claro. Con los valores de ejemplo de
+  # .env.example la aplicacion levanta y la subida de imagenes responde 503
+  # controlado.
+  PIRRY_LEDGER_R2_ACCOUNT_ID: "${PIRRY_LEDGER_R2_ACCOUNT_ID:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_ACCESS_KEY_ID: "${PIRRY_LEDGER_R2_ACCESS_KEY_ID:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_SECRET_ACCESS_KEY: "${PIRRY_LEDGER_R2_SECRET_ACCESS_KEY:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_BUCKET: "${PIRRY_LEDGER_R2_BUCKET:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_R2_ENDPOINT: "${PIRRY_LEDGER_R2_ENDPOINT:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES: "${PIRRY_LEDGER_IMAGE_SIGNATURE_MINUTES:?falta este valor en el archivo .env: copia .env.example a .env}"
+  PIRRY_LEDGER_IMAGE_MAX_BYTES: "${PIRRY_LEDGER_IMAGE_MAX_BYTES:?falta este valor en el archivo .env: copia .env.example a .env}"
 
 services:
   # PostgreSQL. Sin puertos publicados: no es accesible desde fuera de la
@@ -69,9 +72,9 @@ services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: "${POSTGRES_USER}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_USER:?falta POSTGRES_USER en el archivo .env: copia .env.example a .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en el archivo .env: copia .env.example a .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?falta POSTGRES_DB en el archivo .env: copia .env.example a .env}"
     volumes:
       # Los datos de la aplicacion sobreviven a "docker compose down" (sin -v).
       - pirry-ledger-db-data:/var/lib/postgresql/data
