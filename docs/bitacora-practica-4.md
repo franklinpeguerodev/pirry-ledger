@@ -150,3 +150,87 @@ El cuerpo `sobreviviente` es el contenido del documento que se subió **antes** 
 acumulada, que además demuestran el trozo de RF-DOC-02 y RF-DOC-03 que falta: que
 otro usuario Estándar sea rechazado al descargar y al eliminar un documento ajeno.
 
+---
+
+### Entrada 6 — Los seis frentes de la revisión acumulada (2026-11-11)
+
+**Qué se pidió.** Recorrer los seis frentes del enunciado con la composición
+levantada: alta con activación por correo, sesión, rechazo de un Estándar en una
+operación de Administrador, recuperación de contraseña, permisos y negocio.
+
+**Qué verifiqué.**
+
+| Frente | Salida real |
+|---|---|
+| Alta con activación | `alta=201`, el enlace sale del correo, `activar=200` → `{"activated":true}` |
+| Sesión | `me=200` con `"role":"Standard"` y su sucursal, `logout=204`, `me-tras-logout=401` |
+| Estándar rechazado | `403` con `No tiene permisos para esta operacion.` |
+| Recuperación | `recovery=202`, solicitud `ResetPassword` en `Pending`, el Administrador la aprueba (`204`), el código llega por correo, `reset=204` y el login con la contraseña nueva funciona |
+| Permisos | crear `202`, `aprobar=204`, `aprobar-otra-vez=400` (*"Solo se pueden aprobar solicitudes en estado Pendiente."*), `rechazar=204` |
+| Negocio | factura `Issued`, `cobrar=200` → `Paid`, `transicion-prohibida=400` con *"La factura no puede pasar de Paid a NotDelivered."* |
+
+Y de paso quedó cerrado el trozo de RF-DOC-02 y RF-DOC-03 que faltaba: con dos
+Estándares distintos, Ana ve solo su documento, Beto recibe `403` al descargarlo
+y al eliminarlo, y el Administrador sí puede.
+
+**Qué aprendí de mis propios errores.** En esta entrada el agente se equivocó
+tres veces, y el README tenía razón las tres:
+
+1. Usó `POST /api/billing/invoices/{id}/payments` para cobrar, y esa ruta es
+   `RegisterDebtPayment`, del Administrador. La de cajero es `/collect`.
+2. Mandó `receivedAmount` en una factura de delivery, y el servidor lo rechaza
+   con *"Una factura de delivery no registra el monto recibido ni el cambio."*
+   La regla ya estaba documentada en el README.
+3. Para la recuperación de un Estándar no aprobó la solicitud `ResetPassword`
+   antes de leer el correo, así que tomó el token de activación como si fuera el
+   código de recuperación. El paso de aprobación está en el ADR 014 y en el
+   README.
+
+---
+
+### Entrada 7 — La corrida completa y el último defecto real (2026-11-11)
+
+**Qué se pidió.** Una sola corrida desde cero que verifique todo lo calificable y
+diga si algo falla.
+
+**Qué devolví.** Un script que borra los volúmenes, levanta la composición,
+ejecuta las comprobaciones y resume con `PASS`/`FAIL`. Resultado final: **49 de
+49**, sin fallos.
+
+**El último defecto real: el servicio de correo no enviaba nada.** El
+`docker compose ps` lo delataba en la columna COMMAND: el contenedor `mailer`
+mostraba `dotnet PirryLedger.…` en vez de `sh -c …`. La causa: la imagen trae
+`ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"]` y en Compose `command` no
+reemplaza al entrypoint, se le agrega como argumentos. El bucle terminó como
+argumentos de la API, que arrancó como servidor y nunca ejecutó `--send-mail`.
+
+La corrección: el bucle va en el `entrypoint` (`/bin/sh -c`) y el `command` queda
+como el script. `migrate` pasó a `command: ["--migrate"]` y la API se quedó sin
+`command`: las dos confían en el entrypoint de la imagen. Está anotado en el ADR
+019.
+
+**El correo, verificado por la vía del README.** Con el `.env` apuntando a
+Mailpit: `Correos tomados: 1`, `Correos enviados: 1`, `Correos fallidos: 0` y
+`{"total":1}` en la bandeja de la composición, con el enlace de activación dentro
+del mensaje.
+
+**Lo que costó más de lo que debía: el archivo `.env`.** No se versiona, el
+Codespace se recreó dos veces y el agente lo escribió a mano en lugar de copiarlo
+de la plantilla. De ahí salieron tres tropiezos que quedaron documentados:
+
+- `PIRRY_LEDGER_PUBLIC_BASE_URL` con `https`: la aplicación se detiene a
+  propósito, porque no hay TLS (ADR 020).
+- `POSTGRES_PASSWORD` distinto del que inicializó el volumen: `pg_isready` dice
+  `healthy` igual, porque no autentica; el que falla es la aplicación.
+- La semilla del primer Administrador **no cambia la contraseña** de una cuenta
+  que ya existe.
+
+Por eso el `docker-compose.yml` ahora exige las variables obligatorias con `:?`:
+un `.env` incompleto da un mensaje con el nombre de la variable en vez de cien
+avisos y un `dependency failed to start`.
+
+**Estado al cerrar.** 27 commits en la rama, `dotnet build` en 0 errores y 0
+advertencias, 483 pruebas en verde, y la corrida de 49 comprobaciones sin fallos.
+Falta el push, el PR y la etiqueta, que son decisiones mías.
+
+
