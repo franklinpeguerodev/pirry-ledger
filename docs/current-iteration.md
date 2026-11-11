@@ -263,6 +263,20 @@ Last verification: GitHub Codespace, 2026-11-11.
       same PR. The PR is Franklin's; the branch has all of it.
 - [x] Bitácora entry: `docs/bitacora-practica-4.md`, as its own commit.
 
+## Status: concluded
+
+Práctica 4 is delivered (2026-11-11, GitHub Codespace). The evidence for every
+acceptance criterion is in the checklist above and in
+`docs/bitacora-practica-4.md`.
+
+What remains is Franklin's, and it is not code:
+
+- The pull request `develop` -> `main` that promotes the work.
+- The tag `practica-4`, on the merge commit in `main`. The agent does not tag.
+
+This file stays as the record of what the iteration asked and what it
+delivered. The next iteration replaces it.
+
 ## How to work on this iteration
 
 - Plan first: files touched, design decisions and alternatives, how each
