@@ -254,7 +254,7 @@ Edita `.env` y pon tus valores en las líneas que te interesen. Con eso basta:
   variables en el entorno del sistema, y si tampoco están, avisa por el nombre
   de la que falta y se detiene (RD-08).
 - `.env` está en el `.gitignore`: **nunca** se sube al repositorio. Sí se sube
-  `.env.example`, la plantilla con las dieciocho variables, sus descripciones y
+  `.env.example`, la plantilla con las veinticinco variables, sus descripciones y
   valores de ejemplo. Nunca pongas un valor real en `.env.example`.
 - Si un valor tiene espacios o el carácter `#`, ponlo entre comillas dobles.
 - Si una variable ya está definida en el entorno del sistema (por ejemplo, un
@@ -313,15 +313,17 @@ Esto crea las tablas de AccessControl (`ac_users`, `ac_recovery_codes`,
 `ac_activation_tokens`, `ac_sessions` y `ac_branches`), la cola de Notifications
 (`not_email_queue`), las dos tablas de permisos (`per_permission_requests` y
 `per_permission_grants`, con su índice único
-`ux_per_permission_grants_user_permission`), las tablas del módulo Business
-(`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments`, `bil_invoice_edits`
-y `bil_products`) y la tabla de documentos (`doc_documents`), en la misma base y
-manteniendo la propiedad de cada módulo.
+`ux_per_permission_grants_user_permission`), las siete tablas del módulo
+Business (`bil_invoices`, `bil_invoice_items`, `bil_invoice_payments`,
+`bil_invoice_edits`, `bil_products`, `bil_product_images` y
+`bil_image_revision`) y la tabla de documentos (`doc_documents`), en la misma
+base y manteniendo la propiedad de cada módulo.
 
 El orden de los comandos da igual: ninguna de esas tablas declara claves
 foráneas hacia otra pieza, así que ninguna depende de que la otra exista. Las
-cuatro de `bil_` sí se referencian entre ellas, pero se crean en la misma
-migración. Está comprobado también ejecutándolos en orden inverso.
+de `bil_` sí se referencian entre ellas, pero dentro de la misma pieza, y las
+aplica EF Core en el orden de sus migraciones. Está comprobado también
+ejecutándolos en orden inverso.
 
 Para comprobar que las cinco se aplicaron:
 
@@ -331,9 +333,9 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-Son catorce tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
-`per_`, las cinco de `bil_` y `doc_documents`. La tabla `__EFMigrationsHistory`
-que crea EF Core es la decimoquinta fila, pero no es de ninguna pieza.
+Son dieciséis tablas de módulo: las cinco de `ac_`, `not_email_queue`, las dos de
+`per_`, las siete de `bil_` y `doc_documents`. La tabla `__EFMigrationsHistory`
+que crea EF Core es la decimoséptima fila, pero no es de ninguna pieza.
 
 Resultado esperado:
 
@@ -901,12 +903,26 @@ Pirry Ledger es el ERP de un negocio de comida rápida con dos sucursales y 2–
 empleados por sucursal. Se usara a diario desde una tablet y contara con una vista personalizada para los dueños del negocio y es también el
 proyecto de la asignatura Programación III.
 
-La iteración actual (Práctica 1) entrega la primera pieza funcional del Core:
-**Control de acceso completo**, desde el alta de usuarios por el Administrador
-con activación por email hasta la recuperación de contraseña con aprobación del
-Administrador y la administración de usuarios, más la cola mínima de email
-saliente y la **estructura declarada** (sin pruebas) de la máquina de estados
-del negocio.
+El proyecto se armó por capas, y cada capa es una pieza del Core o del módulo
+de negocio, con su tabla y su suite de pruebas:
+
+1. **Control de acceso** (Práctica 1): alta de usuarios por el Administrador
+   con activación por email, inicio y cierre de sesión, recuperación de
+   contraseña con aprobación del Administrador, administración de usuarios y la
+   cola mínima de email saliente.
+2. **Gestión de permisos** (Asignación 2): las solicitudes de permiso con su
+   máquina de estados, las aprobaciones y las concesiones.
+3. **Módulo de negocio** (Práctica 3): la máquina de estados de `Invoice`, las
+   facturas con sus ítems, pagos e historial, y el consumo de una concesión al
+   anular.
+4. **Manejador de documentos** (Práctica 4): subir, listar, descargar y
+   eliminar de forma lógica documentos de cualquier tipo, con los bytes en un
+   volumen con nombre y el proyecto entero levantando con un solo comando de
+   Docker.
+
+La iteración actual es la **Práctica 4**: el Manejador de documentos, la
+composición de Docker con PostgreSQL y SeaweedFS, y la API externa cuya clave
+vive fuera del repositorio.
 
 ### Arquitectura: monolito modular
 
@@ -916,38 +932,44 @@ compilando.
 
 ```mermaid
 flowchart TD
-    Host["PirryLedger.Host<br/>composición, arranque y --send-mail"]
+    Host["PirryLedger.Host<br/>composición, arranque, --send-mail y --migrate"]
     AC["PirryLedger.Core.AccessControl<br/>(Domain, Application, Infrastructure, Api)"]
     NOT["PirryLedger.Core.Notifications<br/>(Domain, Application, Infrastructure, Api)"]
     PERM["PirryLedger.Core.Permissions<br/>(Domain, Application, Infrastructure, Api)"]
-    BUS["PirryLedger.Business<br/>(Domain, Application)"]
+    DOC["PirryLedger.Core.Documents<br/>(Domain, Application, Infrastructure, Api)"]
+    BUS["PirryLedger.Business<br/>(Domain, Application, Infrastructure, Api)"]
     CON["PirryLedger.Core.Contracts<br/>(persistencia, tiempo, notificaciones)"]
 
     Host --> AC
     Host --> NOT
     Host --> PERM
+    Host --> DOC
     Host --> BUS
     AC --> CON
     NOT --> CON
     PERM --> CON
+    DOC --> CON
     BUS --> CON
     PERM --> AC
+    DOC --> AC
 ```
 
 Reglas que se ven en ese diagrama:
 
 - **RD-01**: cada pieza expone sus propios endpoints; el Host no tiene
   controllers (`Program.cs` solo hace `app.MapAccessControl()`,
-  `app.MapPermissions()` y `app.MapNotifications()`, que hoy no mapea ninguna
-  ruta porque el envío de correo es un comando, no un endpoint).
+  `app.MapNotifications()`, `app.MapPermissions()`, `app.MapBusiness()` y
+  `app.MapDocuments()`; `MapNotifications()` no mapea ninguna ruta porque el
+  envío de correo es un comando, no un endpoint).
 - **RD-02**: la lógica de negocio vive en Domain y Application, nunca en los
   endpoints. En la capa Api solo se traduce HTTP a una llamada de caso de uso.
 - **RD-03**: Business referencia únicamente `PirryLedger.Core.Contracts`; el
   Core no referencia Business en ningún `.csproj`.
-- **Una dependencia cruzada entre dos piezas del Core**: `Permissions`
-  referencia `AccessControl` (la capa Application, para el punto único de
-  acceso, y la capa Api, para el filtro). La razón y el plan para
-  deshacerla están en `docs/current-iteration.md`, decisión 5.
+- **Una dependencia cruzada entre piezas del Core**: `Permissions` y
+  `Documents` referencian `AccessControl` (la capa Application, para
+  autenticar al llamador, y la capa Api, para el filtro de acceso). Se mantiene
+  hasta que exista un `IAuthenticator` en `Core.Contracts`; el razonamiento
+  está en `docs/bitacora-asignacion-2.md`.
 - **RD-12**: cada pieza tiene su proyecto de pruebas en `Tests/` y corre sin
   levantar la API.
 - Un solo reloj inyectable `IClock` para todo el sistema (RD-11); ninguna clase
@@ -1921,7 +1943,7 @@ deciden transiciones: llaman al agregado, que delega en la máquina.
 | RD-09 | Usuarios y estados viven en PostgreSQL y sobreviven al reinicio de la aplicación. La clave y la versión de cada imagen del catálogo también (sección 3.15). |
 | RD-10 | La conexión, el primer Administrador, SMTP y el bucket de imágenes se configuran mediante variables de entorno (sección 1, paso 4). Las siete del bucket son obligatorias: sin alguna, la aplicación no arranca y dice cuál falta. |
 | RD-11 | Las fechas de dominio, tokens, sesiones y cambios de contraseña se registran en UTC mediante `IClock`. |
-| RD-12 | AccessControl, Notifications, Permissions y Business tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
+| RD-12 | AccessControl, Notifications, Permissions, Documents y Business tienen suites unitarias que corren sin levantar la API completa (`dotnet test`). |
 
 ### 3.8 Gestión de permisos (RF-GP-01 a RF-GP-07)
 
