@@ -352,17 +352,37 @@ Y, para la parte que esta máquina no tiene, la ruta del README en el Codespace:
 `cp .env.example .env`, `docker compose up --build`, y los seis frentes con sus
 cuerpos exactos.
 
-**Lo que queda pendiente, y es decisión de Franklin.** El pull request
-`develop` → `main` lo abro y lo mergeo yo. Después, la etiqueta:
+**Lo que pasó después, con los datos reales.** El 2026-11-10 Franklin mergeó los
+dos pull requests:
+
+| Pull request | Base | Merge | Título |
+|---|---|---|---|
+| `#87 docs/practica-4-closing` | `develop` | `bb799ba` | Merge pull request #87 from franklinpeguerodev/docs/practica-4-closing |
+| `#88 develop` | `main` | `0b39f21` | Merge pull request #88 from franklinpeguerodev/develop |
+
+Y a petición explícita de Franklin, el agente creó y empujó la etiqueta:
 
 ```powershell
-git tag -a practica-4 -m "Practice 4: document manager, container composition and external API"
-git push origin --tags
+git tag -a practica-4 0b39f21 -m "Practice 4: document manager, container composition and external API"
+git push origin practica-4
 ```
 
-La etiqueta va sobre el commit de merge en `main`, como la `practica-3`. El
-agente no la crea: `docs/current-iteration.md` deja explícita esa decisión como
-del dueño del repositorio.
+La etiqueta va sobre el commit de merge en `main`, `0b39f21`, igual que la
+`practica-3` va sobre `415a874`. Es anotada (`git cat-file -t practica-4`
+devuelve `tag`), y se empujó **solo esa etiqueta**, no `--tags`, para no subir
+por accidente las demás. Verificado en el remoto:
+
+```
+f02732229247fcd0a777abb3346d88086dacc964	refs/tags/practica-4
+0b39f21746567e2f05a2c68ba61c27f079f6fab1	refs/tags/practica-4^{}
+```
+
+La segunda línea es la etiqueta desreferenciada: el commit de merge en `main`.
+
+**Comprobación final sobre el commit etiquetado**, con el árbol en `0b39f21`:
+build en 0 advertencias y 0 errores, y las 483 pruebas superadas, 0 con error.
+Además, `git diff --shortstat origin/develop..origin/main` sale vacío: `main` y
+`develop` tienen el mismo contenido, así que la promoción no dejó nada atrás.
 
 **Lo que este pull request NO incluye.** La auditoría de subidas y eliminaciones
 (RF-DOC-06, Pieza 6, semana 12), adjuntar documentos a una entidad del negocio
