@@ -564,6 +564,13 @@ Cómo se comporta:
 
 - **Es idempotente.** Si ya existe algún Administrador, no hace nada y la
   aplicación arranca igual. Puedes arrancar la aplicación las veces que quieras.
+- **No cambia la contraseña de un Administrador que ya existe.** Cambiar
+  `PIRRY_LEDGER_FIRST_ADMIN_PASSWORD` en el `.env` **no** cambia la contraseña
+  de la cuenta creada: la semilla no la toca. Para empezar de nuevo con otra
+  contraseña hay que borrar el volumen de la base
+  (`docker compose down -v`, solo cuando no hay nada que conservar) y volver a
+  arrancar. Con la composición, la contraseña de la cuenta de ejemplo es la de
+  `.env.example`.
 - **El Administrador nace active.** No llega por email, así que no hay enlace
   de activación que abrir.
 - **No promueve cuentas que ya existen.** Si el email de la semilla ya está
@@ -629,7 +636,35 @@ RF-DOC-05: los archivos no están dentro de la imagen. Están en el volumen
 ```bash
 docker volume inspect pirry-ledger-documents
 docker compose exec seaweedfs ls -la /data
+docker compose exec seaweedfs du -ah /data | sort -h | tail -12
 ```
+
+Para ver el contenido de un documento directamente desde el almacenamiento, la
+API de archivos de SeaweedFS (el filer) contesta por HTTP dentro de la red:
+
+```bash
+# el objeto: bucket + clave (documents/{guid})
+docker compose exec seaweedfs wget -qO- \
+  "http://localhost:8888/pirry-ledger-documents/documents/<guid>"
+
+# el contenido del bucket
+docker compose exec seaweedfs wget -qO- "http://localhost:8888/pirry-ledger-documents/?pretty=y"
+```
+
+Para explorar con un cliente interactivo (dentro del shell: `ls /`,
+`ls /pirry-ledger-documents`, `cat /pirry-ledger-documents/documents/<guid>`):
+
+```bash
+docker compose exec seaweedfs weed shell -filer=localhost:8888
+```
+
+> `weed filer` no sirve para mirar: es el comando que **arranca** un filer, y
+> dentro del contenedor choca con el que ya está corriendo
+> (`resource temporarily unavailable` sobre el LevelDB). El cliente es
+> `weed shell`.
+
+La descarga por la API y la lectura directa devuelven lo mismo: el objeto se
+guarda tal cual, sin transformar.
 
 `docker compose down` (sin `-v`) no toca ese volumen: al volver a arrancar, el
 documento sigue listado y se descarga.
@@ -652,30 +687,59 @@ dirección pública) y el código de recuperación que viaja en el cuerpo.
 Subir un documento (el archivo es de prueba; cualquier tipo vale):
 
 ```bash
+echo "hola desde el codespace" > prueba.txt
 curl -i -X POST http://localhost:8090/api/documents \
   -H "Authorization: Bearer <token>" \
-  -F "file=@factura.pdf"
+  -F "file=@prueba.txt"
 ```
 
-Respuesta `201` con el registro que pide RF-DOC-01: nombre, tipo, tamaño, fecha y
-quién lo subió, más la sucursal de la sesión:
+Respuesta `201` **obtenida en el Codespace el 2026-11-11**, con el registro que
+pide RF-DOC-01: nombre, tipo, tamaño, fecha y quién lo subió, más la sucursal de
+la sesión. La sucursal es `Todas` porque quien subió es el Administrador:
 
 ```json
 {
-  "id": "6d1a2c3e-8f4b-4a2e-9c1d-2b3f4a5c6d7e",
-  "name": "factura.pdf",
-  "contentType": "application/pdf",
-  "sizeBytes": 184320,
-  "uploadedByUserId": "0a1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+  "id": "e22f5459-371e-46db-ac8d-f4d9e6e15ca6",
+  "name": "prueba.txt",
+  "contentType": "text/plain",
+  "sizeBytes": 24,
+  "uploadedByUserId": "f5b90f48-ca06-48f1-884a-e6ec99bde964",
   "branchId": "00000000-0000-0000-0000-000000000001",
-  "uploadedAtUtc": "2026-11-10T18:22:41.1234567Z"
+  "uploadedAtUtc": "2026-11-11T00:54:59.6800718Z"
 }
 ```
 
-Listar (`GET /api/documents`) devuelve un arreglo con esa misma forma. Descargar
-(`GET /api/documents/{id}/download`) devuelve los bytes como adjunto
-(`Content-Type: application/octet-stream` y `Content-Disposition: attachment`).
-Eliminar (`DELETE /api/documents/{id}`) responde `204`.
+Listar (`GET /api/documents`) devuelve un arreglo con esa misma forma:
+
+```json
+[
+  {
+    "id": "e22f5459-371e-46db-ac8d-f4d9e6e15ca6",
+    "name": "prueba.txt",
+    "contentType": "text/plain",
+    "sizeBytes": 24,
+    "uploadedByUserId": "f5b90f48-ca06-48f1-884a-e6ec99bde964",
+    "branchId": "00000000-0000-0000-0000-000000000001",
+    "uploadedAtUtc": "2026-11-11T00:54:59.680071Z"
+  }
+]
+```
+
+Descargar (`GET /api/documents/{id}/download`) devuelve los bytes como adjunto,
+también verificado en el Codespace:
+
+```http
+HTTP/1.1 200 OK
+Content-Length: 24
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename=prueba.txt; filename*=UTF-8''prueba.txt
+```
+
+y el cuerpo es `hola desde el codespace`, el mismo texto que se subió. Eliminar
+(`DELETE /api/documents/{id}`) responde `204`.
+
+> La fecha de la lista trae seis decimales y la de la subida siete: PostgreSQL
+> guarda microsegundos. Es la misma fecha, redondeada al guardarse.
 
 #### Rechazo controlado: sin clave o con la API caída
 
