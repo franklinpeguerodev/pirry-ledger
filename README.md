@@ -3293,3 +3293,30 @@ todavía no se escribe: llega en la semana 11.
   eliminación es lógica: el registro y el objeto siguen existiendo (RF-DOC-04).
 - **Despliegue en la nube.** Esta versión corre en Docker; el despliegue queda
   fuera de la práctica.
+
+### Clasificación del catálogo
+
+La migración agrega Comidas y Bebidas con sus diez subcategorías iniciales.
+Los productos existentes aparecen como **Sin categoría** hasta que se les
+asigne una subcategoría. Al crear o editar un producto, la descripción es
+obligatoria.
+
+| Método | Ruta | Uso |
+| --- | --- | --- |
+| GET | /api/billing/categories | Lista las categorías con sus subcategorías. Requiere sesión. |
+| POST | /api/admin/categories | Crea una categoría. Cuerpo `{"name":"Comidas"}`. |
+| PUT | /api/admin/categories/{id} | Cambia el nombre de una categoría. |
+| POST | /api/admin/categories/{id}/subcategories | Crea una subcategoría. Cuerpo `{"name":"Postres"}`. |
+| PUT | /api/admin/categories/{id}/subcategories/{subcategoryId} | Cambia el nombre de una subcategoría. |
+
+Las escrituras de clasificación requieren el rol Administrador. Las rutas de
+productos aceptan `subcategoryId` al crear o editar. En una edición, omitir
+el campo conserva la asignación y enviar `null` la quita.
+
+`GET /api/billing/products` admite `categoryId`, `subcategoryId` y
+`unclassified=true`. La consulta sin filtros devuelve el catálogo completo.
+Una edición con descripción vacía o subcategoría inexistente responde
+`400`. Un usuario Standard que intenta crear una categoría recibe `403`.
+
+La suite que verifica estas rutas y el control de acceso se ejecuta con
+`dotnet test pirry-ledger.slnx --no-restore`.

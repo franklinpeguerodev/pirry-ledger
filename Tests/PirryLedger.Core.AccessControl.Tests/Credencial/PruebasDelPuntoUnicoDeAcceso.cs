@@ -71,6 +71,7 @@ public class PruebasDelPuntoUnicoDeAcceso
         typeof(PirryLedger.Business.Application.UseCases.UpdateProduct),
         typeof(PirryLedger.Business.Application.UseCases.SetProductActive),
         typeof(PirryLedger.Business.Application.UseCases.ListProducts),
+        typeof(PirryLedger.Business.Application.UseCases.ManageClassification),
         // Los casos de uso de las imagenes del catalogo (ADR 015) y las
         // reglas de la imagen que vienen de la configuracion.
         typeof(PirryLedger.Business.Application.UseCases.SetProductImage),
@@ -287,6 +288,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.ReactivateUser)]
     [InlineData(Operation.UnlockUser)]
     [InlineData(Operation.CreateProduct)]
+    [InlineData(Operation.ManageProductClassification)]
     [InlineData(Operation.UpdateProduct)]
     [InlineData(Operation.SetProductActive)]
     [InlineData(Operation.SetProductImage)]
@@ -301,13 +303,13 @@ public class PruebasDelPuntoUnicoDeAcceso
     // administracion declaradas, contadas desde las rutas reales. Si alguien
     // anade una mas y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteDieciseisRutasDeAdministrador()
+    public void HayExactamenteVeinteRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(16, deAdministracion.Count);
+        Assert.Equal(20, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {

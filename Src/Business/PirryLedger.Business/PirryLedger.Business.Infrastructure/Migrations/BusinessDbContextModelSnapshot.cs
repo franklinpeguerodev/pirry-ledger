@@ -22,6 +22,35 @@ namespace PirryLedger.Business.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Category", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("bil_categories", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Comidas"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0000-000000000002"),
+                            Name = "Bebidas"
+                        });
+                });
+
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -210,10 +239,16 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("price");
 
+                    b.Property<Guid?>("SubcategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subcategory_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
                         .IsUnique();
+
+                    b.HasIndex("SubcategoryId");
 
                     b.ToTable("bil_products", (string)null);
                 });
@@ -282,6 +317,91 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                     b.ToTable("bil_product_images", (string)null);
                 });
 
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Subcategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("bil_subcategories", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000001"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Chimis"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000002"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Club sándwiches"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000003"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Sándwiches"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000004"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Yaroas"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000005"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Hamburguesas"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000006"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000001"),
+                            Name = "Tostones"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000007"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000002"),
+                            Name = "Jugos naturales"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000008"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000002"),
+                            Name = "Batidas"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000009"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000002"),
+                            Name = "Refrescos"
+                        },
+                        new
+                        {
+                            Id = new Guid("ca7e0000-0000-0000-0001-000000000010"),
+                            CategoryId = new Guid("ca7e0000-0000-0000-0000-000000000002"),
+                            Name = "Agua"
+                        });
+                });
+
             modelBuilder.Entity("PirryLedger.Business.Infrastructure.Persistence.ImageRevisionCounter", b =>
                 {
                     b.Property<int>("Id")
@@ -329,12 +449,29 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("PirryLedger.Business.Domain.Entities.Subcategory", null)
+                        .WithMany()
+                        .HasForeignKey("SubcategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.ProductImage", b =>
                 {
                     b.HasOne("PirryLedger.Business.Domain.Entities.Product", null)
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Subcategory", b =>
+                {
+                    b.HasOne("PirryLedger.Business.Domain.Entities.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

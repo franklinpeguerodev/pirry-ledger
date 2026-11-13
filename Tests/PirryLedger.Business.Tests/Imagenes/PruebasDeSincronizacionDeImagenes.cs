@@ -232,7 +232,7 @@ public sealed class PruebasDeSincronizacionDeImagenes
         bool activo,
         string nombre = "Combo Pirri")
     {
-        var producto = Product.Create(nombre, null, 500m);
+        var producto = Product.Create(nombre, "Producto de prueba", 500m);
 
         if (!activo)
         {

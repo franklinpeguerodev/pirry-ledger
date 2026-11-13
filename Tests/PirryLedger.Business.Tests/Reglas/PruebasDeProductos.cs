@@ -20,13 +20,13 @@ public sealed class PruebasDeProductos
     public void CrearProductoConPrecioInvalidoSeRechaza()
     {
         Assert.Throws<InvoiceRuleViolationException>(
-            () => Product.Create("Combo Pirri", null, 500.005m));
+            () => Product.Create("Combo Pirri", "Producto de prueba", 500.005m));
     }
 
     [Fact]
     public void DesactivarProductoNoCambiaSuPrecioHistorico()
     {
-        var producto = Product.Create("Combo Pirri", null, 500m);
+        var producto = Product.Create("Combo Pirri", "Producto de prueba", 500m);
 
         producto.SetActive(false);
 
@@ -37,10 +37,10 @@ public sealed class PruebasDeProductos
     [Fact]
     public void CrearItemDesdeProductoConservaLaFotoDelNombreYPrecio()
     {
-        var producto = Product.Create("Combo Pirri", null, 500m);
+        var producto = Product.Create("Combo Pirri", "Producto de prueba", 500m);
         var item = InvoiceItem.Create(producto, 2);
 
-        producto.Update("Combo Pirri grande", null, 700m);
+        producto.Update("Combo Pirri grande", "Producto de prueba", 700m);
 
         Assert.Equal(producto.Id, item.ProductId);
         Assert.Equal("Combo Pirri", item.Name);
