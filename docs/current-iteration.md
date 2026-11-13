@@ -19,16 +19,16 @@ the requirements index.
 
 ## Acceptance criteria
 
-- [ ] Existing products retain price, state and image after migration.
+- [x] Existing products retain price, state and image after migration.
 - [x] The ten initial subcategories can be listed under their approved categories.
-- [ ] An administrator can add and rename categories and subcategories.
+- [x] An administrator can add and rename categories and subcategories.
 - [x] Product reads expose the classification and support filters by category,
       subcategory and unclassified status. Existing unfiltered reads still work.
 - [x] Product writes reject unknown subcategories and blank descriptions for every product.
 - [x] Standard users can read the catalog and cannot change its classification.
 - [x] Rejected writes leave the stored data unchanged.
 - [x] Build and tests pass. The README documents verified API examples.
-- [ ] ADR 021 and a separate logbook commit accompany the pull request.
+- [x] ADR 021 and a separate logbook commit accompany the pull request.
 
 ## Out of scope
 

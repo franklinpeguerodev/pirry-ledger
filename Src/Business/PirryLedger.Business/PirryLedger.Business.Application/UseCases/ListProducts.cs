@@ -7,9 +7,9 @@ public sealed class ListProducts
 {
     private readonly IProductRepository _products;
     private readonly IProductImageRepository _images;
-    private readonly IClassificationRepository? _classification;
+    private readonly IClassificationRepository _classification;
 
-    public ListProducts(IProductRepository products, IProductImageRepository images, IClassificationRepository? classification = null)
+    public ListProducts(IProductRepository products, IProductImageRepository images, IClassificationRepository classification)
     {
         _products = products;
         _images = images;
@@ -23,7 +23,7 @@ public sealed class ListProducts
         CancellationToken cancellationToken = default, Guid? categoryId = null, Guid? subcategoryId = null, bool unclassified = false)
     {
         var products = await _products.ListAsync(cancellationToken);
-        if (categoryId is Guid category && _classification is not null)
+        if (categoryId is Guid category)
         {
             var subcategories = await _classification.ListSubcategoriesAsync(cancellationToken);
             var matching = subcategories.Where(item => item.CategoryId == category).Select(item => item.Id).ToHashSet();

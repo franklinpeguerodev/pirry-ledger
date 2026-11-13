@@ -47,6 +47,32 @@ public sealed class PruebasDeClasificacionDelCatalogo
         Assert.Empty(categorias!);
     }
 
+    [Fact]
+    public async Task RenombrarClasificacionConservaSusIdentificadores()
+    {
+        await using var servidor = new ServidorDePruebasHttp();
+        var cliente = servidor.Cliente;
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", servidor.TokenDeAdministrator());
+        var alta = await cliente.PostAsJsonAsync("/api/admin/categories", new { name = "Comidas" });
+        var categoria = (await alta.Content.ReadFromJsonAsync<CategoryItem>())!;
+        var ruta = $"/api/admin/categories/{categoria.Id}";
+        var altaSubcategoria = await cliente.PostAsJsonAsync(
+            $"{ruta}/subcategories", new { name = "Postres" });
+        var subcategoria = (await altaSubcategoria.Content.ReadFromJsonAsync<SubcategoryItem>())!;
+
+        var cambioCategoria = await cliente.PutAsJsonAsync(ruta, new { name = "Platos" });
+        var cambioSubcategoria = await cliente.PutAsJsonAsync(
+            $"{ruta}/subcategories/{subcategoria.Id}", new { name = "Dulces" });
+        var categorias = await cliente.GetFromJsonAsync<CategoryItem[]>("/api/billing/categories");
+
+        Assert.Equal(HttpStatusCode.OK, cambioCategoria.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, cambioSubcategoria.StatusCode);
+        var actual = Assert.Single(categorias!);
+        Assert.Equal(categoria.Id, actual.Id);
+        Assert.Equal("Platos", actual.Name);
+        Assert.Equal(new SubcategoryItem(subcategoria.Id, categoria.Id, "Dulces"), Assert.Single(actual.Subcategories));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

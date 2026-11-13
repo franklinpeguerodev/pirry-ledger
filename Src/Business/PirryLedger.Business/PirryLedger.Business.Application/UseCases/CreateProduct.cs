@@ -7,9 +7,9 @@ namespace PirryLedger.Business.Application.UseCases;
 public sealed class CreateProduct
 {
     private readonly IProductRepository _products;
-    private readonly IClassificationRepository? _classification;
+    private readonly IClassificationRepository _classification;
 
-    public CreateProduct(IProductRepository products, IClassificationRepository? classification = null)
+    public CreateProduct(IProductRepository products, IClassificationRepository classification)
     {
         _products = products;
         _classification = classification;
@@ -21,8 +21,8 @@ public sealed class CreateProduct
         decimal price,
         CancellationToken cancellationToken = default, Guid? subcategoryId = null)
     {
-        if (subcategoryId is Guid selectedId && (_classification is null ||
-            await _classification.FindSubcategoryAsync(selectedId, cancellationToken) is null))
+        if (subcategoryId is Guid selectedId &&
+            await _classification.FindSubcategoryAsync(selectedId, cancellationToken) is null)
         {
             throw new InvoiceRuleViolationException("La subcategoría no existe.");
         }

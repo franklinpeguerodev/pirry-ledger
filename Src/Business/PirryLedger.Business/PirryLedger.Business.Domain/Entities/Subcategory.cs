@@ -2,6 +2,10 @@ namespace PirryLedger.Business.Domain.Entities;
 
 public sealed class Subcategory
 {
+    private Subcategory()
+    {
+    }
+
     public Guid Id { get; private set; }
     public Guid CategoryId { get; private set; }
     public string Name { get; private set; } = string.Empty;
