@@ -57,11 +57,7 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 
 COPY --from=build /app/publish ./
 
-# El puerto de escucha NO se fija aqui: sale de PIRRY_LEDGER_PUBLIC_BASE_URL, que
-# es la unica fuente de verdad del host y puerto de Kestrel y de los enlaces de
-# activacion (docs/adr/005-listen-address-from-public-base-url.md). UseUrls gana
-# sobre ASPNETCORE_URLS, asi que definir esta ultima no cambia nada. EXPOSE solo
-# documenta el puerto por defecto; el mapeo real se hace al ejecutar.
+# PORT configura la escucha HTTP. EXPOSE documenta el puerto de Compose.
 EXPOSE 8090
 
 # Usuario sin privilegios que ya trae la imagen (APP_UID). La aplicacion no

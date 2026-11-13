@@ -203,7 +203,8 @@ contiene valores reales.
 | Variable | Para qué sirve |
 |---|---|
 | `ConnectionStrings__PirryLedger` | **Obligatoria.** Cadena de conexión a PostgreSQL: host, puerto, base de datos, usuario y contraseña. |
-| `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública de la aplicación. Fija a la vez el host y el puerto donde escucha la API y la dirección con la que se construyen los enlaces de activación. |
+| `PIRRY_LEDGER_PUBLIC_BASE_URL` | **Obligatoria.** Dirección pública para construir los enlaces de activación. Admite HTTP y HTTPS. |
+| `PORT` | **Obligatoria.** Puerto HTTP de Kestrel, entre 1 y 65535. Agrega `PORT=8090` a tu `.env` local existente. |
 | `PIRRY_LEDGER_SMTP_HOST` | Servidor SMTP saliente, por ejemplo `smtp.gmail.com`. |
 | `PIRRY_LEDGER_SMTP_PORT` | Puerto SMTP. Con `StartTls` suele ser `587`. |
 | `PIRRY_LEDGER_SMTP_SECURITY` | Cómo se cifra el transporte: `StartTls`, `Ssl` o `Ninguno`. |
@@ -396,21 +397,14 @@ Done.
 dotnet run --project Src/Host/PirryLedger.Host --launch-profile http
 ```
 
-Mantén esta terminal abierta. El host y el puerto los fija
-`PIRRY_LEDGER_PUBLIC_BASE_URL` (paso 4): es la misma variable que da la
-dirección de los enlaces de activación, así que **una sola fuente** decide dónde
-escucha la API y qué dirección llevan los enlaces. Con el valor del paso 4, la
-API queda en `http://localhost:8090`. Se comprueba en la salida de la consola:
+Mantén esta terminal abierta. Con `PORT=8090`, Kestrel escucha en
+`http://0.0.0.0:8090`. Desde esta máquina puedes abrir `http://localhost:8090`.
+El perfil `http` configura el entorno de desarrollo.
 
-```
-Now listening on: http://localhost:8090
-Application started. Press Ctrl+C to shut down.
-```
-
-El perfil `--launch-profile http` solo fija el entorno de desarrolelo; el puerto
-no sale de ahí. Por eso la API escucha en el mismo sitio aunque se lance el DLL
-compilado directamente (`dotnet Src\Host\PirryLedger.Host\bin\Debug\net10.0\PirryLedger.Host.dll`)
-o con otro perfil.
+En Render, configura `PORT=8090` y usa el dominio público HTTPS de tu servicio
+como `PIRRY_LEDGER_PUBLIC_BASE_URL`. Render recibe HTTPS y reenvía por HTTP
+al puerto interno. Comprueba el puerto en el log y abre un enlace de activación
+recién generado para verificar el dominio público.
 
 El proyecto del Host incluye un `appsettings.Development.json` local con la
 configuración de logs para `ASPNETCORE_ENVIRONMENT=Development`. El archivo
@@ -419,17 +413,11 @@ configuración de logs para `ASPNETCORE_ENVIRONMENT=Development`. El archivo
 termine subiendo al repositorio overrides de configuración pensados solo para
 su máquina. Si necesitas uno, créalo a mano y mantenlo fuera del historial.
 
-Si se va a abrir desde otra tablet o equipo, la variable debe ser la dirección
-de esa máquina, no `localhost`, por ejemplo `http://192.168.1.10:8090`: la API
-escucha en esa dirección y los enlaces del email salen con ella. Cambia el
-valor en el paso 4 y vuelve a arrancar.
+Si vas a abrir el enlace de activación desde otro dispositivo en la red local,
+usa una URL alcanzable desde ese dispositivo, como `http://192.168.1.10:8090`.
 
-Si falta cualquiera de las dos variables obligatorias
-(`ConnectionStrings__PirryLedger` o `PIRRY_LEDGER_PUBLIC_BASE_URL`), la
-aplicación se detiene y avisa por consola el nombre exacto de la variable que
-falta; no imprime ninguna traza (RD-08). Si el puerto ya está ocupado por otro
-programa o el host de la variable no pertenece a esta máquina, la aplicación
-también se detiene y el mensaje del sistema indica cuál de los dos es.
+Si falta `ConnectionStrings__PirryLedger`, `PIRRY_LEDGER_PUBLIC_BASE_URL` o
+`PORT`, el arranque se detiene y muestra la variable que debes configurar.
 
 Al arrancar, la semilla crea el primer Administrador si las variables
 `PIRRY_LEDGER_FIRST_ADMIN_*` están definidas y todavía no existe ningún
@@ -979,7 +967,7 @@ Cada módulo se capa igual: `Domain` (entidades y reglas), `Application` (casos
 de uso), `Infrastructure` (PostgreSQL, migraciones, SMTP) y `Api` (endpoints).
 `PirryLedger.Host` es composición y nada más: arranca la aplicación, registra
 los módulos, lee la configuración obligatoria, fija la dirección de escucha con
-`PIRRY_LEDGER_PUBLIC_BASE_URL` y sirve el comando `--send-mail`.
+`PORT` y sirve el comando `--send-mail`.
 
 ### Estructura del repositorio
 
@@ -1083,7 +1071,7 @@ Convención de los ADR: nombre de archivo y título en inglés, contenido en esp
 | Primer Administrador: semilla desde variables de entorno en el arranque | `docs/adr/002-first-administrator.md` |
 | Trazabilidad del cambio de contraseña (`passwordCambiadaUtc`) sin auditoría completa | `docs/adr/003-password-change-traceability.md` |
 | Columnas de AccessControl en snake_case, declaradas con `HasColumnName` | `docs/adr/004-snake-case-column-naming.md` |
-| Dirección de escucha de la API desde `PIRRY_LEDGER_PUBLIC_BASE_URL`, la misma variable que arma los enlaces | `docs/adr/005-listen-address-from-public-base-url.md` |
+| Puerto HTTP desde `PORT` y URL pública para los enlaces de activación | `docs/adr/020-listen-address-inside-a-container.md` |
 | Variables de entorno de desarrolelo local desde un archivo `.env` cargado con `DotNetEnv` | `docs/adr/006-local-env-configuration.md` |
 | Enviador de correo: comando CLI `--send-mail` en el Host, no servicio en segundo plano | `docs/adr/007-mail-sender-cli-command.md` |
 | Concesiones de permisos viven en su propia tabla `per_permission_grants`, independiente de `per_permission_requests` | `docs/adr/008-permission-grants-table.md` |

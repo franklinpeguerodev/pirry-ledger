@@ -294,3 +294,12 @@ delivered. The next iteration replaces it.
 - PR uses `.github/PULL_REQUEST_TEMPLATE.md` with exactly its four sections.
 - Local shell is PowerShell; the Codespace is bash. Give both forms when a
   command differs.
+
+## Authorized deployment adjustment (2026-11-12)
+
+Franklin approved separating the public activation URL from the HTTP listener
+port (ADR 020, RD-08, RD-10). The Host requires both
+`PIRRY_LEDGER_PUBLIC_BASE_URL` and `PORT`. The acceptance checks cover HTTP and
+HTTPS public URLs, explicit listener port selection, invalid configuration, and
+an activation link using the public origin. Compose and Render use port 8090
+in their standard configuration.

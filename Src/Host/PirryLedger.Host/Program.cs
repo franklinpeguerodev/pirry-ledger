@@ -59,17 +59,9 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 // tablas separadas por prefijo. Ninguna de las dos ve los contextos de la otra.
 var connection = ReadRequiredConnection(builder.Configuration);
 
-// La misma variable fija el puerto donde escucha la API y la direccion de los
-// enlaces de activacion. Una sola fuente para las dos cosas: no hay forma de
-// que se desincronicen (docs/adr/005-listen-address-from-public-base-url.md).
-// Los perfiles de launchSettings ya no traen applicationUrl, solo el entorno.
 var baseUrl = ReadRequiredBaseUrl(builder.Configuration);
-
-// ADR 020: la variable sigue siendo la direccion publica (los enlaces) y el
-// puerto, pero el proceso escucha en TODAS las interfaces. Un puerto publicado
-// por Docker llega a la interfaz del contenedor, no a su loopback: atado a
-// localhost, el contenedor no respondería en la direccion del README.
-builder.WebHost.UseUrls(ListenAddressFor(baseUrl));
+var port = ReadRequiredPort(builder.Configuration);
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddAccessControl(connection, baseUrl);
 builder.Services.AddNotifications(
@@ -187,10 +179,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// No hay UseHttpsRedirection: la direccion de escucha sale de
-// PIRRY_LEDGER_PUBLIC_BASE_URL (hoy http) y no existe ningun endpoint https al
-// que redirigir, asi que el middleware no redirige nada y solo imprime un aviso.
-// Si se decide HTTPS, va en un ADR (docs/adr/005-listen-address-from-public-base-url.md).
+// El proxy de Render termina TLS y reenvía por HTTP a Kestrel.
 
 // RD-07 y RD-08: la frontera de error del API. Este middleware envuelve la
 // ejecucion de la ruta y convierte cualquier excepcion en un rechazo
@@ -221,33 +210,6 @@ app.MapBusiness();
 app.MapDocuments();
 
 app.Run();
-
-// ADR 020: la variable dice la direccion publica y el puerto; el host de
-// escucha es siempre 0.0.0.0, para que un puerto publicado por Docker llegue.
-// Solo se admite http: hoy no hay certificado ni TLS, y aceptar https en la
-// variable produciria un arranque que no responde.
-static string ListenAddressFor(string publicBaseUrl)
-{
-    if (!Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var uri))
-    {
-        Console.Error.WriteLine(
-            $"La variable de entorno {EnvironmentConfiguration.BaseUrlVariable} no es una dirección válida. " +
-            "El README explica el formato.");
-
-        Environment.Exit(1);
-    }
-
-    if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
-    {
-        Console.Error.WriteLine(
-            $"La variable de entorno {EnvironmentConfiguration.BaseUrlVariable} usa {uri.Scheme}, " +
-            "pero la API solo escucha http. El README explica el formato.");
-
-        Environment.Exit(1);
-    }
-
-    return $"http://0.0.0.0:{uri.Port}";
-}
 
 // ADR 018: recorre los pasos de migracion registrados por las piezas y para en
 // el primero que falla. El Host no conoce el DbContext de ninguna pieza: solo
@@ -327,24 +289,38 @@ static string ReadRequiredConnection(IConfiguration configuration)
     return value;
 }
 
-// Lee PIRRY_LEDGER_PUBLIC_BASE_URL, con la que se arman los enlaces de
-// activacion y con la que se fija el host:puerto donde escucha la API. La
-// recuperacion no lleva enlace: lleva un codigo suelto, y por eso esta variable
-// no entra en ese Email. Sin ella los enlaces saldrian con una direccion que no
-// existe, asi que es obligatoria igual que la cadena de conexion.
+// La dirección pública se usa para generar los enlaces de activación.
 static string ReadRequiredBaseUrl(IConfiguration configuration)
 {
     var value = configuration[EnvironmentConfiguration.BaseUrlVariable];
 
-    if (string.IsNullOrWhiteSpace(value))
+    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+        (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+        string.IsNullOrEmpty(uri.Host) ||
+        !string.IsNullOrEmpty(uri.UserInfo) ||
+        !string.IsNullOrEmpty(uri.Query) ||
+        !string.IsNullOrEmpty(uri.Fragment))
     {
         Console.Error.WriteLine(
-            $"Falta la variable de entorno {EnvironmentConfiguration.BaseUrlVariable}. " +
-            "El README explica como definirla.");
+            $"Define {EnvironmentConfiguration.BaseUrlVariable} con una URL pública HTTP o HTTPS sin credenciales, consulta ni fragmento.");
         Environment.Exit(1);
     }
 
-    return value.TrimEnd('/');
+    return value.Trim().TrimEnd('/');
+}
+
+static int ReadRequiredPort(IConfiguration configuration)
+{
+    var value = configuration[EnvironmentConfiguration.PortVariable];
+
+    if (!int.TryParse(value, out var port) || port is < 1 or > 65535)
+    {
+        Console.Error.WriteLine(
+            $"Define {EnvironmentConfiguration.PortVariable} con un puerto entero entre 1 y 65535.");
+        Environment.Exit(1);
+    }
+
+    return port;
 }
 
 // Si PIRRY_LEDGER_FIRST_ADMIN_EMAIL y ..._PASSWORD estan definidas, crea el
