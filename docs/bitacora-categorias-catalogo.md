@@ -18,3 +18,10 @@ subcategorías y se hizo obligatoria la dependencia de clasificación. La suite
 completa pasó con 489 pruebas, incluida la edición de ambos niveles. En
 PostgreSQL temporal se verificó que la migración también conserva la clave
 y la versión del registro de imagen asociado.
+
+Franklin corrigió el alcance. El Administrador crea toda la clasificación y
+Standard consulta lo creado. Se cerró el PR 94 y se retiró la precarga de la
+migración y del modelo. PostgreSQL temporal devolvió cero categorías y cero
+subcategorías y conservó el producto de prueba y su imagen. La prueba HTTP
+verificó el listado vacío, el rechazo a Standard y la lectura posterior de
+la clasificación creada por el Administrador.
