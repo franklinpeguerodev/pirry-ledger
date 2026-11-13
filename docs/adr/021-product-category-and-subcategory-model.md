@@ -6,9 +6,7 @@ Aceptado por Franklin.
 
 ## Contexto
 
-El catálogo necesita agrupar productos en dos niveles configurables. El menú
-inicial usa Comidas y Bebidas. El Administrador debe poder ampliar la
-clasificación desde los datos.
+El catálogo necesita agrupar productos en dos niveles configurables. El Administrador crea y edita la clasificación. Standard consulta los datos guardados.
 
 ## Decisión
 
@@ -16,6 +14,9 @@ El módulo Business guarda categorías y subcategorías en dos tablas. Cada
 subcategoría pertenece a una categoría y cada producto puede referenciar una
 subcategoría. Los productos existentes conservan sus datos y aparecen como
 Sin categoría hasta que se les asigne una subcategoría.
+
+La migración crea las tablas vacías. El servidor genera los identificadores
+al crear categorías y subcategorías.
 
 El servidor exige una descripción al crear o editar cualquier producto.
 

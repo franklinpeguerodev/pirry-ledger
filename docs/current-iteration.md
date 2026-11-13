@@ -8,8 +8,7 @@ Working branch: `feature/catalog-categories`. Logbook:
 
 Persist two configurable levels, categories and subcategories. Products may
 reference a subcategory. Existing products start unclassified and retain their
-price, activation state and image. Seed Comidas and Bebidas with the ten
-approved subcategories. All product creates and edits require a description. Administrators can create and edit both levels. Authenticated users
+price, activation state and image. Classification starts empty. Administrators create the data. All product creates and edits require a description. Administrators can create and edit both levels. Authenticated users
 can read the classification and filter the product catalog.
 
 Applicable design requirements: RD-01, RD-02, RD-03, RD-06, RD-07, RD-08,
@@ -20,7 +19,7 @@ the requirements index.
 ## Acceptance criteria
 
 - [x] Existing products retain price, state and image after migration.
-- [x] The ten initial subcategories can be listed under their approved categories.
+- [x] Classification starts empty and authenticated users can list what administrators create.
 - [x] An administrator can add and rename categories and subcategories.
 - [x] Product reads expose the classification and support filters by category,
       subcategory and unclassified status. Existing unfiltered reads still work.

@@ -34,7 +34,7 @@ public sealed class PruebasDeClasificacionDelCatalogo
     }
 
     [Fact]
-    public async Task StandardPuedeConsultarClasificacionPeroNoCrearCategorias()
+    public async Task StandardConsultaLaClasificacionCreadaPorElAdministrador()
     {
         await using var servidor = new ServidorDePruebasHttp();
         var cliente = servidor.Cliente;
@@ -45,6 +45,21 @@ public sealed class PruebasDeClasificacionDelCatalogo
 
         Assert.Equal(HttpStatusCode.Forbidden, respuesta.StatusCode);
         Assert.Empty(categorias!);
+
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", servidor.TokenDeAdministrator());
+        var alta = await cliente.PostAsJsonAsync("/api/admin/categories", new { name = "Menú de temporada" });
+        var categoria = (await alta.Content.ReadFromJsonAsync<CategoryItem>())!;
+        var altaSubcategoria = await cliente.PostAsJsonAsync(
+            $"/api/admin/categories/{categoria.Id}/subcategories", new { name = "Especiales" });
+
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", servidor.TokenDeStandard());
+        var clasificacion = await cliente.GetFromJsonAsync<CategoryItem[]>("/api/billing/categories");
+
+        Assert.Equal(HttpStatusCode.Created, alta.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, altaSubcategoria.StatusCode);
+        var visible = Assert.Single(clasificacion!);
+        Assert.Equal(categoria.Id, visible.Id);
+        Assert.Equal("Especiales", Assert.Single(visible.Subcategories).Name);
     }
 
     [Fact]

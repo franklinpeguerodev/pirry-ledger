@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
 namespace PirryLedger.Business.Infrastructure.Migrations
 {
@@ -48,32 +47,6 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         principalTable: "bil_categories",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.InsertData(
-                table: "bil_categories",
-                columns: new[] { "id", "name" },
-                values: new object[,]
-                {
-                    { new Guid("ca7e0000-0000-0000-0000-000000000001"), "Comidas" },
-                    { new Guid("ca7e0000-0000-0000-0000-000000000002"), "Bebidas" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "bil_subcategories",
-                columns: new[] { "id", "category_id", "name" },
-                values: new object[,]
-                {
-                    { new Guid("ca7e0000-0000-0000-0001-000000000001"), new Guid("ca7e0000-0000-0000-0000-000000000001"), "Chimis" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000002"), new Guid("ca7e0000-0000-0000-0000-000000000001"), "Club sándwiches" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000003"), new Guid("ca7e0000-0000-0000-0000-000000000001"), "Sándwiches" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000004"), new Guid("ca7e0000-0000-0000-0000-000000000001"), "Yaroas" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000005"), new Guid("ca7e0000-0000-0000-0000-000000000001"), "Hamburguesas" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000006"), new Guid("ca7e0000-0000-0000-0000-000000000001"), "Tostones" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000007"), new Guid("ca7e0000-0000-0000-0000-000000000002"), "Jugos naturales" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000008"), new Guid("ca7e0000-0000-0000-0000-000000000002"), "Batidas" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000009"), new Guid("ca7e0000-0000-0000-0000-000000000002"), "Refrescos" },
-                    { new Guid("ca7e0000-0000-0000-0001-000000000010"), new Guid("ca7e0000-0000-0000-0000-000000000002"), "Agua" }
                 });
 
             migrationBuilder.CreateIndex(

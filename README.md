@@ -3296,7 +3296,7 @@ todavía no se escribe: llega en la semana 11.
 
 ### Clasificación del catálogo
 
-La migración agrega Comidas y Bebidas con sus diez subcategorías iniciales.
+La migración crea las tablas de clasificación vacías. El Administrador crea las categorías y subcategorías. Standard consulta la clasificación guardada.
 Los productos existentes aparecen como **Sin categoría** hasta que se les
 asigne una subcategoría. Al crear o editar un producto, la descripción es
 obligatoria.
