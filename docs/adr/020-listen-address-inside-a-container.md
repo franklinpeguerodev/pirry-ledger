@@ -6,6 +6,19 @@
 - **Decide:** Franklin. **Redacta:** el agente.
 - **Modifica:** ADR 005 (solo la dirección de escucha; la fuente única del puerto y de los enlaces no cambia)
 
+## Enmienda autorizada por Franklin (2026-11-12)
+
+Kestrel escucha por HTTP en `0.0.0.0`, en el puerto obligatorio `PORT`.
+`PIRRY_LEDGER_PUBLIC_BASE_URL` admite HTTP y HTTPS y se usa para generar
+los enlaces de activación. Se eligió exigir el puerto en cada entorno para
+evitar que un cambio en el enlace altere la escucha del servidor.
+
+Compose publica el puerto 8090 y reenvía al puerto configurado del contenedor.
+En Render, el proxy termina TLS y reenvía por HTTP a Kestrel. La configuración
+propuesta usa `PORT=8090` en ambos entornos y el dominio HTTPS en Render.
+
+La decisión original se conserva a continuación como registro histórico.
+
 ## Contexto
 
 El ADR 005 dejó `PIRRY_LEDGER_PUBLIC_BASE_URL` como **única fuente**: de ella

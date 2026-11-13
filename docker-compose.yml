@@ -25,10 +25,8 @@ x-app-environment: &app-environment
   # La base de datos se alcanza por el nombre del servicio, nunca por localhost.
   ConnectionStrings__PirryLedger: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
 
-  # Direccion publica: arma los enlaces de activacion y fija el puerto donde
-  # escucha la API. El proceso escucha en 0.0.0.0 (ADR 020), asi que el puerto
-  # publicado llega. Sin esta variable la aplicacion no arranca (ADR 005),
-  # asi que aqui se exige con un mensaje claro.
+  # Dirección pública para los enlaces y puerto HTTP del Host.
+  PORT: "${PORT:?define PORT en .env}"
   PIRRY_LEDGER_PUBLIC_BASE_URL: "${PIRRY_LEDGER_PUBLIC_BASE_URL:?falta PIRRY_LEDGER_PUBLIC_BASE_URL en el archivo .env: copia .env.example a .env}"
 
   # Primer Administrator (ADR 002). Opcional: sin estas variables no se crea
@@ -119,14 +117,14 @@ services:
     restart: "no"
 
   # La API. Es el unico servicio que publica un puerto (seccion 1.2 del
-  # enunciado). El puerto del host y el del contenedor son el mismo numero.
+  # enunciado). El puerto publicado es 8090 y PORT define el puerto interno.
   # Sin command: la imagen ya arranca el Host con su ENTRYPOINT.
   app:
     build: .
     image: pirry-ledger-app
     environment: *app-environment
     ports:
-      - "8090:8090"
+      - "8090:${PORT:?define PORT en .env}"
     depends_on:
       db:
         condition: service_healthy

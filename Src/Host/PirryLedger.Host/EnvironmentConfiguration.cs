@@ -31,6 +31,7 @@ internal static class EnvironmentConfiguration
     // activacion, para que funcionen al abrirse en un navegador, y con la que se
     // fija el host:puerto donde escucha la API. La recuperacion no lleva enlace:
     // lleva un codigo suelto, asi que esa variable no se usa ahi.
+    public const string PortVariable = "PORT";
     public const string BaseUrlVariable = "PIRRY_LEDGER_PUBLIC_BASE_URL";
 
     // Primer Administrator (docs/adr/002-first-administrator.md). El registro
