@@ -390,4 +390,13 @@ Además, `git diff --shortstat origin/develop..origin/main` sale vacío: `main` 
 SeaweedFS (siguen en R2, ADR 015), y cualquier cambio en las máquinas de
 estados existentes. Ninguna prueba se debilitó ni se eliminó.
 
+## 2026-11-12 — Separación de la URL pública y el puerto
 
+Franklin pidió y autorizó separar la URL de los enlaces de activación del
+puerto HTTP del Host. El agente actualizó el Host, la configuración de
+Compose y el ADR 020. La suite con `dotnet test --no-restore` pasó 483
+pruebas y la compilación aislada del Host terminó sin errores ni advertencias.
+Las pruebas de configuración confirmaron el rechazo de una URL inválida y
+de un puerto ausente o fuera de rango. HTTP y HTTPS públicos pasaron la
+validación con el puerto explícito. Quedan pendientes la revisión de Franklin,
+el arranque completo con Docker y la activación desde Render.
