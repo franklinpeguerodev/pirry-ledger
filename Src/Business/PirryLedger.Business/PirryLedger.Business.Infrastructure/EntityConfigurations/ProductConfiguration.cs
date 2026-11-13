@@ -41,6 +41,10 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasColumnName("image_revision")
             .IsRequired();
 
+        builder.Property(product => product.SubcategoryId).HasColumnName("subcategory_id");
+        builder.HasOne<Subcategory>().WithMany()
+            .HasForeignKey(product => product.SubcategoryId).OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(product => product.Name)
             .IsUnique();
     }

@@ -84,7 +84,7 @@ public sealed class PruebasDeActivacionDeProducto
 
     private static async Task<Product> ProductoAsync(BusinessDbContext contexto)
     {
-        var producto = Product.Create("Combo Pirri", null, 500m);
+        var producto = Product.Create("Combo Pirri", "Producto de prueba", 500m);
         contexto.Products.Add(producto);
         await contexto.SaveChangesAsync();
 

@@ -198,7 +198,7 @@ public sealed class PruebasDeSubidaDeImagen
 
     private static Preparado Preparar()
     {
-        var producto = Product.Create("Combo Pirri", null, 500m);
+        var producto = Product.Create("Combo Pirri", "Producto de prueba", 500m);
         var productos = new FakeProductRepository();
         productos.Seed(producto);
 

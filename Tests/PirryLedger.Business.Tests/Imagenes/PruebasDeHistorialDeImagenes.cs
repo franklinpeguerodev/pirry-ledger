@@ -172,7 +172,7 @@ public sealed class PruebasDeHistorialDeImagenes
         // El contador global de revisiones: una sola fila, como en la base.
         contexto.ImageRevisionCounters.Add(new ImageRevisionCounter { Id = 1, Value = 0 });
 
-        var producto = Product.Create("Combo Pirri", null, 500m);
+        var producto = Product.Create("Combo Pirri", "Producto de prueba", 500m);
         contexto.Products.Add(producto);
 
         await contexto.SaveChangesAsync();

@@ -28,6 +28,10 @@ public sealed class Product
 
     public decimal Price { get; private set; }
 
+    public Guid? SubcategoryId { get; private set; }
+
+    public void AssignSubcategory(Guid? subcategoryId) => SubcategoryId = subcategoryId;
+
     public bool IsActive { get; private set; }
 
     // La revision global en la que el producto cambio por ultima vez de
@@ -63,9 +67,11 @@ public sealed class Product
 
     public void Update(string name, string? description, decimal price)
     {
-        Name = NormalizeName(name);
-        Description = NormalizeDescription(description);
+        var normalizedName = NormalizeName(name);
+        var normalizedDescription = NormalizeDescription(description);
         ValidatePrice(price);
+        Name = normalizedName;
+        Description = normalizedDescription;
         Price = price;
     }
 
@@ -89,11 +95,11 @@ public sealed class Product
         return trimmed;
     }
 
-    private static string? NormalizeDescription(string? description)
+    private static string NormalizeDescription(string? description)
     {
         if (string.IsNullOrWhiteSpace(description))
         {
-            return null;
+            throw new InvoiceRuleViolationException("La descripción del producto es obligatoria.");
         }
 
         var trimmed = description.Trim();

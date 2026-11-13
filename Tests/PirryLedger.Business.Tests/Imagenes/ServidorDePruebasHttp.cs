@@ -78,6 +78,8 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
         builder.Services.AddSingleton<IProductImageRepository>(Imagenes);
         builder.Services.AddSingleton<IImageStore>(Store);
         builder.Services.AddSingleton(new ProductImageOptions(MaxBytes, 15));
+        builder.Services.AddSingleton<IClassificationRepository, RepositorioDeClasificacionEnMemoria>();
+        builder.Services.AddScoped<ManageClassification>();
         builder.Services.AddScoped<CreateProduct>();
         builder.Services.AddScoped<UpdateProduct>();
         builder.Services.AddScoped<SetProductActive>();
@@ -134,7 +136,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
     // otra cosa.
     public Product CrearProducto(string nombre = "Combo Pirri")
     {
-        var producto = Product.Create(nombre, null, 500m);
+        var producto = Product.Create(nombre, "Producto de prueba", 500m);
         Productos.Seed(producto);
 
         return producto;

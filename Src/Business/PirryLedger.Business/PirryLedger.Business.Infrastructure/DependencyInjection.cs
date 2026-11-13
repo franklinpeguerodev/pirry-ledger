@@ -52,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<UpdateProduct>();
         services.AddScoped<SetProductActive>();
         services.AddScoped<ListProducts>();
+        services.AddScoped<ManageClassification>();
+        services.AddScoped<IClassificationRepository, ClassificationRepository>();
         services.AddScoped<CollectInvoicePayment>();
         services.AddScoped<LeaveInvoiceAsDebt>();
         services.AddScoped<EditInvoiceItems>();
