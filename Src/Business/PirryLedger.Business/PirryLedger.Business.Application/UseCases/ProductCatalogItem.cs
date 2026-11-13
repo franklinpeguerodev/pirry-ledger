@@ -15,7 +15,7 @@ public sealed record ProductCatalogItem(
     decimal Price,
     bool IsActive,
     string? ImageKey,
-    string? ImageVersion)
+    string? ImageVersion, Guid? SubcategoryId = null)
 {
     public static ProductCatalogItem From(Product product, ProductImage? image) =>
         new(
@@ -25,5 +25,5 @@ public sealed record ProductCatalogItem(
             product.Price,
             product.IsActive,
             image?.ImageKey,
-            image?.Version);
+            image?.Version, product.SubcategoryId);
 }

@@ -23,6 +23,21 @@ public sealed class InvoiceItemBody
 
 public sealed class ProductBody
 {
+    private Guid? _subcategoryId;
+
+    public Guid? SubcategoryId
+    {
+        get => _subcategoryId;
+        init
+        {
+            _subcategoryId = value;
+            HasSubcategoryId = true;
+        }
+    }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasSubcategoryId { get; private set; }
+
     public string? Name { get; init; }
 
     public string? Description { get; init; }
@@ -78,3 +93,5 @@ public sealed class DebtPaymentBody
 {
     public decimal Amount { get; init; }
 }
+
+public sealed record ClassificationBody(string? Name);

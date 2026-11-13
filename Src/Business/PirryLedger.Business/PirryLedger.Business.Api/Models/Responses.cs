@@ -25,7 +25,7 @@ public sealed record ProductResponse(
     decimal Price,
     bool IsActive,
     string? ImageKey,
-    string? ImageVersion)
+    string? ImageVersion, Guid? SubcategoryId = null)
 {
     public static ProductResponse From(Product product, ProductImage? image) =>
         new(
@@ -35,7 +35,7 @@ public sealed record ProductResponse(
             product.Price,
             product.IsActive,
             image?.ImageKey,
-            image?.Version);
+            image?.Version, product.SubcategoryId);
 
     public static ProductResponse From(ProductCatalogItem item) =>
         new(
@@ -45,7 +45,7 @@ public sealed record ProductResponse(
             item.Price,
             item.IsActive,
             item.ImageKey,
-            item.ImageVersion);
+            item.ImageVersion, item.SubcategoryId);
 }
 
 // La imagen vigente de un producto. La clave es la que hay que pedir al

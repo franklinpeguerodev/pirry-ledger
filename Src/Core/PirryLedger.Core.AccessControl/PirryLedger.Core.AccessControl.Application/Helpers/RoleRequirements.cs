@@ -136,6 +136,8 @@ public static class RoleRequirements
         [Operation.UpdateProduct] = new(AccessLevel.Administrator),
         [Operation.SetProductActive] = new(AccessLevel.Administrator),
         [Operation.ListProducts] = new(AccessLevel.AnySession),
+        [Operation.ListProductClassification] = new(AccessLevel.AnySession),
+        [Operation.ManageProductClassification] = new(AccessLevel.Administrator),
 
         // ADR 015: subir, reemplazar y quitar la imagen de un producto es del
         // Administrador, que es quien administra el catalogo. Un Standard que

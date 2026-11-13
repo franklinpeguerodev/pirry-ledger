@@ -25,6 +25,26 @@ public static class EndpointRegistration
 {
     public static IEndpointRouteBuilder MapBusiness(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapGet("/api/billing/categories", (ManageClassification useCase, CancellationToken ct) =>
+            RunAsync(async () => Results.Ok(await useCase.ListAsync(ct))))
+            .WithAccess(Operation.ListProductClassification);
+
+        endpoints.MapPost("/api/admin/categories", (ClassificationBody body, ManageClassification useCase, CancellationToken ct) =>
+            RunAsync(async () => Results.Json(await useCase.SaveCategoryAsync(null, body.Name ?? string.Empty, ct), statusCode: 201)))
+            .WithAccess(Operation.ManageProductClassification);
+
+        endpoints.MapPut("/api/admin/categories/{id:guid}", (Guid id, ClassificationBody body, ManageClassification useCase, CancellationToken ct) =>
+            RunAsync(async () => Results.Ok(await useCase.SaveCategoryAsync(id, body.Name ?? string.Empty, ct))))
+            .WithAccess(Operation.ManageProductClassification);
+
+        endpoints.MapPost("/api/admin/categories/{categoryId:guid}/subcategories", (Guid categoryId, ClassificationBody body, ManageClassification useCase, CancellationToken ct) =>
+            RunAsync(async () => Results.Json(await useCase.SaveSubcategoryAsync(categoryId, null, body.Name ?? string.Empty, ct), statusCode: 201)))
+            .WithAccess(Operation.ManageProductClassification);
+
+        endpoints.MapPut("/api/admin/categories/{categoryId:guid}/subcategories/{id:guid}", (Guid categoryId, Guid id, ClassificationBody body, ManageClassification useCase, CancellationToken ct) =>
+            RunAsync(async () => Results.Ok(await useCase.SaveSubcategoryAsync(categoryId, id, body.Name ?? string.Empty, ct))))
+            .WithAccess(Operation.ManageProductClassification);
+
         endpoints.MapPost("/api/admin/products", (
             ProductBody body,
             CreateProduct useCase,
@@ -36,7 +56,7 @@ public static class EndpointRegistration
                     body.Name ?? string.Empty,
                     body.Description,
                     body.Price,
-                    cancellationToken);
+                    cancellationToken, body.SubcategoryId);
 
                 // Un producto recien creado todavia no tiene imagen, pero la
                 // respuesta lleva el mismo formato que el resto.
@@ -61,7 +81,7 @@ public static class EndpointRegistration
                     body.Name ?? string.Empty,
                     body.Description,
                     body.Price,
-                    cancellationToken);
+                    cancellationToken, body.SubcategoryId, body.HasSubcategoryId);
 
                 var image = await images.FindLiveAsync(id, cancellationToken);
 
@@ -86,10 +106,13 @@ public static class EndpointRegistration
 
         endpoints.MapGet("/api/billing/products", (
             ListProducts useCase,
+            Guid? categoryId,
+            Guid? subcategoryId,
+            bool? unclassified,
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
-                var products = await useCase.ExecuteAsync(cancellationToken);
+                var products = await useCase.ExecuteAsync(cancellationToken, categoryId, subcategoryId, unclassified ?? false);
                 return Results.Ok(products.Select(ProductResponse.From).ToList());
             }))
         .WithAccess(Operation.ListProducts);
