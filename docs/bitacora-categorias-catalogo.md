@@ -12,3 +12,9 @@ pruebas. En PostgreSQL temporal, la migración conservó el precio, el estado y
 la revisión de imagen de un producto existente. El producto quedó sin
 subcategoría y la consulta devolvió seis subcategorías de Comidas y cuatro de
 Bebidas. La revisión de Franklin queda pendiente.
+
+En la revisión previa al nuevo PR se encapsuló la creación de categorías y
+subcategorías y se hizo obligatoria la dependencia de clasificación. La suite
+completa pasó con 489 pruebas, incluida la edición de ambos niveles. En
+PostgreSQL temporal se verificó que la migración también conserva la clave
+y la versión del registro de imagen asociado.
