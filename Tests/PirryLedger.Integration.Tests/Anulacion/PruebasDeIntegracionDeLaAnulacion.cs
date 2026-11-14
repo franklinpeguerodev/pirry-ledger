@@ -2,13 +2,14 @@ using PirryLedger.Business.Application.Exceptions;
 using PirryLedger.Business.Domain.Enums;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Permissions.Domain.Enums;
+using PirryLedger.Core.Permissions.Application.Exceptions;
 
 namespace PirryLedger.Integration.Tests.Anulacion;
 
 // Seccion 1.4 del enunciado: la integracion entre el negocio y Permissions,
 // con las dos piezas reales. Las dos caras que exige el enunciado son estas
 // dos pruebas: la anulacion se rechaza mientras la solicitud no esta aprobada,
-// y se permite despues de que un Administrator la apruebe.
+// y se ejecuta al aprobar la solicitud.
 public sealed class PruebasDeIntegracionDeLaAnulacion
 {
     [Fact]
@@ -36,7 +37,7 @@ public sealed class PruebasDeIntegracionDeLaAnulacion
     }
 
     [Fact]
-    public async Task UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite()
+    public async Task AprobarLaSolicitudAnulaLaFacturaEnLaMismaOperacion()
     {
         // Arrange: la factura queda Paid y su anulacion crea la solicitud.
         var escenario = new EscenarioDeIntegracion();
@@ -44,15 +45,12 @@ public sealed class PruebasDeIntegracionDeLaAnulacion
         await Assert.ThrowsAsync<CancellationPermissionRequiredException>(
             () => escenario.AnularAsync(facturaId));
 
-        // Act: el Administrator real aprueba la solicitud y el cajero vuelve a
-        // intentar la anulacion.
+        // Act
         await escenario.AprobarSolicitudDeAnulacionAsync(facturaId);
-        Assert.Equal(1, await escenario.ConcesionesDelCajeroAsync());
 
-        var factura = await escenario.AnularAsync(facturaId);
-
-        // Assert: la anulacion paso y la concesion se consumio al usarla.
-        Assert.Equal(InvoiceState.Cancelled, factura.State);
+        // Assert
+        var solicitud = Assert.Single(await escenario.SolicitudesAsync(facturaId));
+        Assert.Equal(PermissionRequestState.Applied, solicitud.State);
         Assert.Equal(InvoiceState.Cancelled, await escenario.EstadoDeLaFacturaAsync(facturaId));
         Assert.Equal(0, await escenario.ConcesionesDelCajeroAsync());
     }
@@ -77,8 +75,7 @@ public sealed class PruebasDeIntegracionDeLaAnulacion
         var rechazo = await Assert.ThrowsAsync<CancellationPermissionRequiredException>(
             () => escenario.AnularAsync(segunda));
 
-        // Assert: la segunda sigue pagada y pide su propio permiso, con el
-        // nombre de la segunda factura; el permiso de la primera no se toco.
+        // Assert
         Assert.False(rechazo.AlreadyPending);
         Assert.Equal(InvoiceState.Paid, await escenario.EstadoDeLaFacturaAsync(segunda));
 
@@ -86,12 +83,24 @@ public sealed class PruebasDeIntegracionDeLaAnulacion
         Assert.Equal(PermissionNames.CancelInvoice(segunda), solicitudDeLaSegunda.RequestedPermission);
         Assert.Equal(PermissionRequestState.Pending, solicitudDeLaSegunda.State);
 
-        Assert.Equal(InvoiceState.Paid, await escenario.EstadoDeLaFacturaAsync(primera));
-        Assert.Equal(1, await escenario.ConcesionesDelCajeroAsync());
+        Assert.Equal(InvoiceState.Cancelled, await escenario.EstadoDeLaFacturaAsync(primera));
+        Assert.Equal(0, await escenario.ConcesionesDelCajeroAsync());
+    }
 
-        // El permiso de la primera sigue sirviendo para la primera.
-        var primeraAnulada = await escenario.AnularAsync(primera);
-        Assert.Equal(InvoiceState.Cancelled, primeraAnulada.State);
+    [Fact]
+    public async Task AprobarUnaSolicitudParaUnaFacturaInexistenteDejaLaSolicitudPendiente()
+    {
+        var escenario = new EscenarioDeIntegracion();
+        var facturaId = Guid.NewGuid();
+        await escenario.SolicitarPermisoDeAnulacionAsync(facturaId);
+
+        await Assert.ThrowsAsync<PermissionRequestRejectedException>(
+            () => escenario.AprobarSolicitudDeAnulacionAsync(facturaId));
+
+        var solicitud = Assert.Single(await escenario.SolicitudesAsync(facturaId));
+        Assert.Equal(PermissionRequestState.Pending, solicitud.State);
+        Assert.Null(solicitud.ApproverId);
+        Assert.Equal(0, await escenario.ConcesionesDelCajeroAsync());
     }
 
     [Fact]

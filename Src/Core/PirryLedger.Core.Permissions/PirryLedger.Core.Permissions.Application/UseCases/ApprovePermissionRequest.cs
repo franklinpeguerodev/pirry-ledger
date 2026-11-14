@@ -1,3 +1,4 @@
+using System.Transactions;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
@@ -8,7 +9,8 @@ using PirryLedger.Core.Permissions.Domain.Entities;
 
 namespace PirryLedger.Core.Permissions.Application.UseCases;
 
-// RF-GP-03 + RF-GP-05 + RF-GP-07: aprobar una solicitud pendiente pasa por
+// Los permisos de anulacion aplican el cambio en la factura al aprobar.
+// RF-GP-03 + RF-GP-05 + RF-GP-07: los demas permisos pasan por
 // tres transiciones en una sola operacion (misma transaccion EF Core):
 //
 //   1. Pending -> Approved: graba aprobador e instante UTC.
@@ -25,19 +27,22 @@ public sealed class ApprovePermissionRequest
     private readonly Authenticate _authenticate;
     private readonly IPasswordResetIssuer _passwordResetIssuer;
     private readonly IClock _clock;
+    private readonly IApprovedInvoiceCancellation? _invoiceCancellation;
 
     public ApprovePermissionRequest(
         IPermissionRequestRepository requests,
         IPermissionGrantRepository grants,
         Authenticate authenticate,
         IPasswordResetIssuer passwordResetIssuer,
-        IClock clock)
+        IClock clock,
+        IApprovedInvoiceCancellation? invoiceCancellation = null)
     {
         _requests = requests;
         _grants = grants;
         _authenticate = authenticate;
         _passwordResetIssuer = passwordResetIssuer;
         _clock = clock;
+        _invoiceCancellation = invoiceCancellation;
     }
 
     public async Task ExecuteAsync(
@@ -53,6 +58,7 @@ public sealed class ApprovePermissionRequest
             RoleRequirements.RequiredRole(Operation.ApprovePermissionRequest),
             cancellationToken);
 
+        using var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
         var request = await _requests.FindByIdAsync(requestId, cancellationToken);
 
         if (request is null)
@@ -77,6 +83,23 @@ public sealed class ApprovePermissionRequest
         }
 
         var now = _clock.UtcNow;
+
+        if (PermissionNames.IsCancelInvoice(request.RequestedPermission, out var invoiceId))
+        {
+            if (_invoiceCancellation is null
+                || !await _invoiceCancellation.TryCancelAsync(invoiceId, cancellationToken))
+            {
+                throw new PermissionRequestRejectedException("La factura indicada no se puede anular.");
+            }
+
+            request.Approve(caller.Id, now);
+            request.MarkApplied(now);
+            await _requests.SaveAsync(request, cancellationToken);
+            transaction.Complete();
+            return;
+        }
+
+        transaction.Dispose();
 
         // RF-GP-03: aprobar registra aprobador e instante UTC.
         request.Approve(caller.Id, now);

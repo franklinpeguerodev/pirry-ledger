@@ -123,6 +123,16 @@ internal sealed class EscenarioDeIntegracion
         return await CrearAnulacion(negocio, permisos).ExecuteAsync(facturaId, Cajero.Id);
     }
 
+    public async Task SolicitarPermisoDeAnulacionAsync(Guid facturaId)
+    {
+        await using var permisos = new PermissionsDbContext(_opcionesPermisos);
+        var gateway = new PermissionRequestGateway(
+            new PermissionRequestRepository(permisos),
+            new EfPermissionAuthority(new PermissionGrantRepository(permisos), Clock),
+            Clock);
+        await gateway.RequestAsync(Cajero.Id, PermissionNames.CancelInvoice(facturaId));
+    }
+
     // RF-GP-05: un Administrator real aprueba la solicitud pendiente de esa
     // factura. El token se emite con Login y el role lo decide Authenticate,
     // como en el endpoint.
@@ -136,6 +146,8 @@ internal sealed class EscenarioDeIntegracion
             ?? throw new InvalidOperationException(
                 "No hay una solicitud pendiente de anulacion para esa factura.");
 
+        await using var negocio = new BusinessDbContext(_opcionesNegocio);
+
         var aprobacion = new ApprovePermissionRequest(
             new PermissionRequestRepository(permisos),
             new PermissionGrantRepository(permisos),
@@ -147,7 +159,8 @@ internal sealed class EscenarioDeIntegracion
             // ADR 014: aprobar una anulacion de factura no emite codigos; el
             // escenario no necesita un emisor real.
             new SinEmisorDeCodigos(),
-            Clock);
+            Clock,
+            CrearAnulacion(negocio, permisos));
 
         await aprobacion.ExecuteAsync(token, solicitud.Id);
     }
