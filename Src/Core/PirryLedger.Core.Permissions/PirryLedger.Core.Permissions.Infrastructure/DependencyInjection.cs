@@ -66,7 +66,8 @@ public static class DependencyInjection
             // ADR 014: AccessControl registra la implementacion de este contrato.
             // Permissions solo lo pide; no conoce PasswordResetIssuer.
             provider.GetRequiredService<IPasswordResetIssuer>(),
-            provider.GetRequiredService<IClock>()));
+            provider.GetRequiredService<IClock>(),
+            provider.GetService<IApprovedInvoiceCancellation>()));
 
         services.AddScoped<RejectPermissionRequest>(provider => new RejectPermissionRequest(
             provider.GetRequiredService<IPermissionRequestRepository>(),

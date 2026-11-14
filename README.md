@@ -28,6 +28,17 @@ Este README está ordenado como se usa:
 
 ---
 
+## Anulación automática de facturas al aprobar la solicitud
+
+Para una factura pagada o en deuda, el estándar solicita la anulación con
+`POST /api/billing/invoices/{id}/cancel`. El administrador aprueba la solicitud
+con `POST /api/permissions/requests/{id}/approve`. Si recibe `204`, puede
+consultar `GET /api/billing/invoices/{id}` y ver `state: Cancelled`. La solicitud
+queda en `Applied`. Si la factura no se puede anular, la aprobación se rechaza
+y la solicitud sigue pendiente. Las concesiones emitidas antes del cambio
+se pueden consumir con la operación de anulación existente.
+
+
 ## 1. Cómo correr el proyecto
 
 Todos los comandos están escritos para PowerShell en Windows. Sigue los pasos
@@ -1205,7 +1216,7 @@ defecto y corriendo la suite, no leyendo el código.
 | 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 11 de los 49 pares. |
 | 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
 | 3 (RF-NEG-03) | `InvoiceStateMachine.cs:62`: elimina la llamada a `EnsureHasAtLeastOneItem` en `Draft -> Issued`, así que se puede emitir una factura sin ítems. | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | Que emitir sin ítems se rechace, no cambie el estado y no guarde nada. |
-| 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
+| 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `AprobarLaSolicitudAnulaLaFacturaEnLaMismaOperacion`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
 
 Para ver un defecto: `git checkout practica-3-defecto-N`, correr
 `dotnet test pirry-ledger.slnx` y comprobar que falla al menos una de las pruebas
@@ -2430,7 +2441,7 @@ $pendientes = Invoke-RestMethod -Uri "$base/api/permissions/requests/pending" -H
 $solicitud = $pendientes | Where-Object { $_.requestedPermission -eq "CancelInvoice:$factura" }
 Invoke-RestMethod -Uri "$base/api/permissions/requests/$($solicitud.id)/approve" -Method Post -Headers $adminHeaders
 
-Pedir Post "/api/billing/invoices/$factura/cancel" $estHeaders $null
+Pedir Get "/api/billing/invoices/$factura" $estHeaders $null
 ```
 
 Lo que devuelve cada llamada:
@@ -2443,7 +2454,7 @@ Lo que devuelve cada llamada:
 | Consultar tras el rechazo | `200` | La factura **sigue** en `Paid`: el rechazo no cambió nada |
 | Anular otra vez | `409` | `{"message":"Ya se envió una solicitud de permiso para anular esta factura; espera la aprobación del Administrador."}` |
 | Aprobar la solicitud | `204` | Sin cuerpo |
-| Anular con la concesión | `200` | `state` `Cancelled`, y la concesión queda consumida |
+| Consultar tras la aprobación | `200` | `state` `Cancelled` |
 
 El `403` y el `409` no son un capricho: el primero dice "acabo de pedirlo" y el
 segundo "ya lo habías pedido, no hace falta repetirlo". Solo una solicitud
@@ -2645,7 +2656,7 @@ Salida esperada: **4 pruebas superadas**, 0 con error. Cada una prueba una cara:
 | Prueba | Qué demuestra |
 |---|---|
 | `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada` | Cara uno: sin concesión, la anulación se rechaza (`403`, `AlreadyPending = false`), la factura sigue `Paid` y queda una sola solicitud `Pending` con el nombre `CancelInvoice:<id>`. |
-| `UnAdministradorApruebaLaSolicitudYEntoncesLaAnulacionSePermite` | Cara dos: tras la aprobación real de un Administrator hay una concesión, la anulación pasa y la concesión queda consumida (cero). |
+| `AprobarLaSolicitudAnulaLaFacturaEnLaMismaOperacion` | Cara dos: al aprobar, la factura queda anulada, la solicitud aplicada y no queda una concesión pendiente de consumo. |
 | `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` | El permiso es por factura: el de la primera no anula la segunda, que pide el suyo; el de la primera sigue sirviendo para la primera. |
 | `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente` | El primer intento crea la solicitud (`403`) y el segundo encuentra una pendiente (`409`); sigue habiendo una sola y la factura no cambia. |
 

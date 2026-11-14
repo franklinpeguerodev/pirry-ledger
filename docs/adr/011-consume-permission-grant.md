@@ -1,6 +1,6 @@
 # ADR 011 - Consume a permission grant
 
-- **Estado:** aceptada
+- **Estado:** sustituida parcialmente por el [ADR 022](022-cancel-invoice-on-permission-approval.md). Sigue aplicando a concesiones de anulación emitidas antes del cambio.
 - **Fecha:** 2026-10-30
 - **Requisitos:** RF-GP-05; RF-NEG-06; toca ADR 008; RD-04, RD-06
 - **Decide:** Franklin. **Redacta:** el agente.

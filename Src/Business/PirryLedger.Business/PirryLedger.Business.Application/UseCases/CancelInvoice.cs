@@ -10,7 +10,7 @@ namespace PirryLedger.Business.Application.UseCases;
 // permiso; desde Paid o InDebt consume la concesion CancelInvoice:<id> y, si no
 // la hay, pide el permiso en nombre del usuario y rechaza. La linea de
 // ConsumeAsync es el objetivo del defecto 4 del enunciado.
-public sealed class CancelInvoice
+public sealed class CancelInvoice : IApprovedInvoiceCancellation
 {
     private readonly IInvoiceRepository _invoices;
     private readonly IPermissionAuthority _permissions;
@@ -24,6 +24,19 @@ public sealed class CancelInvoice
         _invoices = invoices;
         _permissions = permissions;
         _permissionRequests = permissionRequests;
+    }
+
+    public async Task<bool> TryCancelAsync(Guid invoiceId, CancellationToken cancellationToken)
+    {
+        var invoice = await _invoices.GetByIdAsync(invoiceId, cancellationToken: cancellationToken);
+        if (invoice is null || invoice.State is not (InvoiceState.Paid or InvoiceState.InDebt))
+        {
+            return false;
+        }
+
+        invoice.Cancel();
+        await _invoices.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<Invoice> ExecuteAsync(

@@ -59,6 +59,8 @@ public static class DependencyInjection
         services.AddScoped<EditInvoiceItems>();
         services.AddScoped<MarkInvoiceAsNotDelivered>();
         services.AddScoped<CancelInvoice>();
+        services.AddScoped<PirryLedger.Core.Contracts.Permissions.IApprovedInvoiceCancellation>(
+            provider => provider.GetRequiredService<CancelInvoice>());
         services.AddScoped<ConfirmInvoiceTransfer>();
         services.AddScoped<RejectInvoiceTransfer>();
         services.AddScoped<RegisterDebtPayment>();

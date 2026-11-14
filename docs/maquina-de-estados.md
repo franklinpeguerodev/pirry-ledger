@@ -39,8 +39,8 @@ once:
 | `PendingVerification` | `Paid` | Administrador | Los pagos cubren el total. |
 | `PendingVerification` | `InDebt` | Administrador | Transferencia rechazada. Exige el nombre de la persona. |
 | `InDebt` | `Paid` | Administrador | Los abonos cubren el total de la deuda. |
-| `Paid` | `Cancelled` | Quien solicitó el permiso | Existe un permiso aprobado para esa factura; se consume al anular. |
-| `InDebt` | `Cancelled` | Quien solicitó el permiso | Igual que la anterior. |
+| `Paid` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
+| `InDebt` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
 
 Siete de las once filas comprueban su condición en la propia máquina, una
 comprobación por fila y aislada en su método: si una se quita, la prueba de esa
@@ -55,7 +55,7 @@ recibe los hechos de la tentativa en `InvoiceTransitionContext` (cantidad de
 transferencia); no lee colecciones ni base de datos, así que se prueba sin
 levantar la aplicación (RD-12).
 
-La consulta del permiso de anulación **no** es una condición de la tabla: depende
+En el flujo anterior, la consulta del permiso de anulación **no** es una condición de la tabla: depende
 de la factura concreta y la resuelve el caso de uso. El orden es el del ADR 011:
 la transición se resuelve en memoria, se consume la concesión y solo entonces se
 guarda la factura; si el consumo falla, la factura no se guarda. La máquina no
@@ -85,6 +85,11 @@ operación falla en lugar de "no hacer nada".
 `Paid -> Cancelled` era la transición prohibida de la Práctica 1. Ahora está
 permitida con un permiso aprobado para esa factura, y por eso `Paid` dejó de ser
 terminal.
+
+La aprobación y la anulación automática se guardan en la misma transacción.
+La solicitud queda en `Applied` y la factura en `Cancelled`. Si la factura
+no se puede anular, la solicitud sigue pendiente. Las concesiones emitidas
+antes del cambio conservan el flujo de consumo del ADR 011.
 
 ### Estados terminales
 
