@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `026-branch-business-day-transactions.md` (2026-11-19) — Branch business days and closing snapshots coordinated by PostgreSQL transaction locks.
+
 - `025-invoice-issuer-scope.md` (2026-11-19) — Invoice issuer persisted and scoped with branch; administrator remains global.
 
 - `023-standard-in-app-notifications.md` (2026-11-19) — Standard notifications use only the internal channel; security mail remains.

@@ -25,6 +25,7 @@ public static class EndpointRegistration
 {
     public static IEndpointRouteBuilder MapBusiness(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapBusinessDays();
         endpoints.MapGet("/api/billing/categories", (ManageClassification useCase, CancellationToken ct) =>
             RunAsync(async () => Results.Ok(await useCase.ListAsync(ct))))
             .WithAccess(Operation.ListProductClassification);
@@ -208,7 +209,8 @@ public static class EndpointRegistration
                     branch.Name,
                     branch.Address,
                     cancellationToken,
-                    caller.Id);
+                    caller.Id,
+                    caller.Name);
 
                 return Results.Json(
                     InvoiceResponse.From(invoice),
@@ -445,6 +447,11 @@ public static class EndpointRegistration
         try
         {
             return await action();
+        }
+        catch (BusinessDayRuleViolationException error)
+        {
+            return Results.Json(new { message = error.Message, code = error.Code },
+                statusCode: StatusCodes.Status409Conflict);
         }
         catch (InvoiceNotFoundException error)
         {

@@ -131,6 +131,9 @@ public static class RoleRequirements
         // que la tabla sigue diciendo a quien admite cada ruta.
         [Operation.ListInvoices] = new(AccessLevel.AnySession),
         [Operation.GetInvoice] = new(AccessLevel.AnySession),
+        [Operation.GetBusinessDay] = new(AccessLevel.AnySession),
+        [Operation.CloseBusinessDay] = new(AccessLevel.AnySession),
+        [Operation.ReopenBusinessDay] = new(AccessLevel.AnySession),
 
         [Operation.CreateProduct] = new(AccessLevel.Administrator),
         [Operation.UpdateProduct] = new(AccessLevel.Administrator),

@@ -17,10 +17,15 @@ Preserve the access-control baseline.
 Business decisions: `docs/reglas-operativas-practica-5.md`.
 Acceptance scenarios: `docs/criterios-notificaciones-reportes.md`.
 Preparation authorized 2026-11-19; implementation not yet delivered.
-Invoice ownership implemented in `feature/invoice-ownership` (ADR 025), pending PR review.
+Invoice ownership integrated in develop (ADR 025).
 Scoped repository combines branch and issuer; no standard branch transfers.
 Other Practice 5 features remain pending. Debt-specific cross-issuer queries are
 scheduled for the debt-payments feature; ordinary invoice queries remain private.
+Branch business days implemented in `feature/branch-business-days` (ADR 026),
+pending PR review. Close/reopen and first-invoice opening are coordinated per
+branch; closed snapshots include pending cancellation exclusions through a Core
+contract. Notifications, reports and full sales-adjustment integration remain
+in subsequent features. No closing revision history is implemented.
 Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
 Identity/access rows were preserved and operational counts verified as zero.
