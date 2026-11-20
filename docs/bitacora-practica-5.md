@@ -1,5 +1,44 @@
 # Bitácora — Práctica 5
 
+## 2026-11-20 — Abonos por sucursal
+
+- Franklin pidió continuar y consultó progreso: se estimó 30 % del esfuerzo,
+  con preparación, limpieza, emisor y jornadas integrados; abonos en ejecución.
+- Aprobó bloqueo de fila de factura frente a bloqueo de sucursal y ADR 027.
+- Rama feature/debt-payments desde develop con jornadas integradas.
+- Se añadieron consulta operativa por sucursal, abonos Cash/Transfer y resolución
+  administrativa; no abre jornadas ni incluye abonos en efectivo/ventas del cierre.
+- Se oculta historial al Estándar también en respuestas ordinarias de factura.
+  Administrador conserva pagos rechazados, motivo y fecha/usuario de resolución.
+- La fecha de saldo completo usa registro del pago, no confirmación posterior.
+- Rojo demostrado quitando deliberadamente filtro de abono confirmado: prueba
+  esperaba PaidAmount 0 y obtenía 500 con transferencia pendiente. Código correcto
+  restaurado; no se debilitó prueba para pasar.
+- Otra prueba roja detectó pago parcial original visible al Estándar en factura
+  fiada. Se corrigió la respuesta ordinaria para ocultar toda su colección de
+  pagos; Administrador conserva historial completo y el saldo sigue visible.
+- Se actualizó prueba anterior de abono sin método: la regla aprobada ahora exige
+  Cash/Transfer, manteniendo comprobaciones de recibido/cambio ausentes.
+- Se actualizaron expectativas de autorización antiguas: abonar admite sesión,
+  historial/confirmación/rechazo siguen administrativos y se verifican aparte.
+  Tres nuevas rutas /api/admin llevan el conteo comprobado de 20 a 23.
+- Verificación final: dotnet test pirry-ledger.slnx --no-build --no-restore -v q:
+  535 aprobadas, 0 fallidas y 0 omitidas (Business 264, AccessControl 162,
+  Permissions 52, Documents 40, Notifications 12 e Integration 5).
+- dotnet build pirry-ledger.slnx --no-restore -v q: 0 advertencias, 0 errores.
+- Se generó y aplicó AddVerifiedDebtPayments: metadatos e índice parcial, sin
+  reclasificar registros históricos ni cambiar ordinales de métodos.
+- PostgreSQL con helper temporal y bibliotecas existentes: dos abonos de 600
+  sobre saldo 1000 aceptan solo uno, quedando saldo 400 y un pago.
+- Otra transacción no toma la misma factura, pero sí otra de la sucursal.
+- Reutilizar contexto no resucita pago rechazado; confirmación salda con fecha
+  de registro y conserva rechazo anterior; otra sucursal y anulación pendiente rechazan.
+- Índice impide dos abonos pendientes sin impedir transferencias múltiples de venta.
+- Datos temporales propios retirados. No se inspeccionó .env ni se imprimió
+  configuración. No se instalaron paquetes ni se hicieron cambios móviles.
+- Notificaciones y recordatorios siguen pendientes de sus features; no se afirma
+  entrega de avisos por estos nuevos eventos. Franklin revisa el PR; evidencia del agente.
+
 ## 2026-11-20 — Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
 
 - Franklin pidió continuar y aprobó bloqueo transaccional PostgreSQL por sucursal
