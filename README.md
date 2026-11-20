@@ -1,5 +1,53 @@
 # Pirry Ledger
 
+## Deudas y abonos por sucursal — RF-NEG-06, RD-06
+
+Estándar consulta y abona cualquier deuda de su sucursal, incluida la de otro
+emisor y jornadas anteriores. No se agrupa por nombre. Conserva deudas saldadas.
+No requiere caja abierta, no abre jornada y no suma abonos al cierre de ventas.
+Administrador conserva alcance global. Facturas ordinarias siguen privadas por emisor.
+
+| Método y ruta | Uso |
+|---|---|
+| GET /api/billing/debts | Resúmenes; Administrador puede filtrar branchId, Estándar solo su sucursal |
+| GET /api/billing/debts/{id} | Saldo, pendiente de transferencia o deuda saldada; sin historial |
+| POST /api/billing/invoices/{id}/payments | Abona a factura seleccionada; cuerpo con amount y method obligatorio: Cash o Transfer |
+| GET /api/admin/debts/{id}/payments | Historial completo, incluidos rechazados y fecha de pago completo |
+| POST /api/admin/debts/{id}/payments/{paymentId}/confirm | Administrador confirma transferencia seleccionada |
+| POST /api/admin/debts/{id}/payments/{paymentId}/reject | Administrador rechaza; cuerpo con reason obligatorio |
+
+El registro devuelve DebtSummary, no la factura completa del contrato anterior.
+Un importe cero, negativo, con decimales inválidos o mayor al saldo se rechaza
+completo. Efectivo reduce saldo inmediatamente. Transferencia deja saldo intacto
+y hasPendingTransfer=true: se bloquea otro abono solo en esa factura hasta
+confirmación/rechazo. También aplica cuando registra un Administrador; puede
+confirmar el mismo. Si se rechaza, vuelve a permitir abonos y conserva motivo.
+Anulación pendiente impide nuevos abonos.
+
+Al completar saldo se pasa a Paid; en transferencia ocurre solo al confirmar.
+paidAtUtc del historial usa fecha de registro del pago final, no confirmación.
+El Estándar no recibe historial de pagos de deuda, fechas ni rechazados: ni en
+la vista operativa ni dentro de sus respuestas ordinarias de factura. La fecha
+de emisión sí identifica la factura; transferencia pendiente se indica sin historial.
+Historial y resolución administrativa rechazan al Estándar con 403. Otra
+sucursal no se consulta ni abona por ID. Todas las rutas requieren sesión.
+
+Migración AddVerifiedDebtPayments agrega motivo y fecha/usuario de resolución,
+e índice de abono por transferencia pendiente. No altera métodos de pagos históricos.
+
+Pruebas sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeAbonosPorTransferencia -v q
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeDeudasPorHttp -v q
+```
+
+Las pruebas HTTP usan consultas EF reales en memoria y sustituyen únicamente
+el bloqueo PostgreSQL; la concurrencia física se verifica aparte. Se cubren
+compañeros, sucursales, pagos pendientes, rechazo sin motivo, historial oculto,
+deuda saldada, pagos con caja cerrada y confirmación por el propio Administrador.
+Avisos y recordatorios de abonos siguen pendientes de sus features.
+
 ## Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
 
 La primera factura abre jornada de su sucursal en la fecha calendario de RD.
@@ -67,8 +115,8 @@ La prueba HTTP emite con sesión de Ana y campos falsificados en el cuerpo;
 verifica el emisor real y la sucursal de sesión. Juan, de esa misma sucursal,
 no obtiene la factura ni puede concluirla; estado y pagos quedan intactos.
 La consulta administrativa de todos los emisores también tiene prueba.
-Las consultas específicas de deudas y abonos compartidos por sucursal llegan
-en su feature; esta protección no concede acceso a reportes o historiales.
+Las consultas específicas de deudas y abonos compartidos por sucursal ya están
+descritas al inicio; no conceden acceso a reportes ni historial al Estándar.
 
 ## Iteración en preparación — Práctica 5
 
@@ -2284,7 +2332,7 @@ Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities
 | Cualquier transferencia manda la factura a verificación pendiente | `Collect` mira si algún pago es `Transfer` | `CobrarConTransferenciaPasaAVerificacionPendiente`, `CobrarConEfectivoYTransferenciaPasaAVerificacionPendiente` |
 | La deuda exige nombre, de 120 caracteres como máximo | `NormalizeDebtorName` recorta y valida | `DejarComoDeudaSinNombreSeRechaza`, `UnNombreDeDeudorDemasiadoLargoSeRechaza` |
 | Un abono solo se registra si la factura está en deuda y no pasa de lo que se debe | `RegisterDebtPayment` comprueba el estado y el saldo antes de agregar | `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza`, `AbonarUnaFacturaPagadaSeRechazaYNoRegistraElPago`, `UnAbonoMayorQueLoQueSeDebeSeRechaza` |
-| El abono no tiene método de pago ni recibido | `InvoicePayment.Debt` usa `PaymentMethod.None` | `UnAbonoDeDeudaNoTieneMetodo` |
+| Abono nuevo conserva Cash o Transfer, sin recibido ni cambio | `InvoicePayment.Debt` valida método; transferencia queda pendiente | `UnAbonoEnEfectivoConservaMetodoSinRecibidoNiCambio`, `TransferenciaRegistradaNoReduceSaldoYBloqueaMasAbonos` |
 | El abono que cubre el total deja la factura pagada | `RegisterDebtPayment` transiciona antes de agregar el pago | `ElAbonoQueCubreElTotalPasaAPagada` |
 | Confirmar una transferencia exige verificación pendiente y que cubra el total | `ConfirmTransfer` valida estado y saldo | `ConfirmarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza`, `ConfirmarUnaTransferenciaQueNoCubreElTotalSeRechaza` |
 | Rechazar una transferencia deja el pago rechazado, no cuenta y pasa a deuda | `RejectTransfer` solo corre desde verificación pendiente | `RechazarLaTransferenciaDejaElPagoRechazadoYPasaADeuda`, `RechazarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza` |
@@ -2456,7 +2504,7 @@ secciones 3.4 y 3.8.
 | `POST` | `/api/billing/invoices/{id}/cancel` | `CancelInvoice` | `Standard` |
 | `POST` | `/api/billing/invoices/{id}/transfers/confirm` | `ConfirmInvoiceTransfer` | `Administrator` |
 | `POST` | `/api/billing/invoices/{id}/transfers/reject` | `RejectInvoiceTransfer` | `Administrator` |
-| `POST` | `/api/billing/invoices/{id}/payments` | `RegisterDebtPayment` | `Administrator` |
+| `POST` | `/api/billing/invoices/{id}/payments` | `RegisterDebtPayment` | `AnySession`, con alcance de sucursal |
 | `GET` | `/api/billing/invoices` | `ListInvoices` | `AnySession` |
 | `GET` | `/api/billing/invoices/{id}` | `GetInvoice` | `AnySession` |
 | `GET` | `/api/billing/invoices/{id}/edits` | `ListInvoiceEdits` | `Administrator` |
@@ -2576,16 +2624,13 @@ $r = Pedir Post '/api/billing/invoices' $estHeaders $combo
 $deuda = ($r.Cuerpo | ConvertFrom-Json).id
 Pedir Post "/api/billing/invoices/$deuda/debt" $estHeaders @{ debtorName = 'Ana Perez' } | Out-Null
 
-Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 100 } | Out-Null
-Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 400 } | Out-Null
-Pedir Post "/api/billing/invoices/$deuda/payments" $estHeaders  @{ amount = 10 }  | Out-Null
 ```
 
 - Dejar en deuda: `200`, `state` `InDebt`, `debtorName` `Ana Perez`, `balance` 500.00.
-- Abono de 100: `200`, sigue `InDebt` con `paidAmount` 100 y `balance` 400.
-- Abono de 400: `200`, pasa a `Paid` porque el abono cubre el total.
-- El mismo abono con el cajero: `403`, porque `RegisterDebtPayment` es del
-  Administrador.
+- Para abonar se usa ahora el contrato de Práctica 5 descrito al inicio: amount
+  y method obligatorio, respuesta DebtSummary. Estándar de la sucursal también
+  puede abonar. Las pruebas HTTP reproducibles sustituyen el ejemplo anterior
+  sin método y no atribuyen una ejecución manual nueva a esta sección.
 
 Una transferencia nace en verificación pendiente y solo el Administrador la
 resuelve:
@@ -2654,9 +2699,9 @@ Aprobar la solicitud (admin)           204
 Anular con permiso (cajero)            200  state=Cancelled
 Anular una factura ya anulada          400  message=La factura no puede pasar de Cancelled a Cancelled.
 Dejar en deuda (cajero)                200  state=InDebt | debtorName=Ana Perez | balance=500.00
-Abono parcial (admin)                  200  state=InDebt | paidAmount=100 | balance=400.00
-Abono que cubre el total (admin)       200  state=Paid | paidAmount=500.00 | balance=0.00
-Abono con rol de cajero                403  message=No tiene permisos para esta operacion.
+Histórico anterior a Práctica 5: abono parcial admin          200  state=InDebt | paidAmount=100 | balance=400.00
+Histórico anterior a Práctica 5: abono total admin            200  state=Paid | paidAmount=500.00 | balance=0.00
+Histórico anterior a Práctica 5: abono con cajero             403  (restricción reemplazada por alcance de sucursal)
 Marcar no entregada (cajero)           200  state=NotDelivered
 No entregada sin delivery              400  message=La factura no puede pasar de Paid a NotDelivered.
 Editar items (cajero)                  200  state=Issued | total=700
@@ -3074,7 +3119,7 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 | `POST` | `/api/billing/invoices/{id}/cancel` | Anula. Desde `Issued` responde `200`; desde `Paid` o `InDebt` exige la concesión `CancelInvoice:<id>` y, si no la hay, responde `403` o `409` con el mensaje del permiso. |
 | `POST` | `/api/billing/invoices/{id}/transfers/confirm` | Confirma una transferencia en verificación pendiente. Exige `Administrator`. Responde `200`. |
 | `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"..."}`. Exige `Administrator`. Responde `200`. |
-| `POST` | `/api/billing/invoices/{id}/payments` | Registra un abono de deuda. Cuerpo `{"amount":100}`. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/payments` | Registra abono: amount y method (Cash o Transfer). Estándar de sucursal o Administrador; responde 200 con DebtSummary. |
 | `GET` | `/api/billing/invoices` | Lista las facturas con sus ítems y pagos. Cualquier sesión válida. Responde `200`. |
 | `GET` | `/api/billing/invoices/{id}` | Devuelve una factura. Cualquier sesión válida. Responde `200` o `404`. |
 | `GET` | `/api/billing/invoices/{id}/edits` | Historial de edición. Exige `Administrator`. Responde `200`. |
@@ -3208,6 +3253,9 @@ erDiagram
         numeric change_amount "nullable"
         datetime registered_at_utc
         uuid registered_by_user_id
+        datetime resolved_at_utc "nullable"
+        uuid resolved_by_user_id "nullable"
+        string rejection_reason "nullable"
     }
 
     bil_invoice_edits {

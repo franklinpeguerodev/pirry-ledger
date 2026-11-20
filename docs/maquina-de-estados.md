@@ -39,7 +39,7 @@ once:
 | `Issued` | `NotDelivered` | Quien cobra | La factura es de delivery. |
 | `PendingVerification` | `Paid` | Administrador | Los pagos cubren el total. |
 | `PendingVerification` | `InDebt` | Administrador | Transferencia rechazada. Exige el nombre de la persona. |
-| `InDebt` | `Paid` | Administrador | Los abonos cubren el total de la deuda. |
+| `InDebt` | `Paid` | Estándar de sucursal en efectivo / Administrador confirma transferencia | Los pagos confirmados cubren el saldo; no queda transferencia pendiente. |
 | `Paid` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
 | `InDebt` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
 
@@ -170,3 +170,13 @@ de nuevo reemplaza el resumen. No existe historial de revisiones en esta fase.
 Pendientes de transferencia, fiadas, no entregadas, anuladas y solicitudes
 pendientes de anulación permiten cerrar. Factura Issued sin conclusión bloquea
 e identifica factura/emisor sin conceder al compañero acceso para modificarla.
+
+## Abonos de deuda — Práctica 5
+
+Los abonos no agregan estados a Invoice. Efectivo se registra confirmado;
+transferencia se registra pendiente sin reducir saldo ni pasar a Paid.
+Una pendiente bloquea nuevos abonos en esa factura. Confirmar el pago final
+usa la transición existente InDebt -> Paid; rechazar deja InDebt y conserva
+saldo, con motivo obligatorio. Los metadatos del pago guardan resolución y actor.
+La fecha de pago completo es su registro, sin cambiar emisión ni jornada.
+El historial solo se expone al Administrador. Véase ADR 027.

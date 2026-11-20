@@ -111,6 +111,11 @@ public enum Operation
     GetBusinessDay,
     CloseBusinessDay,
     ReopenBusinessDay,
+    ListDebts,
+    GetDebt,
+    GetDebtPaymentHistory,
+    ConfirmDebtTransfer,
+    RejectDebtTransfer,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica
