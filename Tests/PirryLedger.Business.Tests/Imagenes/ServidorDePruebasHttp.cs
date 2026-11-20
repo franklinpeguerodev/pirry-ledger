@@ -40,7 +40,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
 
     private readonly WebApplication _app;
 
-    public ServidorDePruebasHttp()
+    public ServidorDePruebasHttp(Action<IServiceCollection>? configure = null)
     {
         Clock = new RelojAvanzable(Instante);
 
@@ -101,6 +101,8 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
 
         builder.Services.AddScoped<IBranchDirectory, DirectorioDeSucursalesEnMemoria>();
 
+        configure?.Invoke(builder.Services);
+
         _app = builder.Build();
 
         // El mismo orden de middleware que el Host (Program.cs): el
@@ -156,7 +158,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
         return EmitirSesion(usuario);
     }
 
-    public string TokenDeStandard(string correo = "cajero@ejemplo.com")
+    public string TokenDeStandard(string correo = "cajero@ejemplo.com", Guid? branchId = null)
     {
         var usuario = User.Create(
             "Cajero",
@@ -164,7 +166,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
             "hash-que-no-se-usa-porque-aqui-no-hay-contrasena",
             Clock.UtcNow);
 
-        usuario.AssignBranch(Guid.NewGuid());
+        usuario.AssignBranch(branchId ?? Guid.NewGuid());
         usuario.Activate();
 
         return EmitirSesion(usuario);

@@ -6,6 +6,23 @@ namespace PirryLedger.Core.AccessControl.Tests.Credencial;
 public sealed class PruebasDeSucursales
 {
     [Fact]
+    public void TrasladarUnEstandarRechazaSinCambiarSucursalNiVersion()
+    {
+        // Arrange
+        var original = Guid.NewGuid();
+        var user = User.Create("Empleado", "empleado@ejemplo.com", "hash",
+            DateTime.UtcNow, original);
+        var version = user.CredentialVersion;
+
+        // Act
+        Assert.Throws<InvalidOperationException>(() => user.AssignBranch(Guid.NewGuid()));
+
+        // Assert
+        Assert.Equal(original, user.BranchId);
+        Assert.Equal(version, user.CredentialVersion);
+    }
+
+    [Fact]
     public void AsignarSucursalAUnStandardInvalidaLasSesiones()
     {
         var user = User.Create(
