@@ -29,7 +29,7 @@ No prueba ausencia de objetos huérfanos en almacenes externos.
 
 `scripts/maintenance/reset-operational-data.preview.sql` prepara un borrado
 explícito con comparación de filas completas de identidad/acceso y ROLLBACK
-obligatorio al final. No fue ejecutado todavía. No es una limpieza de archivos.
+obligatorio al final. Se ejecutó correctamente con ROLLBACK. No es una limpieza de archivos.
 Contador técnico se recrea con id 1 y valor 0, como migración AddProductImages.
 
 ## Destino y credenciales
@@ -45,7 +45,7 @@ ejecución sin publicar secretos. No se deduce el destino por el nombre del repo
 | Acción | Tablas u objetos |
 |---|---|
 | Conservar íntegramente | ac_users, ac_branches y branch_id de usuarios |
-| Pendiente de decisión | ac_sessions, ac_activation_tokens, ac_recovery_codes |
+| Conservar por decisión de Franklin | ac_sessions, ac_activation_tokens, ac_recovery_codes |
 | Retirar | bil_invoices, bil_invoice_items, bil_invoice_payments, bil_invoice_edits |
 | Retirar catálogo | bil_products, bil_product_images, bil_categories, bil_subcategories |
 | Reinicializar | bil_image_revision: conservar la fila técnica requerida por el repositorio |
@@ -72,11 +72,11 @@ Usuarios conservan contraseña, rol, estado y atributos actuales; no se muestran
 No se documenta todavía un comando permanente de ejecución: no se localizaron
 psql ni docker mediante Get-Command y no se instalarán sin autorización.
 El inventario sí fue ejecutado mediante herramienta temporal .NET; el borrado
-preparatorio no fue ejecutado. No depende de instalar psql o Docker.
+preparatorio fue verificado con ROLLBACK, sin persistir eliminación. No depende de instalar psql o Docker.
 
 ## Secuencia antes de eliminar
 
-1. Confirmar política de sesiones y códigos; revisar que no interrumpa activaciones.
+1. Conservar sesiones y códigos, según respuesta explícita de Franklin.
 2. Obtener conexión mediante configuración cargada en ejecución, sin imprimir valores.
 3. Ejecutar inventario de lectura y revisar tablas nuevas/desconocidas.
 4. Guardar localmente manifiestos de objetos antes de borrar sus referencias.
@@ -97,6 +97,7 @@ demuestra que no existan objetos huérfanos: inventariarlos requiere revisar alm
 - Configuraciones de tabla y columna contrastadas con el SQL.
 - Script de inventario sin DELETE, TRUNCATE ni lectura de columnas de secretos.
 - Completado: conexión real, conteos, relaciones y manifiestos de registros.
-- Pendiente: política de sesiones/códigos, inventario de objetos externos,
-  revisión/ejecución de vista previa y ejecución final de limpieza.
+- Vista previa ejecutada: comprobación de filas de identidad/acceso y ROLLBACK correctos.
+- Inventario repetido después: mismos conteos, incluidas 6 facturas, 38 sesiones y 3 activaciones.
+- Pendiente: inventario de objetos externos y revisión/ejecución final de limpieza.
 - No se ejecutaron build ni pruebas: solo documentación y consulta SQL preparatoria.

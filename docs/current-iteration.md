@@ -18,8 +18,8 @@ Business decisions: `docs/reglas-operativas-practica-5.md`.
 Acceptance scenarios: `docs/criterios-notificaciones-reportes.md`.
 Preparation authorized 2026-11-19; implementation not yet delivered.
 Operational reset: read-only database inventory completed; deletion is pending.
-See `docs/limpieza-datos-practica-5.md`. Sessions and access-code policy still
-requires Franklin's decision; neither rows nor external objects have been removed.
+See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
+Rollback-only deletion preview passed; no rows or external objects were removed.
 
 - Invoice ownership, branch business days, closing snapshots and explicit reopening.
 - Branch debt payments with verified transfers and role-specific views.

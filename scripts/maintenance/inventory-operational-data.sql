@@ -7,9 +7,9 @@ SELECT current_database() AS base_actual, current_schema() AS esquema_actual;
 SELECT 'usuarios a conservar' AS grupo, count(*) AS cantidad FROM ac_users
 UNION ALL SELECT 'sucursales a conservar', count(*) FROM ac_branches
 UNION ALL SELECT 'asignaciones a conservar', count(*) FROM ac_users WHERE branch_id IS NOT NULL
-UNION ALL SELECT 'sesiones: decisión pendiente', count(*) FROM ac_sessions
-UNION ALL SELECT 'activaciones: decisión pendiente', count(*) FROM ac_activation_tokens
-UNION ALL SELECT 'recuperaciones: decisión pendiente', count(*) FROM ac_recovery_codes
+UNION ALL SELECT 'sesiones: conservar', count(*) FROM ac_sessions
+UNION ALL SELECT 'activaciones: conservar', count(*) FROM ac_activation_tokens
+UNION ALL SELECT 'recuperaciones: conservar', count(*) FROM ac_recovery_codes
 UNION ALL SELECT 'facturas', count(*) FROM bil_invoices
 UNION ALL SELECT 'líneas de factura', count(*) FROM bil_invoice_items
 UNION ALL SELECT 'pagos', count(*) FROM bil_invoice_payments

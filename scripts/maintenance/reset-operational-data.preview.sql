@@ -1,6 +1,6 @@
 -- Vista previa transaccional. ROLLBACK final: no persiste la limpieza.
 -- No ejecutar en producción ni convertir a COMMIT sin revisar destino/manifiestos.
--- Sesiones/códigos se conservan en este borrador hasta decisión de Franklin.
+-- Sesiones/códigos se conservan por decisión explícita de Franklin.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
