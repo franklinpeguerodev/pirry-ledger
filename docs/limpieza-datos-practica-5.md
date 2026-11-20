@@ -1,7 +1,42 @@
 # Inventario y preparación de limpieza — Práctica 5
 
-Estado: procedimiento en preparación. No se ejecutó eliminación.
-Rama: `chore/reset-operational-data`, desde develop con el PR de planificación integrado.
+Estado: limpieza PostgreSQL y de imágenes referidas ejecutada; objetos sin registro pendientes.
+Rama de evidencia: `chore/complete-operational-reset`, desde develop tras integrar vista previa.
+
+## Ejecución final y resultado
+
+Franklin pidió continuar tras integrar la vista previa y decidió conservar sesiones
+y códigos. Se usaron configuración y dependencias existentes sin inspeccionar .env
+ni imprimir sus valores. Herramienta temporal fuera del repositorio, sin paquetes nuevos.
+
+1. Inspección de lectura: 2 claves de imagen en base y 7 objetos en prefijo products/ de R2.
+2. Se guardó manifiesto local fuera de Git, antes del borrado.
+3. Se ejecutó el SQL ya verificado dentro de una transacción, con los bloqueos de
+   tablas de la vista previa y comprobación de filas completas de identidad/acceso.
+4. En esta ejecución se confirmó la transacción en lugar de revertirla.
+5. Se retiraron solo las dos imágenes referidas; consultas posteriores devolvieron
+   ausencia para ambas claves. No se borraron buckets ni volúmenes.
+6. Inventario posterior: 4 usuarios, 2 sucursales, 4 asignaciones, 38 sesiones,
+   3 activaciones y 0 recuperaciones, conservados. Cero facturas, líneas, pagos,
+   ediciones, productos, imágenes registradas, categorías, subcategorías, solicitudes,
+   concesiones, correos y documentos registrados. Contador técnico: una fila.
+
+Salida de ejecución: 0. La conexión y credenciales no se publicaron.
+Los bloqueos protegieron la transacción; no se afirma haber detenido servicios
+externos de API/SMTP ni impedido operaciones después del commit.
+La comparación completa dentro de transacción es evidencia de preservación de
+identidad/acceso; no se realizó login con credenciales de usuarios reales.
+
+### Límites pendientes
+
+- Cinco objetos R2 sin registro no se eliminaron: no se deduce su pertenencia
+  solamente por compartir prefijo. Su revisión no bloquea implementar propiedad de facturas.
+- Cero documentos registrados no demuestra almacén SeaweedFS vacío; objetos
+  huérfanos no se inspeccionaron ni borraron.
+- Manifiestos permiten rastrear claves; no son copia de seguridad de los bytes.
+- No hay prueba de eliminación de versiones históricas en almacenamiento externo.
+- No se ejecutaron migraciones ni suite completa: cambió información operativa,
+  no código de producción. Las secciones siguientes conservan evidencia preparatoria.
 
 ## Inventario real ejecutado
 
@@ -99,5 +134,6 @@ demuestra que no existan objetos huérfanos: inventariarlos requiere revisar alm
 - Completado: conexión real, conteos, relaciones y manifiestos de registros.
 - Vista previa ejecutada: comprobación de filas de identidad/acceso y ROLLBACK correctos.
 - Inventario repetido después: mismos conteos, incluidas 6 facturas, 38 sesiones y 3 activaciones.
-- Pendiente: inventario de objetos externos y revisión/ejecución final de limpieza.
+- Completado: limpieza final PostgreSQL y retiro verificado de imágenes registradas.
+- Pendiente: revisión de cinco objetos R2 sin registro y posibles huérfanos SeaweedFS.
 - No se ejecutaron build ni pruebas: solo documentación y consulta SQL preparatoria.

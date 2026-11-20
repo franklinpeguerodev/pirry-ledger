@@ -17,9 +17,11 @@ Preserve the access-control baseline.
 Business decisions: `docs/reglas-operativas-practica-5.md`.
 Acceptance scenarios: `docs/criterios-notificaciones-reportes.md`.
 Preparation authorized 2026-11-19; implementation not yet delivered.
-Operational reset: read-only database inventory completed; deletion is pending.
+Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
-Rollback-only deletion preview passed; no rows or external objects were removed.
+Identity/access rows were preserved and operational counts verified as zero.
+Five unreferenced R2 objects remain for ownership review; unregistered SeaweedFS
+objects were not inventoried. Do not claim all external storage is empty.
 
 - Invoice ownership, branch business days, closing snapshots and explicit reopening.
 - Branch debt payments with verified transfers and role-specific views.
