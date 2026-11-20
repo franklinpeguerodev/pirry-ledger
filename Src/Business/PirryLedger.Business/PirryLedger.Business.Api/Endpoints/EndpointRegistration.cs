@@ -27,6 +27,11 @@ public static class EndpointRegistration
     {
         endpoints.MapBusinessDays();
         endpoints.MapDebts();
+        endpoints.MapPost("/api/billing/invoices/{id:guid}/recover", (Guid id, CollectPaymentBody body,
+            [Microsoft.AspNetCore.Mvc.FromServices] RecoverUndeliveredInvoice useCase,
+            CancellationToken cancellationToken) => RunAsync(async () =>
+                Results.Ok(InvoiceResponse.From(await useCase.ExecuteAsync(id, ToPayments(body.Payments), cancellationToken)))))
+            .WithAccess(Operation.RecoverUndeliveredInvoice);
         endpoints.MapGet("/api/billing/categories", (ManageClassification useCase, CancellationToken ct) =>
             RunAsync(async () => Results.Ok(await useCase.ListAsync(ct))))
             .WithAccess(Operation.ListProductClassification);
@@ -462,6 +467,10 @@ public static class EndpointRegistration
                 statusCode: StatusCodes.Status404NotFound);
         }
         catch (DebtAccessDeniedException error)
+        {
+            return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (InvoiceRecoveryDeniedException error)
         {
             return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
         }

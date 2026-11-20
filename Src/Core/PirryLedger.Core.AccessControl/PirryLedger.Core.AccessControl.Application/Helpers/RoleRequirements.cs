@@ -113,6 +113,7 @@ public static class RoleRequirements
         // operaciones de mostrador; un Administrator recibe 403 en ellas.
         [Operation.IssueInvoice] = new(AccessLevel.Standard),
         [Operation.CollectInvoicePayment] = new(AccessLevel.Standard),
+        [Operation.RecoverUndeliveredInvoice] = new(AccessLevel.Standard),
         [Operation.LeaveInvoiceAsDebt] = new(AccessLevel.Standard),
         [Operation.EditInvoiceItems] = new(AccessLevel.Standard),
         [Operation.MarkInvoiceAsNotDelivered] = new(AccessLevel.Standard),
