@@ -27,7 +27,7 @@ transición `Draft -> Issued` ocurre en la misma operación que la emisión.
 ### Transiciones permitidas
 
 De los 49 pares posibles entre los siete estados, la tabla permite exactamente
-once:
+trece:
 
 | desde | hacia | quién la ejecuta | condición |
 |---|---|---|---|
@@ -42,8 +42,10 @@ once:
 | `InDebt` | `Paid` | Estándar de sucursal en efectivo / Administrador confirma transferencia | Los pagos confirmados cubren el saldo; no queda transferencia pendiente. |
 | `Paid` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
 | `InDebt` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
+| `NotDelivered` | `Paid` | Estándar emisor, por recuperación | Delivery, pagos cubren total y ninguno es transferencia. |
+| `NotDelivered` | `PendingVerification` | Estándar emisor, por recuperación | Delivery y algún pago es transferencia. |
 
-Siete de las once filas comprueban su condición en la propia máquina, una
+Nueve de las trece filas comprueban su condición en la propia máquina, una
 comprobación por fila y aislada en su método: si una se quita, la prueba de esa
 fila se pone roja. La fila `PendingVerification -> Paid` es la excepción: su
 condición la comprueba `Invoice.ConfirmTransfer` antes de pedir la transición,
@@ -64,7 +66,7 @@ conoce la pieza de permisos (RF-NEG-09).
 
 ### Transiciones prohibidas
 
-Los otros 38 pares se rechazan con `InvalidInvoiceTransitionException` y el
+Los otros 36 pares se rechazan con `InvalidInvoiceTransitionException` y el
 estado no cambia (RF-NEG-04). Agrupados por su origen:
 
 - Desde `Draft` (6): hacia sí mismo, `PendingVerification`, `Paid`, `InDebt`,
@@ -77,7 +79,9 @@ estado no cambia (RF-NEG-04). Agrupados por su origen:
   `InDebt` y `NotDelivered`. Una factura pagada solo puede anularse con permiso.
 - Desde `InDebt` (5): hacia `Draft`, `Issued`, `PendingVerification`, sí mismo y
   `NotDelivered`.
-- Desde `Cancelled` (7) y desde `NotDelivered` (7): todos. Son terminales.
+- Desde `Cancelled` (7): todos. Es terminal.
+- Desde `NotDelivered` (5): `Draft`, `Issued`, `InDebt`, `Cancelled` y sí mismo.
+  Solo admite las dos transiciones de recuperación.
 
 Están incluidas las siete transiciones que dejan el estado igual
 (`Draft -> Draft`, `Paid -> Paid`, …): la máquina no es idempotente y repetir una
@@ -94,9 +98,11 @@ antes del cambio conservan el flujo de consumo del ADR 011.
 
 ### Estados terminales
 
-`Cancelled` y `NotDelivered` son terminales (RF-NEG-05): no tienen ninguna
-transición saliente declarada. Si el cliente de una factura marcada como no
-entregada aparece después, se emite una factura nueva; la anterior no revive.
+`Cancelled` es terminal (RF-NEG-05): no tiene ninguna transición saliente.
+Desde Práctica 5, `NotDelivered` se recupera mediante operación exclusiva por
+su Estándar emisor, conservando factura, fecha y jornada originales (ADR 028).
+El cobro ordinario no permite esta recuperación. Transferencia espera la
+verificación administrativa existente; no se modifica el cierre guardado.
 
 ## Máquina de estados de la solicitud de permiso
 
