@@ -178,3 +178,170 @@ Se evalúa el punto etiquetado; puedes seguir trabajando en main después. Esta 
 del cuatrimestre.
 3. Rúbrica
 Criterio No logrado (0 %) Parcialmente logrado
+(50 %)
+Logrado (100 %)
+Archivo de contexto y
+criterios de aceptación
+(1.5 pts)
+No hay archivo de
+contexto ni criterios
+escritos, o los criterios se
+escribieron después de
+que el agente entregó el
+código.
+Existen el archivo de
+contexto y los criterios,
+pero el contexto no dice
+cómo correr ni probar el
+proyecto ni qué no debe
+tocar el agente, o hay
+criterios que no se
+El archivo de contexto
+declara propósito,
+lenguaje, cómo correr,
+cómo probar,
+convenciones y
+restricciones (incluida la
+regla de no tocar
+
+## Página 4
+
+pueden comprobar ("las
+notificaciones funcionan
+bien"), o no cubren las
+dos funcionalidades
+delegadas.
+secretos). Los criterios
+cubren notificaciones y
+reportes, cada uno con
+una condición y cómo se
+comprueba, citan los RF
+y el commit que los
+agrega es anterior al
+primer commit de
+notificaciones.
+Notificaciones RF-NOT-
+01 a 07 (2.0 pts)
+No hay notificaciones, o
+se consultan sin sesión
+válida.
+Se crean y se consultan,
+pero falla alguna regla: la
+crea o recibe quien no
+debe (RF-NOT-01, 02),
+un usuario ve o marca la
+notificación de otro (RF-
+NOT-04, 05), falta el
+evento del negocio (RF-
+NOT-03) o no se puede
+desactivar el canal de
+correo (RF-NOT-07).
+Crear una solicitud
+notifica solo a los
+Administradores;
+resolverla notifica al
+solicitante con el
+resultado y el motivo; un
+evento del negocio
+notifica y se puede
+provocar siguiendo el
+README; las
+notificaciones se
+consultan y marcan solo
+las propias; cada una
+llega por canal interno y
+por correo; con el correo
+desactivado queda la
+interna y no se encola
+correo.
+Cola de correos RF-NOT-
+08 a 13 (1.5 pts)
+Los correos se envían
+dentro de la operación
+que los origina, o el envío
+falla si el servidor de
+correo no responde.
+Los correos se encolan y
+se envían aparte, pero
+falta una regla: reintentos
+limitados con estado
+fallido (RF-NOT-10),
+consulta del estado por el
+Administrador (RF-NOT-
+11) o evitar duplicados al
+ejecutar el procesador
+dos veces (RF-NOT-12).
+Los correos se encolan;
+el procesador
+independiente los envía;
+un correo que falla se
+reintenta el máximo
+declarado en el README
+y queda fallido con su
+último error; el
+Administrador consulta la
+cola; ejecutar el
+procesador dos veces no
+duplica envíos; las
+credenciales SMTP salen
+de variables de entorno.
+Reportes con agregación
+RF-REP-01 a 05 (1.5 pts)
+No hay reportes, o
+devuelven el listado de
+registros en lugar de
+valores agrupados.
+Hay dos reportes con
+agregación, pero falla
+una regla: el del negocio
+solo cuenta filas, un
+Estándar obtiene datos
+de otros usuarios (RF-
+REP-04) o el filtro por
+fechas no cambia el
+resultado (RF-REP-05).
+Un reporte del Core y uno
+del negocio devuelven
+valores agrupados
+(menos filas que los
+registros que resumen);
+el del negocio responde
+una pregunta real del
+dominio; un Estándar
+solo ve lo suyo; dos
+rangos de fechas
+distintos dan resultados
+distintos sobre los
+
+## Página 5
+
+mismos datos.
+Revisión acumulada (1.5
+pts)
+El proyecto no levanta
+con el comando del
+README, o funciona uno
+de los seis frentes o
+ninguno.
+Funcionan de dos a cinco
+de los seis frentes.
+Funcionan los seis
+frentes.
+Total 8.0
+
+4. Qué se revisa exactamente
+• git clone del repositorio y git checkout practica-5.
+• El archivo de contexto del agente y docs/criterios-notificaciones-reportes.md, y en git log que
+el commit que los agrega es anterior al primer commit del motor de notificaciones.
+• .env.example copiado a .env y el comando de la sección «Contenedor» del README: el proyecto
+levanta.
+• Crear una solicitud de permiso con un Estándar y comprobar la notificación de los Administradores;
+resolverla y comprobar la del solicitante; provocar el evento del negocio.
+• Consultar y marcar notificaciones propias, y comprobar que las de otro usuario se rechazan. Desactivar
+el canal de correo y comprobar que no se encola ninguno.
+• Provocar un fallo de envío según el README: reintentos, estado fallido y último error; consulta de la
+cola como Administrador y como Estándar; ejecutar el procesador dos veces.
+• Los dos reportes con dos rangos de fechas distintos y con un usuario Estándar.
+• El historial completo, en busca de credenciales SMTP o de la clave de la API externa.
+• Los seis frentes de la revisión acumulada, arrancados desde el README.
+Programación III · ITLA · 2026-C-3
