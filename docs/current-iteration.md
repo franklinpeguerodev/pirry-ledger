@@ -19,13 +19,17 @@ Acceptance scenarios: `docs/criterios-notificaciones-reportes.md`.
 Preparation authorized 2026-11-19; implementation is being delivered by feature.
 Invoice ownership integrated in develop (ADR 025).
 Scoped repository combines branch and issuer; no standard branch transfers.
-Debt-specific cross-issuer queries and verified payments implemented in
-`feature/debt-payments` (ADR 027), pending PR review. Ordinary invoice queries
+Debt-specific cross-issuer queries and verified payments integrated in develop
+(ADR 027, PR 105). Ordinary invoice queries
 remain private; Standard responses hide debt payment history.
 Branch business days integrated in develop (ADR 026).
 Close/reopen and first-invoice opening are coordinated per
 branch; closed snapshots include pending cancellation exclusions through a Core
-contract. Notifications, reports and full sales-adjustment integration remain
+contract. Dedicated undelivered recovery and shared sales calculations are
+implemented in `feature/invoice-sales-adjustments` (ADR 028), pending review.
+Only the Standard issuer recovers, retaining the original invoice/day and
+leaving saved closings unchanged. Pending cancellation exclusions and resolution
+are covered across Billing and Permissions. Notifications and reports remain
 in subsequent features. No closing revision history is implemented.
 Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.

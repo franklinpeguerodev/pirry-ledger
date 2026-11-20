@@ -187,12 +187,13 @@ public class PruebasDelPuntoUnicoDeAcceso
         Assert.Contains(AccessLevel.Administrator, niveles);
     }
 
-    // RF-NEG-06: quien cobra es el cajero. Las seis operaciones de mostrador
+    // RF-NEG-06: quien cobra es el cajero. Las siete operaciones de mostrador
     // exigen Standard y un Administrator recibe 403; el rol concreto se pide a
     // la tabla, no se escribe en el endpoint.
     [Theory]
     [InlineData(Operation.IssueInvoice)]
     [InlineData(Operation.CollectInvoicePayment)]
+    [InlineData(Operation.RecoverUndeliveredInvoice)]
     [InlineData(Operation.LeaveInvoiceAsDebt)]
     [InlineData(Operation.EditInvoiceItems)]
     [InlineData(Operation.MarkInvoiceAsNotDelivered)]

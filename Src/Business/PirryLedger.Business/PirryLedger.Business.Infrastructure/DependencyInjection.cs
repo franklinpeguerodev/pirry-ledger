@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<ManageClassification>();
         services.AddScoped<IClassificationRepository, ClassificationRepository>();
         services.AddScoped<CollectInvoicePayment>();
+        services.AddScoped<RecoverUndeliveredInvoice>();
         services.AddScoped<LeaveInvoiceAsDebt>();
         services.AddScoped<EditInvoiceItems>();
         services.AddScoped<MarkInvoiceAsNotDelivered>();

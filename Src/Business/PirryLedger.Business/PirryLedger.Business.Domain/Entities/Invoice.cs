@@ -138,6 +138,26 @@ public sealed class Invoice
     // aplica las reglas de dinero que la maquina no puede ver.
     public void Collect(IReadOnlyCollection<InvoicePayment> payments)
     {
+        if (State == InvoiceState.NotDelivered)
+        {
+            throw new InvoiceRuleViolationException("La factura no entregada requiere la operación de recuperación.");
+        }
+
+        ApplySalePayments(payments);
+    }
+
+    public void RecoverUndelivered(IReadOnlyCollection<InvoicePayment> payments)
+    {
+        if (State != InvoiceState.NotDelivered)
+        {
+            throw new InvoiceRuleViolationException("Solo se puede recuperar una factura no entregada.");
+        }
+
+        ApplySalePayments(payments);
+    }
+
+    private void ApplySalePayments(IReadOnlyCollection<InvoicePayment> payments)
+    {
         ArgumentNullException.ThrowIfNull(payments);
 
         var paidAmount = payments.Sum(payment => payment.Amount);
@@ -161,6 +181,7 @@ public sealed class Invoice
             TotalAmount = Total,
             PaidAmount = paidAmount,
             HasTransfer = hasTransfer,
+            IsDelivery = IsDelivery,
         };
 
         State = InvoiceStateMachine.Transition(State, target, context);

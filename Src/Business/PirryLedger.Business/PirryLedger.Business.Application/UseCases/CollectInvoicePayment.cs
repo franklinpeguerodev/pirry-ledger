@@ -1,7 +1,5 @@
 using PirryLedger.Business.Application.Ports;
 using PirryLedger.Business.Domain.Entities;
-using PirryLedger.Business.Domain.Enums;
-using PirryLedger.Business.Domain.Rules;
 using PirryLedger.Core.Contracts.Time;
 
 namespace PirryLedger.Business.Application.UseCases;
@@ -31,7 +29,7 @@ public sealed class CollectInvoicePayment
         var invoice = await _invoices.GetRequiredAsync(invoiceId, cancellationToken);
 
         var domainPayments = payments
-            .Select(payment => BuildPayment(payment, registeredByUserId))
+            .Select(payment => InvoiceSalePaymentFactory.Create(payment, _clock.UtcNow, registeredByUserId))
             .ToList();
 
         invoice.Collect(domainPayments);
@@ -41,19 +39,4 @@ public sealed class CollectInvoicePayment
         return invoice;
     }
 
-    private InvoicePayment BuildPayment(InvoicePaymentInput input, Guid registeredByUserId) =>
-        input.Method switch
-        {
-            PaymentMethod.Cash => InvoicePayment.Cash(
-                input.Amount,
-                input.ReceivedAmount,
-                _clock.UtcNow,
-                registeredByUserId),
-            PaymentMethod.Transfer => InvoicePayment.Transfer(
-                input.Amount,
-                _clock.UtcNow,
-                registeredByUserId),
-            _ => throw new InvoiceRuleViolationException(
-                "El método de pago no es válido para un cobro."),
-        };
 }

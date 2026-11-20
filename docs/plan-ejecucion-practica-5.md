@@ -2,8 +2,8 @@
 
 Autorizado comenzar el 2026-11-19. Reglas completas en
 `reglas-operativas-practica-5.md`; criterios en `criterios-notificaciones-reportes.md`.
-Estado: preparación, limpieza, propiedad de facturas y jornadas integradas.
-Abonos implementados y verificados, pendientes de revisión del PR.
+Estado: preparación, limpieza, propiedad, jornadas y abonos integrados.
+Ajustes de ventas y recuperación explícita implementados, pendientes de revisión del PR.
 Los bloques posteriores conservan el orden y alcance de este plan.
 
 ## Git y dependencias

@@ -12,6 +12,31 @@ namespace PirryLedger.Integration.Tests.Anulacion;
 // y se ejecuta al aprobar la solicitud.
 public sealed class PruebasDeIntegracionDeLaAnulacion
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SolicitudRealExcluyeVentaYLaResolucionActualizaSuClasificacion(bool aprobar)
+    {
+        var escenario = new EscenarioDeIntegracion();
+        var facturaId = await escenario.EmitirFacturaPagadaAsync(500m);
+        var original = await escenario.CifrasDeFacturaAsync(facturaId);
+
+        await Assert.ThrowsAsync<CancellationPermissionRequiredException>(() => escenario.AnularAsync(facturaId));
+        var pendiente = await escenario.CifrasDeFacturaAsync(facturaId);
+        if (aprobar) await escenario.AprobarSolicitudDeAnulacionAsync(facturaId);
+        else await escenario.RechazarSolicitudDeAnulacionAsync(facturaId);
+        var resuelta = await escenario.CifrasDeFacturaAsync(facturaId);
+
+        Assert.Equal(500m, original.Sold);
+        Assert.Equal(0m, pendiente.Sold);
+        Assert.Equal(0m, pendiente.Cash);
+        Assert.Equal(500m, pendiente.PendingCancellation);
+        Assert.Equal(aprobar ? 0m : 500m, resuelta.Sold);
+        Assert.Equal(aprobar ? 0m : 500m, resuelta.Cash);
+        Assert.Equal(aprobar ? 500m : 0m, resuelta.Cancelled);
+        Assert.Equal(0m, resuelta.PendingCancellation);
+    }
+
     [Fact]
     public async Task AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada()
     {

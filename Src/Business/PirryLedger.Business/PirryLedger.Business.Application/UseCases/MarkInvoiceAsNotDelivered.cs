@@ -4,7 +4,7 @@ using PirryLedger.Business.Domain.Entities;
 namespace PirryLedger.Business.Application.UseCases;
 
 // RF-NEG-02: marcar una factura de delivery como no entregada. Solo una
-// factura de delivery puede hacerlo y el estado es terminal.
+// factura de delivery puede hacerlo; la recuperación tiene operación propia.
 public sealed class MarkInvoiceAsNotDelivered
 {
     private readonly IInvoiceRepository _invoices;

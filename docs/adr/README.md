@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `028-explicit-undelivered-invoice-recovery.md` (2026-11-20) — Dedicated recovery operation and original-day sales adjustments.
+
 - `027-branch-debt-payments.md` (2026-11-20) — Branch-scoped debt access, row-locked payments and administrative history.
 
 - `026-branch-business-day-transactions.md` (2026-11-19) — Branch business days and closing snapshots coordinated by PostgreSQL transaction locks.

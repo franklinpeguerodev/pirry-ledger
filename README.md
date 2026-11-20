@@ -1,5 +1,47 @@
 # Pirry Ledger
 
+## Recuperación de delivery y ajustes de ventas — ADR 028
+
+El Estándar emisor recupera una factura no entregada con
+`POST /api/billing/invoices/{id}/recover`. Cuerpo de ejemplo:
+
+```json
+{"payments":[{"method":"Cash","amount":500}]}
+```
+
+Usa los mismos campos de pago que el cobro ordinario: Cash o Transfer; delivery
+no admite receivedAmount ni cambio. Devuelve InvoiceResponse con 200. Efectivo
+que cubre el total pasa a Paid; transferencia a PendingVerification y requiere
+confirmación administrativa por la ruta existente de transferencias.
+
+Sin sesión responde 401; Administrador 403; compañero u otra sucursal 404.
+Solo se recupera NotDelivered: otra situación o repetir recuperación devuelve
+400 sin agregar pagos. `/collect` rechaza la recuperación; es una acción distinta.
+Se toman usuario y fecha del servidor, sin aceptar identidad del cuerpo.
+
+Conserva factura, líneas, precios, emisión y jornada originales. Puede recuperarse
+después del cierre sin abrir/reabrir caja. La jornada conserva su cierre guardado;
+la venta recuperada corresponde a la jornada original para cálculos posteriores.
+
+InvoiceSalesCalculation centraliza cifras de facturación usadas al cerrar.
+Solicitar anulación excluye venta y efectivo, aprobar mantiene exclusión como
+anulado y rechazar reincorpora a la jornada original. No entregado también queda
+excluido hasta recuperarse. Las cifras separan transferencias confirmadas y
+pendientes, fiado y exclusiones; abonos de deuda permanecen fuera del cierre.
+Los reportes y notificaciones se conectarán en sus features posteriores.
+
+Pruebas reproducibles sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter "FullyQualifiedName~Recuperacion|FullyQualifiedName~AjustesDeVentas" -v q
+dotnet test Tests/PirryLedger.Integration.Tests/PirryLedger.Integration.Tests.csproj --no-restore -v q
+```
+
+Incluyen ruta exclusiva, permisos reales, conservación de cierre, transferencia
+verificada y exclusión/reincorporación mediante solicitudes reales de Permisos.
+No requiere migración, paquete ni variable nuevos. Cancelled sigue terminal;
+NotDelivered ahora tiene las dos salidas explícitas de recuperación.
+
 ## Deudas y abonos por sucursal — RF-NEG-06, RD-06
 
 Estándar consulta y abona cualquier deuda de su sucursal, incluida la de otro
@@ -1349,8 +1391,8 @@ defecto y corriendo la suite, no leyendo el código.
 
 | Defecto | Qué se planta | Pruebas que lo detectan | Qué comprueban |
 |---|---|---|---|
-| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 11 de los 49 pares. |
-| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
+| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteTreceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 13 de los 49 pares. |
+| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteTreceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
 | 3 (RF-NEG-03) | `InvoiceStateMachine.cs:62`: elimina la llamada a `EnsureHasAtLeastOneItem` en `Draft -> Issued`, así que se puede emitir una factura sin ítems. | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | Que emitir sin ítems se rechace, no cambie el estado y no guarde nada. |
 | 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `AprobarLaSolicitudAnulaLaFacturaEnLaMismaOperacion`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
 
@@ -2017,8 +2059,8 @@ Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
 
 ### 3.6 Máquina de estados del negocio
 
-La máquina de la factura tiene siete estados, once transiciones permitidas y
-treinta y ocho prohibidas, y cada fila de esas tablas tiene su prueba. Se
+La máquina de la factura tiene siete estados, trece transiciones permitidas y
+treinta y seis prohibidas, y cada fila de esas tablas tiene su prueba. Se
 verifica sin base de datos y sin levantar la aplicación (RF-NEG-03, RF-NEG-04,
 RF-NEG-05, RF-NEG-09, RD-04, RD-12).
 
@@ -2034,12 +2076,12 @@ Verifica en ese orden:
    `Paid`, `InDebt`, `Cancelled` y `NotDelivered`.
 2. **Las transiciones permitidas están declaradas en un solo sitio**
    (RF-NEG-04, RD-04): `InvoiceStateMachine` tiene una única lista
-   `AllowedTransitions` con las once filas de la tabla de
+   `AllowedTransitions` con las trece filas de la tabla de
    `docs/maquina-de-estados.md`. Ningún otro punto del código cambia el estado.
-3. **Hay transiciones explícitamente prohibidas y dos estados terminales**
-   (RF-NEG-05): los otros treinta y ocho pares lanzan
-   `InvalidInvoiceTransitionException` sin cambiar el estado, y `Cancelled` y
-   `NotDelivered` no tienen ninguna salida.
+3. **Hay transiciones explícitamente prohibidas y un estado terminal**
+   (RF-NEG-05): los otros treinta y seis pares lanzan
+   `InvalidInvoiceTransitionException` sin cambiar el estado. `Cancelled` no
+   tiene salidas; `NotDelivered` admite las dos de recuperación del ADR 028.
 4. **Las condiciones de las filas se comprueban de verdad**: emitir sin ítems,
    cobrar sin cubrir el total, cobrar con transferencia, dejar una deuda sin
    nombre o marcar como no entregada una factura que no es de delivery se
@@ -2049,11 +2091,10 @@ Verifica en ese orden:
 dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-Salida esperada: **134 pruebas superadas**, 0 con error: las 62 de la máquina de
-esta sección y las 72 de las reglas, la persistencia y los casos de uso de las
-secciones 3.10 y 3.12. Los nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
+Salida actual: **286 pruebas superadas**, 0 con error en Billing, incluidas
+máquina, reglas, persistencia y casos de uso. Los nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
 `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)`,
-`AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`,
+`AnuladaNoTieneSalidas`, `NoEntregadaSoloAdmiteLasSalidasDeRecuperacion`,
 `EmitirSinItemsSeRechazaYNoCambiaElEstado`, entre otras.
 
 Para ver que la suite puede fallar, quita la línea
