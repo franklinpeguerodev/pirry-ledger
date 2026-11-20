@@ -44,6 +44,9 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.400 (`global.json
 
 ## Truthfulness rules
 
+- Never read `.env`. Inspect variable names through `.env.example` and configuration code, without printing secret values.
+- Practice 5 requires entry commands in this context file as a limited exception to keeping run instructions only in the README. The README remains the complete setup source. Existing entry commands are `docker compose up --build` and `dotnet test pirry-ledger.slnx --configuration Release`; run and verify them during acceptance before claiming success.
+
 - **Never invent commands, paths, packages, versions or results.** Past error in this repo: a README documented `npm install` and `npm run dev` with no `package.json`. If a task needs a run command: create the project or manifest first, then document it, then run it.
 - Verify with a command, not by eye: `Test-Path`, `git status`, `git check-ignore -v`, `dotnet build`.
 - Run every command you document before proposing the commit, and show the real output.
@@ -90,6 +93,10 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.400 (`global.json
 - Commits: English subject, imperative mood, one change per commit, with the requirement ID when one applies. Example: `Add salted password hashing (RF-CA-02)`. Do not mix unrelated changes.
 - Before proposing a commit, run `git status` and `git diff --staged`. No `bin/`, `obj/`, generated files or secrets. A credential in history is penalized even if deleted later, so check before committing, not after.
 - Pull requests use `.github/PULL_REQUEST_TEMPLATE.md` with exactly its four sections (Qué cambia, Por qué, Cómo probarlo, Qué NO incluye). Do not add sections. Cite requirement IDs. Franklin opens the PR.
+
+### Practice 5 workflow authorization
+
+Franklin authorized the agent on 2026-11-19 to push feature branches and open PRs; Franklin reviews and approves them. This overrides the preceding rule that Franklin opens PRs for this iteration. No merge or delivery tag is authorized by that instruction. Base: develop; one branch per major feature. Atomic commits must contain at most 200 added/deleted lines, with smaller cohesive commits allowed.
 
 ## Documentation
 
