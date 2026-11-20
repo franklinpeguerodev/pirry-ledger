@@ -1,5 +1,19 @@
 # Bitácora — Práctica 5
 
+## Continuación — Inventario real
+
+- Franklin indicó continuar; PR de inventario comprobado integrado en develop.
+- El agente encontró dotnet y bibliotecas Npgsql/DotNetEnv del Host ya compiladas.
+  Preparó herramienta temporal fuera del repo, sin paquetes nuevos, para ejecutar
+  el SQL de lectura con carga de configuración equivalente al Host.
+- Primer intento restringido falló al conectar; ejecución con permiso de red
+  terminó correctamente. No se imprimieron valores secretos ni se inspeccionó .env.
+- Resultado: 4 usuarios, 2 sucursales, 6 facturas, 2 productos, 2 imágenes,
+  38 sesiones y 3 activaciones. Conteos y relaciones documentados en limpieza.
+- Preparado borrador de eliminación PostgreSQL con ROLLBACK y preservación de
+  identidad/acceso; no ejecutado. No se borraron filas ni objetos externos.
+- Pendientes: decisión de sesiones/códigos y limpieza de almacenes con manifiesto revisado.
+
 ## Continuación — Inventario de limpieza
 
 - Franklin aprobó el PR de planificación; el agente comprobó su integración en develop.
