@@ -34,5 +34,13 @@ public sealed class InvoicePaymentConfiguration : IEntityTypeConfiguration<Invoi
         builder.Property(payment => payment.RegisteredAtUtc).HasColumnName("registered_at_utc");
 
         builder.Property(payment => payment.RegisteredByUserId).HasColumnName("registered_by_user_id");
+        builder.Property(payment => payment.ResolvedAtUtc).HasColumnName("resolved_at_utc");
+        builder.Property(payment => payment.ResolvedByUserId).HasColumnName("resolved_by_user_id");
+        builder.Property(payment => payment.RejectionReason).HasColumnName("rejection_reason");
+
+        builder.HasIndex(payment => payment.InvoiceId);
+        builder.HasIndex(payment => payment.InvoiceId, "PendingDebtTransfer")
+            .HasDatabaseName("ux_bil_pending_debt_transfer").IsUnique()
+            .HasFilter($"kind = {(int)PaymentKind.Debt} AND method = {(int)PaymentMethod.Transfer} AND status = {(int)PaymentStatus.Registered}");
     }
 }

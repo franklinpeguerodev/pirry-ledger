@@ -52,5 +52,8 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.Ignore(invoice => invoice.Total);
         builder.Ignore(invoice => invoice.PaidAmount);
+        builder.Ignore(invoice => invoice.ConfirmedPaidAmount);
+        builder.Ignore(invoice => invoice.HasPendingTransfer);
+        builder.Ignore(invoice => invoice.DebtPaidAtUtc);
     }
 }

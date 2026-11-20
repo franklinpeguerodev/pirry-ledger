@@ -245,6 +245,18 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("registered_by_user_id");
 
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at_utc");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_user_id");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("status");
@@ -252,6 +264,11 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
+
+                    b.HasIndex(new[] { "InvoiceId" }, "PendingDebtTransfer")
+                        .IsUnique()
+                        .HasDatabaseName("ux_bil_pending_debt_transfer")
+                        .HasFilter("kind = 1 AND method = 1 AND status = 0");
 
                     b.ToTable("bil_invoice_payments", (string)null);
                 });
