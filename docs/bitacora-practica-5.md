@@ -1,5 +1,45 @@
 # Bitácora — Práctica 5
 
+## 2026-11-20 — Recuperación explícita y ajustes de ventas
+
+- Franklin confirmó integración del PR 105 y pidió continuar el plan. Se
+  comprobó merge a26a1cf y se creó feature/invoice-sales-adjustments desde develop.
+- Se presentaron dos alternativas: reutilizar cobro o crear operación exclusiva.
+  Franklin aprobó alternativa 2 y ADR 028: ruta /recover y caso de uso propio.
+- NotDelivered deja de ser terminal y admite Paid o PendingVerification;
+  Cancelled sigue terminal. Solo el Estándar emisor recupera su sucursal.
+  La ruta /collect sigue rechazando no entregadas.
+- Se conserva factura, líneas, precios, emisión y jornada; no abre/reabre caja
+  ni modifica cierre guardado. Se comparte construcción y validación de pagos
+  con el cobro ordinario. Transferencia conserva verificación administrativa.
+- InvoiceSalesCalculation centraliza cifras y exclusiones usadas en cierres:
+  pendiente excluye, rechazo reincorpora, aprobación clasifica anulado;
+  no entregado se excluye hasta recuperación. Abonos permanecen fuera del cierre.
+- Rojo inicial: las dos salidas desde NotDelivered fallaron con Assert.True
+  porque la tabla aún las prohibía. Se actualizaron pruebas antiguas de terminal
+  y conteo: 13 permitidas, 36 prohibidas y cinco salidas no entregadas rechazadas.
+  Se conservó prueba de Cancelled sin salidas; no se debilitó ese requisito.
+- Mutación adicional: retirar filtro de anulación pendiente hizo fallar
+  SolicitudExcluyeVentaYEfectivoYRechazoLosReincorpora: esperaba 0 y recibió 500.
+  Regla restaurada antes de verificación final y publicación.
+- Pruebas HTTP reales con EF en memoria: 401 sin sesión, 403 Administrador,
+  404 compañero/otra sucursal; rechazos no agregan pagos ni cambian estado.
+  Emisor recupera y repetición se rechaza; cierre permanece sin modificación.
+- Integración Billing/Permisos: solicitudes reales excluyen; aprobación y
+  rechazo actualizan cifras mediante contrato público, sin leer tablas ajenas.
+- PostgreSQL real con helper temporal y bibliotecas existentes: recuperación
+  en efectivo y transferencia persistidas, confirmación posterior, identidad,
+  emisión/jornada y cierre original comprobados desde contextos nuevos.
+  Primer intento restringido falló en TLS; ejecución autorizada terminó bien.
+  Se retiraron solo facturas/jornada temporales propias; no se leyó .env como
+  archivo ni se imprimieron valores. Se usó carga de configuración de aplicación.
+- Compilación sin advertencias ni errores. Suite completa: 560 aprobadas,
+  0 fallidas y 0 omitidas (Billing 286, AccessControl 163, Permissions 52,
+  Documents 40, Notifications 12, Integration 7). Filtro de recuperación/ajustes:
+  25 aprobadas; integración: 7 aprobadas. Comandos en README ejecutados.
+- Sin migración, paquetes, móvil, notificaciones, reportes o auditoría general.
+  Evidencia ejecutada por el agente; Franklin revisa. Sin merge ni etiqueta.
+
 ## 2026-11-20 — Abonos por sucursal
 
 - Franklin pidió continuar y consultó progreso: se estimó 30 % del esfuerzo,
