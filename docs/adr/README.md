@@ -1,5 +1,8 @@
 # Architecture Decision Records
 
+- `023-standard-in-app-notifications.md` (2026-11-19) — Standard notifications use only the internal channel; security mail remains.
+- `024-selective-administrator-email-notifications.md` (2026-11-19) — Selected administrator events use email with individual preferences.
+
 One-line index of the ADRs in this folder. The title and date below come from each ADR's heading; this index does not modify or summarize any ADR — open the file for the context, alternatives, and consequences.
 
 - `001-session-credential.md` (2026-09-30) — Session credential: opaque token with a session table.
