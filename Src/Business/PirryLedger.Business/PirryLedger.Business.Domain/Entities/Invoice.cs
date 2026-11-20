@@ -41,6 +41,16 @@ public sealed class Invoice
 
     public Guid IssuedByUserId { get; private set; }
 
+    public string IssuedByUserName { get; private set; } = string.Empty;
+    public Guid? BusinessDayId { get; private set; }
+
+    public void AssignBusinessDay(Guid id)
+    {
+        if (id == Guid.Empty || BusinessDayId is not null)
+            throw new InvoiceRuleViolationException("La jornada de una factura solo se asigna una vez.");
+        BusinessDayId = id;
+    }
+
     public string BranchName { get; private set; } = string.Empty;
 
     public string BranchAddress { get; private set; } = string.Empty;
@@ -81,7 +91,8 @@ public sealed class Invoice
         Guid branchId,
         string branchName,
         string branchAddress,
-        Guid issuedByUserId = default)
+        Guid issuedByUserId = default,
+        string issuedByUserName = "")
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -99,6 +110,7 @@ public sealed class Invoice
         IssuedAtUtc = issuedAtUtc;
         BranchId = branchId;
         IssuedByUserId = issuedByUserId;
+        IssuedByUserName = issuedByUserName;
         BranchName = branchName;
         BranchAddress = branchAddress;
     }
