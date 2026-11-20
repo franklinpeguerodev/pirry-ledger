@@ -1,5 +1,30 @@
 # Pirry Ledger
 
+## Coordinación transaccional entre módulos — ADR 029
+
+IApplicationTransaction permite ejecutar escrituras de varios módulos en una
+sola transacción PostgreSQL. Cada módulo incorpora exclusivamente su propio
+contexto mediante IModuleTransactionParticipant; conserva sus entidades y tablas.
+La conexión compartida vive durante el ámbito de DI y no es propiedad de los
+contextos individuales. Las llamadas anidadas comparten la transacción exterior.
+Un fallo anidado obliga a revertir aunque el llamador capture la excepción.
+
+Esta entrega prepara la infraestructura del centro de notificaciones. Todavía
+no conecta eventos de negocio ni sustituye las transacciones existentes de
+jornadas, abonos o permisos. Esas adaptaciones y la bandeja siguen pendientes.
+SMTP conserva su proceso independiente. No requiere migración ni variables nuevas.
+
+Verificación sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeTransaccionEntreModulos -v q
+```
+
+Resultado: cuatro pruebas aprobadas de conexión/transacción compartidas,
+reversión y anidamiento. Verificación PostgreSQL separada con datos temporales:
+fallo revierte escrituras de Billing y Permisos y descarta seguimiento;
+la siguiente operación confirma ambos módulos. Datos propios retirados al terminar.
+
 ## Recuperación de delivery y ajustes de ventas — ADR 028
 
 El Estándar emisor recupera una factura no entregada con

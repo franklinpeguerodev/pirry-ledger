@@ -26,11 +26,15 @@ Branch business days integrated in develop (ADR 026).
 Close/reopen and first-invoice opening are coordinated per
 branch; closed snapshots include pending cancellation exclusions through a Core
 contract. Dedicated undelivered recovery and shared sales calculations are
-implemented in `feature/invoice-sales-adjustments` (ADR 028), pending review.
+integrated in develop (ADR 028, PR 106).
 Only the Standard issuer recovers, retaining the original invoice/day and
 leaving saved closings unchanged. Pending cancellation exclusions and resolution
 are covered across Billing and Permissions. Notifications and reports remain
 in subsequent features. No closing revision history is implemented.
+Notification-center prerequisite: explicit cross-module transaction coordinator
+and module-owned participants implemented under ADR 029, pending PR review.
+No notification events or inbox are connected yet; existing explicit transaction
+flows must be adapted before using the coordinator around those operations.
 Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
 Identity/access rows were preserved and operational counts verified as zero.
