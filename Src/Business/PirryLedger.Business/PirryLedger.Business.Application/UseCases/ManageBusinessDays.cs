@@ -40,7 +40,7 @@ public sealed class ManageBusinessDays(IBusinessDayRepository days, IBranchScope
             var unfinished = invoices.Where(x => x.State == InvoiceState.Issued && !pending.Contains(x.Id))
                 .Select(x => new UnfinishedInvoice(x.Id, x.IssuedByUserId, x.IssuedByUserName)).ToArray();
             if (unfinished.Length > 0) throw new UnfinishedInvoicesException(unfinished);
-            day.Close(Calculate(invoices, pending), clock.UtcNow, scope.UserId!.Value);
+            day.Close(InvoiceSalesCalculation.Calculate(invoices, pending), clock.UtcNow, scope.UserId!.Value);
             await days.SaveAsync(ct);
             return day;
         }, ct);
@@ -70,21 +70,6 @@ public sealed class ManageBusinessDays(IBusinessDayRepository days, IBranchScope
         await days.FindAsync(id, branch, ct)
         ?? throw new BusinessDayRuleViolationException("NotFound", "La jornada indicada no existe.");
 
-    private static BusinessDayClosing Calculate(IReadOnlyList<Invoice> invoices, IReadOnlySet<Guid> pending)
-    {
-        var included = invoices.Where(x => !pending.Contains(x.Id)
-            && x.State is not (InvoiceState.Cancelled or InvoiceState.NotDelivered)).ToArray();
-        var payments = included.SelectMany(x => x.Payments).Where(x => x.Kind == PaymentKind.Sale).ToArray();
-        return new BusinessDayClosing(included.Sum(x => x.Total),
-            payments.Where(x => x.Method == PaymentMethod.Cash && x.Status == PaymentStatus.Confirmed).Sum(x => x.Amount),
-            payments.Where(x => x.Method == PaymentMethod.Transfer && x.Status == PaymentStatus.Confirmed).Sum(x => x.Amount),
-            payments.Where(x => x.Method == PaymentMethod.Transfer && x.Status == PaymentStatus.Registered).Sum(x => x.Amount),
-            included.Where(x => x.DebtorName is not null).Sum(x => x.Total - x.Payments
-                .Where(p => p.Kind == PaymentKind.Sale && p.Status != PaymentStatus.Rejected).Sum(p => p.Amount)),
-            invoices.Where(x => pending.Contains(x.Id)).Sum(x => x.Total),
-            invoices.Where(x => !pending.Contains(x.Id) && x.State == InvoiceState.Cancelled).Sum(x => x.Total),
-            invoices.Where(x => !pending.Contains(x.Id) && x.State == InvoiceState.NotDelivered).Sum(x => x.Total));
-    }
 }
 
 public sealed record UnfinishedInvoice(Guid InvoiceId, Guid IssuerId, string IssuerName);

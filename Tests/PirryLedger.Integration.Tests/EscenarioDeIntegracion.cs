@@ -175,6 +175,28 @@ internal sealed class EscenarioDeIntegracion
         return factura.State;
     }
 
+    public async Task<BusinessDayClosing> CifrasDeFacturaAsync(Guid facturaId)
+    {
+        await using var negocio = new BusinessDbContext(_opcionesNegocio);
+        await using var permisos = new PermissionsDbContext(_opcionesPermisos);
+        var factura = await new InvoiceRepository(negocio).GetByIdAsync(facturaId)
+            ?? throw new InvalidOperationException("La factura no existe.");
+        var pendientes = await new PendingInvoiceCancellations(permisos).FindAsync([facturaId], default);
+        return PirryLedger.Business.Domain.Rules.InvoiceSalesCalculation.Calculate([factura], pendientes);
+    }
+
+    public async Task RechazarSolicitudDeAnulacionAsync(Guid facturaId)
+    {
+        var token = await Login.ExecuteAsync(CorreoAdministrador, ContrasenaValida);
+        await using var permisos = new PermissionsDbContext(_opcionesPermisos);
+        var solicitud = await SolicitudPendienteAsync(permisos, facturaId)
+            ?? throw new InvalidOperationException("No hay una solicitud pendiente.");
+        var rechazo = new RejectPermissionRequest(new PermissionRequestRepository(permisos),
+            new Authenticate(Sessions, Users, Clock,
+                new EfPermissionAuthority(new PermissionGrantRepository(permisos), Clock)), Clock);
+        await rechazo.ExecuteAsync(token, solicitud.Id, "La venta sí se realizó.");
+    }
+
     // Las solicitudes de anulacion de esa factura, leidas del almacen real de
     // Permissions con un contexto nuevo.
     public async Task<IReadOnlyList<PermissionRequest>> SolicitudesAsync(Guid facturaId)
