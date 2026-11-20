@@ -1,8 +1,8 @@
 namespace PirryLedger.Business.Domain.Enums;
 
-// RF-NEG-03: the business state set is declared in one place.
-// Issued is shown to the user as "pendiente".
-// Cancelled and NotDelivered are terminal (RF-NEG-05).
+// RF-NEG-03: estados del negocio declarados en un solo lugar.
+// Issued se muestra como "pendiente". Cancelled es terminal (RF-NEG-05).
+// NotDelivered admite recuperación explícita (ADR 028).
 public enum InvoiceState
 {
     Draft,

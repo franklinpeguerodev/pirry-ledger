@@ -8,7 +8,7 @@ namespace PirryLedger.Business.Tests.MaquinaDeEstados;
 // el estado no cambio.
 public sealed class PruebasDeTransicionesProhibidas
 {
-    // Las 38 filas prohibidas: 49 pares posibles menos las 11 permitidas,
+    // Las 36 filas prohibidas: 49 pares posibles menos las 13 permitidas,
     // incluidas las 7 que dejan el estado igual.
     public static TheoryData<InvoiceState, InvoiceState> TransicionesProhibidas => new()
     {
@@ -55,11 +55,9 @@ public sealed class PruebasDeTransicionesProhibidas
         { InvoiceState.Cancelled, InvoiceState.Cancelled },
         { InvoiceState.Cancelled, InvoiceState.NotDelivered },
 
-        // Desde NotDelivered: todas (7)
+        // Desde NotDelivered: cinco; dos salidas de recuperación (ADR 028).
         { InvoiceState.NotDelivered, InvoiceState.Draft },
         { InvoiceState.NotDelivered, InvoiceState.Issued },
-        { InvoiceState.NotDelivered, InvoiceState.PendingVerification },
-        { InvoiceState.NotDelivered, InvoiceState.Paid },
         { InvoiceState.NotDelivered, InvoiceState.InDebt },
         { InvoiceState.NotDelivered, InvoiceState.Cancelled },
         { InvoiceState.NotDelivered, InvoiceState.NotDelivered },
@@ -100,9 +98,9 @@ public sealed class PruebasDeTransicionesProhibidas
         Assert.Equal(InvoiceState.Cancelled, factura.State);
     }
 
-    // RF-NEG-05: NotDelivered es terminal.
+    // ADR 028: las cinco salidas restantes siguen prohibidas.
     [Fact]
-    public void NoEntregadaNoTieneSalidas()
+    public void NoEntregadaSoloAdmiteLasSalidasDeRecuperacion()
     {
         // Arrange
         var factura = FacturaDePrueba.EnEstado(InvoiceState.NotDelivered);
@@ -110,6 +108,11 @@ public sealed class PruebasDeTransicionesProhibidas
         // Act + Assert
         foreach (var destino in Enum.GetValues<InvoiceState>())
         {
+            if (destino is InvoiceState.Paid or InvoiceState.PendingVerification)
+            {
+                Assert.True(InvoiceStateMachine.CanTransition(InvoiceState.NotDelivered, destino));
+                continue;
+            }
             Assert.False(
                 InvoiceStateMachine.CanTransition(InvoiceState.NotDelivered, destino),
                 $"No entregada no deberia poder transicionar a {destino}.");
@@ -132,11 +135,11 @@ public sealed class PruebasDeTransicionesProhibidas
         Assert.Equal(7, estados.Distinct().Count());
     }
 
-    // La tabla permite exactamente 11 de los 49 pares. Una transicion agregada
+    // La tabla permite exactamente 13 de los 49 pares. Una transicion agregada
     // por accidente cambia el conteo y esta prueba avisa, ademas de la fila
     // concreta que la prueba anterior ya rechaza.
     [Fact]
-    public void LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares()
+    public void LaTablaPermiteExactamenteTreceDeLosCuarentaYNuevePares()
     {
         // Arrange
         var estados = Enum.GetValues<InvoiceState>();
@@ -148,6 +151,6 @@ public sealed class PruebasDeTransicionesProhibidas
 
         // Assert
         Assert.Equal(49, estados.Length * estados.Length);
-        Assert.Equal(11, permitidas);
+        Assert.Equal(13, permitidas);
     }
 }

@@ -6,7 +6,7 @@ namespace PirryLedger.Business.Domain.StateMachines;
 // factura. La tabla AllowedTransitions es la unica fuente de verdad; una
 // transicion que no esta en ella se rechaza y el estado no cambia.
 //
-// Cancelled y NotDelivered no tienen transiciones de salida a proposito.
+// Cancelled es terminal. NotDelivered admite recuperación explícita (ADR 028).
 //
 // La consulta del permiso de anulacion NO vive aqui: depende de la factura
 // concreta y la resuelve el caso de uso con una sola linea. La maquina solo
@@ -27,6 +27,8 @@ public static class InvoiceStateMachine
             (InvoiceState.InDebt, InvoiceState.Paid),
             (InvoiceState.Paid, InvoiceState.Cancelled),
             (InvoiceState.InDebt, InvoiceState.Cancelled),
+            (InvoiceState.NotDelivered, InvoiceState.Paid),
+            (InvoiceState.NotDelivered, InvoiceState.PendingVerification),
         };
 
     public static bool CanTransition(InvoiceState from, InvoiceState to) =>
@@ -65,6 +67,17 @@ public static class InvoiceStateMachine
             case (InvoiceState.Issued, InvoiceState.Paid):
                 EnsurePaymentsCoverTheTotal(from, to, context);
                 EnsureNoTransferIsPending(from, to, context);
+                break;
+
+            case (InvoiceState.NotDelivered, InvoiceState.Paid):
+                EnsureIsDelivery(from, to, context);
+                EnsurePaymentsCoverTheTotal(from, to, context);
+                EnsureNoTransferIsPending(from, to, context);
+                break;
+
+            case (InvoiceState.NotDelivered, InvoiceState.PendingVerification):
+                EnsureIsDelivery(from, to, context);
+                EnsureHasTransfer(from, to, context);
                 break;
 
             case (InvoiceState.Issued, InvoiceState.PendingVerification):
