@@ -11,7 +11,7 @@ namespace PirryLedger.Core.AccessControl.Infrastructure;
 //
 // Es Public porque el Host lo resuelve por inyeccion de dependencias. Lo que no
 // hace el Host es tocarlo: solo lo registra.
-public sealed class AccessControlDbContext : DbContext
+public sealed partial class AccessControlDbContext : DbContext
 {
     public AccessControlDbContext(DbContextOptions<AccessControlDbContext> options)
         : base(options)

@@ -4,7 +4,7 @@ using PirryLedger.Business.Infrastructure.EntityConfigurations;
 
 namespace PirryLedger.Business.Infrastructure.Persistence;
 
-public sealed class BusinessDbContext : DbContext
+public sealed partial class BusinessDbContext : DbContext
 {
     public BusinessDbContext(DbContextOptions<BusinessDbContext> options)
         : base(options)

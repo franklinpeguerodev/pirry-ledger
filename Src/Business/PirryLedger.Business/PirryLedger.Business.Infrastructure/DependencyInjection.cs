@@ -1,3 +1,4 @@
+using PirryLedger.Core.Contracts.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Business.Application;
@@ -19,8 +20,13 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(imageStorage);
 
-        services.AddDbContext<BusinessDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContext<BusinessDbContext>((provider, options) =>
+        {
+            var shared = provider.GetService<IModuleDatabaseConnection>();
+            if (shared is null) options.UseNpgsql(connectionString);
+            else options.UseNpgsql(shared.Connection);
+        });
+        services.AddScoped<IModuleTransactionParticipant>(provider => provider.GetRequiredService<BusinessDbContext>());
 
         // ADR 018: el paso de migracion de la pieza.
         services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.BusinessMigration>();

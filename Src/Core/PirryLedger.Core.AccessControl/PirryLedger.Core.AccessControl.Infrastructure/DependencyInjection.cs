@@ -1,3 +1,4 @@
+using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.AccessControl.Domain.Entities;
 using PirryLedger.Core.AccessControl.Domain.Enums;
@@ -25,8 +26,13 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
 
-        services.AddDbContext<AccessControlDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContext<AccessControlDbContext>((provider, options) =>
+        {
+            var shared = provider.GetService<IModuleDatabaseConnection>();
+            if (shared is null) options.UseNpgsql(connectionString);
+            else options.UseNpgsql(shared.Connection);
+        });
+        services.AddScoped<IModuleTransactionParticipant>(provider => provider.GetRequiredService<AccessControlDbContext>());
 
         // ADR 018: el paso de migracion de la pieza.
         services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.AccessControlMigration>();
