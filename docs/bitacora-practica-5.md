@@ -1,5 +1,21 @@
 # Bitácora — Práctica 5
 
+## Continuación — Limpieza ejecutada
+
+- Franklin pidió continuar tras integrar el PR de vista previa; el agente comprobó develop.
+- Se inspeccionaron base y R2: 2 imágenes registradas, 7 objetos en prefijo de productos.
+- Herramienta temporal con Npgsql/DotNetEnv/AWSSDK compilados del Host, sin paquetes nuevos.
+  Carga en ejecución sin inspeccionar .env ni imprimir configuración.
+- Se ejecutó borrado transaccional revisado: salida 0, comparación de filas completas
+  de usuarios, sucursales, sesiones y códigos correcta; contador reinicializado.
+- Se eliminaron 2 imágenes del manifiesto y se verificó ausencia por sus claves.
+- Inventario posterior: 4 usuarios, 2 sucursales, 38 sesiones y 3 activaciones;
+  operativos vacíos y una fila técnica del contador de imágenes.
+- Se conservaron 5 objetos R2 sin registro para revisar pertenencia; no se inspeccionaron
+  huérfanos SeaweedFS. No se afirma almacenamiento externo vacío.
+- No hubo login real, cambios de código de producción, migraciones ni ejecución de suite completa.
+- Franklin no ejecutó comandos atribuidos en esta entrada; resultados son del agente.
+
 ## Verificación de vista previa
 
 - Franklin decidió conservar sesiones y códigos de activación/recuperación.
@@ -61,3 +77,4 @@
 - Franklin revisó reglas en conversación; no se le atribuye ejecución de comandos.
 - Se comprobarán diff, vínculos locales y tamaño de cada commit antes de publicar.
 - La aprobación final de este PR corresponde a Franklin; sin merge ni tag del agente.
+
