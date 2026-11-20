@@ -1,5 +1,40 @@
 # Bitácora — Práctica 5
 
+## 2026-11-20 — Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
+
+- Franklin pidió continuar y aprobó bloqueo transaccional PostgreSQL por sucursal
+  frente a tabla de control, con documentación en ADR 026. Rama desde develop
+  con propiedad integrada: feature/branch-business-days.
+- Se implementaron entidad propia, apertura por primera factura, fecha local,
+  límite UTC equivalente a 16:00 RD, cierre y reapertura explícita.
+- Solo último resumen, conservado al reabrir y reemplazado al cerrar; sin auditoría.
+- Se consulta anulación pendiente mediante contrato del Core y datos propios de
+  Permisos; no hay lectura directa de tablas ajenas. No se adelantaron reportes.
+- Rojo real: cierre incorporaba efecto de un abono sobre fiado; prueba esperaba
+  60 y devolvía 40. Se corrigió para reflejar deuda originada por la venta,
+  excluyendo abonos posteriores del resumen, conforme a reglas acordadas.
+- Pruebas de dominio comenzaron antes de entidad (fallo de compilación por ausencia).
+- dotnet build pirry-ledger.slnx --no-restore -v q: 0 advertencias, 0 errores.
+- dotnet test pirry-ledger.slnx --no-restore -v q: 511 aprobadas, 0 fallidas:
+  Business 245, AccessControl 157, Permissions 52, Documents 40, Notifications 12,
+  Integration 5. Grupo Jornada: 15 aprobadas.
+- HTTP con rutas/filtro reales y dobles/persistencia en memoria: sin sesión 401,
+  otra sucursal 403, cierre con factura ajena inconclusa 409 e identificación de
+  emisor; cobro permite cerrar y otro Estándar de la sucursal puede reabrir.
+- Se generó y aplicó AddBranchBusinessDays. Herramienta temporal con bibliotecas
+  ya compiladas del Host, sin paquetes nuevos ni inspección de .env.
+- PostgreSQL: dos emisiones simultáneas comparten jornada; pg_try_advisory_xact_lock
+  rechaza misma sucursal y acepta otra; fallo tras SaveChanges revierte jornada
+  y factura; cierre se recupera en nuevo contexto y admite reapertura/reemplazo.
+- Carrera emisión/cierre conserva resultado consistente; contrato de anulaciones
+  devuelve solo IDs pendientes solicitados y excluye solicitud rechazada.
+- Datos de prueba por sucursales UUID propias retirados; solicitud de prueba
+  revertida. No se modificaron usuarios/sucursales reales ni credenciales.
+- Quedan para siguientes features notificaciones, CLI, abonos nuevos, ajustes
+  generales de ventas y reportes. No se afirma implementada toda Práctica 5.
+- La migración y diseñador completos se mantienen juntos por unidad lógica.
+- Franklin decide/revisa; comandos y comprobaciones de esta entrada son del agente.
+
 ## Propiedad de facturas — RF-NEG-06, RD-06
 
 - Franklin pidió continuar tras integrar la evidencia de limpieza. Rama desde
