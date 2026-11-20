@@ -41,7 +41,8 @@ Preparation authorized 2026-11-19; implementation not yet delivered.
 
 ## Workflow
 
-Commits are atomic, at most 200 added/deleted lines; no minimum padding.
+Commits are atomic; 100–200 changed lines is a guideline, not a hard limit.
+Larger cohesive changes are allowed with a stated reason; do not split solely by size.
 Agent is authorized to push and create PRs; Franklin reviews and approves.
 No merging or tagging without explicit approval. Branches start from develop
 after their prerequisites are integrated. Important decisions need alternatives

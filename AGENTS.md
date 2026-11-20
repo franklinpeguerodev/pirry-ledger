@@ -96,7 +96,7 @@ Franklin's machine: Windows, PowerShell 5.1, `dotnet` SDK 10.0.400 (`global.json
 
 ### Practice 5 workflow authorization
 
-Franklin authorized the agent on 2026-11-19 to push feature branches and open PRs; Franklin reviews and approves them. This overrides the preceding rule that Franklin opens PRs for this iteration. No merge or delivery tag is authorized by that instruction. Base: develop; one branch per major feature. Atomic commits must contain at most 200 added/deleted lines, with smaller cohesive commits allowed.
+Franklin authorized the agent on 2026-11-19 to push feature branches and open PRs; Franklin reviews and approves them. This overrides the preceding rule that Franklin opens PRs for this iteration. No merge or delivery tag is authorized by that instruction. Base: develop; one branch per major feature. Aim for atomic commits of 100–200 changed lines. Franklin later authorized exceeding this guideline when a larger change is one logical unit; explain the reason rather than splitting a coherent document or change solely by line count.
 
 ## Documentation
 

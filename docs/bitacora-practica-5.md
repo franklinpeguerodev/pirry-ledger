@@ -1,5 +1,19 @@
 # Bitácora — Práctica 5
 
+## Continuación — Inventario de limpieza
+
+- Franklin aprobó el PR de planificación; el agente comprobó su integración en develop.
+- Aclaró que 100–200 líneas es orientativo y puede superarse con unidad lógica.
+  Se corrigieron AGENTS.md, iteración y plan para evitar cortes artificiales.
+- Se creó chore/reset-operational-data y se contrastaron mapeos EF y almacenes:
+  imágenes en R2, documentos en SeaweedFS, datos en PostgreSQL.
+- Se preparó inventario SQL de solo lectura y procedimiento de revisión.
+- Franklin indicó usar propiedades de .env sin leerlas; no se inspeccionó el archivo.
+- No se encontraron psql ni docker en PATH. Inventario real y eliminación pendientes.
+- Sesiones y códigos conservados provisionalmente hasta decisión explícita.
+- Contador de imágenes requiere reinicialización, no desaparición de su fila técnica.
+- No se borraron datos ni se ejecutaron migraciones. No hay pruebas de limpieza exitosa.
+
 ## 2026-11-19 — Preparación autorizada
 
 - Franklin pidió cerrar la iteración anterior, leer la Práctica 5 y acordar

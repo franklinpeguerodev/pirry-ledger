@@ -8,10 +8,12 @@ Estado: preparación documental, sin código implementado ni limpieza ejecutada.
 
 Base/destino: develop. Cada rama nace después de integrar sus dependencias.
 Agente publica PR; Franklin revisa y aprueba. Sin merge ni tag sin autorización.
-Commits atómicos de máximo 200 líneas agregadas/eliminadas, sin mínimo artificial.
+Commits atómicos: 100–200 líneas es una orientación, sin mínimo artificial.
+Franklin permite superarla cuando el cambio constituye una unidad lógica;
+se explica el motivo en vez de partir documentos solo para cumplir el tamaño.
 Cada commit funcional incluye pruebas pertinentes; documentación acompaña cambios.
-Bitácora en commit separado por PR. Documentos extensos se completan por secciones
-coherentes en esta rama antes de código dependiente. Contexto/criterios primero.
+Bitácora en commit separado por PR. Documentos extensos completos cuando forman
+una unidad lógica. Contexto/criterios primero.
 
 | Orden / rama | Entrega | Commits principales propuestos |
 |---|---|---|
@@ -28,8 +30,8 @@ coherentes en esta rama antes de código dependiente. Contexto/criterios primero
 | 10 feature/business-sales-reports | Siete reportes y ventas abiertas | Aggregate sales and products (RF-REP-02, RF-REP-05); Add debt and closing reports (RF-REP-02); Show open-day sales; Record report work |
 | 11 chore/practice-5-acceptance | Revisión acumulada | Document acceptance evidence; Record final review |
 
-Asuntos definitivos reflejan contenido real e IDs relacionados. Si una unidad
-supera 200 líneas, dividir por responsabilidades comprobables, sin commits rotos.
+Asuntos definitivos reflejan contenido real e IDs relacionados. Dividir por
+responsabilidades comprobables cuando corresponda, sin commits rotos ni cortes artificiales.
 
 ## Archivos y contenido por bloque
 
@@ -144,7 +146,7 @@ Procedimiento independiente de migraciones automáticas; verificar preservación
 - Revisar persistencia, roles, activación, sesiones, recuperación, permisos,
   anulación automática previa y documentos tras reinicio sin borrar volúmenes.
 - Build y suite completa con resultados reales; README solo comandos ejecutados.
-- Antes de commit: status, diff staged, ignorados, secretos y máximo 200 líneas.
+- Antes de commit: status, diff staged, ignorados, secretos y cohesión del cambio.
 - PR: exactamente Qué cambia, Por qué, Cómo probarlo y Qué NO incluye.
 - Bitácora separada por PR, distinguiendo agente y comprobación de Franklin.
 - Tag practica-5 solo con autorización; RF-NOT-06 declarado desviado.
