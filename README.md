@@ -13,7 +13,10 @@ la referencia de lo implementado; estas ampliaciones todavía no están disponib
 - [Ramas, archivos y verificaciones](docs/plan-ejecucion-practica-5.md).
 
 El correo selectivo tiene desviaciones expresas de RF-NOT-06 (ADR 023 y 024).
-No se han ejecutado limpieza de datos ni nuevas migraciones en la preparación.
+Se ejecutó la limpieza de datos operativos preservando usuarios, sucursales,
+sesiones y códigos. Se retiraron las imágenes referidas; quedan objetos externos
+sin registro pendientes de revisión. La evidencia y límites están en
+[limpieza de datos](docs/limpieza-datos-practica-5.md). No se aplicaron nuevas migraciones.
 
 ERP para un negocio de comida rápida. Práctica 4 — El proyecto en un contenedor, el Manejador de documentos y una API externa.
 
