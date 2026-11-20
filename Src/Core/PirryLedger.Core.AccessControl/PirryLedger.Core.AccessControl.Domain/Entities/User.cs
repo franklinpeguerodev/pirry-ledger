@@ -172,6 +172,11 @@ public sealed class User
 
     public void AssignBranch(Guid branchId)
     {
+        if (Role == Role.Standard && BranchId != Branch.AllId && BranchId != branchId)
+        {
+            throw new InvalidOperationException("No se puede trasladar un usuario Estándar a otra sucursal.");
+        }
+
         if (branchId == Guid.Empty || branchId == Branch.AllId && Role == Role.Standard)
         {
             throw new ArgumentException("El usuario Estándar debe tener una sucursal física.", nameof(branchId));

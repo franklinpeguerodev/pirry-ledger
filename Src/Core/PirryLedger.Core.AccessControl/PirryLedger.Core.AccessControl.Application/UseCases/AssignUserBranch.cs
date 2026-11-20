@@ -49,7 +49,14 @@ public sealed class AssignUserBranch
                 "Solo se puede asignar sucursal a un usuario Standard.");
         }
 
-        user.AssignBranch(branch.Id);
+        try
+        {
+            user.AssignBranch(branch.Id);
+        }
+        catch (InvalidOperationException error)
+        {
+            throw new AdministrationOperationRejectedException(error.Message);
+        }
         await _users.SaveAsync(user, cancellationToken);
     }
 }
