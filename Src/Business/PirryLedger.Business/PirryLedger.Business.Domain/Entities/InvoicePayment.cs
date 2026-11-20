@@ -60,6 +60,12 @@ public sealed class InvoicePayment
 
     public Guid RegisteredByUserId { get; private set; }
 
+    public DateTime? ResolvedAtUtc { get; private set; }
+
+    public Guid? ResolvedByUserId { get; private set; }
+
+    public string? RejectionReason { get; private set; }
+
     // Pago en efectivo del cobro de la venta. El monto recibido es opcional
     // porque en delivery no se registra; la factura decide si es obligatorio.
     public static InvoicePayment Cash(
@@ -113,20 +119,26 @@ public sealed class InvoicePayment
             registeredByUserId);
     }
 
-    // Abono de deuda registrado por un Administrador: monto y fecha, sin metodo
-    // (decision 7 de current-iteration.md). No lleva recibido ni cambio.
+    // Abono con método explícito. Efectivo confirmado; transferencia pendiente.
+    // No lleva recibido ni cambio.
     public static InvoicePayment Debt(
         decimal amount,
         DateTime registeredAtUtc,
-        Guid registeredByUserId)
+        Guid registeredByUserId,
+        PaymentMethod method = PaymentMethod.Cash)
     {
         EnsureAmountIsValid(amount);
+
+        if (method is not (PaymentMethod.Cash or PaymentMethod.Transfer))
+        {
+            throw new InvoiceRuleViolationException("El abono debe ser en efectivo o transferencia.");
+        }
 
         return new InvoicePayment(
             Guid.NewGuid(),
             PaymentKind.Debt,
-            PaymentMethod.None,
-            PaymentStatus.Confirmed,
+            method,
+            method == PaymentMethod.Transfer ? PaymentStatus.Registered : PaymentStatus.Confirmed,
             amount,
             receivedAmount: null,
             registeredAtUtc,
@@ -139,14 +151,19 @@ public sealed class InvoicePayment
         InvoiceId = invoiceId;
     }
 
-    internal void Confirm()
+    internal void Confirm(DateTime? resolvedAtUtc = null, Guid? resolvedByUserId = null)
     {
         Status = PaymentStatus.Confirmed;
+        ResolvedAtUtc = resolvedAtUtc;
+        ResolvedByUserId = resolvedByUserId;
     }
 
-    internal void Reject()
+    internal void Reject(DateTime? resolvedAtUtc = null, Guid? resolvedByUserId = null, string? reason = null)
     {
         Status = PaymentStatus.Rejected;
+        ResolvedAtUtc = resolvedAtUtc;
+        ResolvedByUserId = resolvedByUserId;
+        RejectionReason = reason;
     }
 
     private static void EnsureAmountIsValid(decimal amount)
