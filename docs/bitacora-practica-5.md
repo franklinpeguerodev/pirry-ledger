@@ -1,5 +1,32 @@
 # Bitácora — Práctica 5
 
+## Propiedad de facturas — RF-NEG-06, RD-06
+
+- Franklin pidió continuar tras integrar la evidencia de limpieza. Rama desde
+  develop: feature/invoice-ownership. Autorizó expresamente ADR 025.
+- Se persistió IssuedByUserId desde sesión y se amplió alcance sucursal/emisor
+  en repositorio. Estándar no lee ni concluye factura de compañero por ID.
+- Se conserva alcance global administrativo y se rechaza traslado de Estándar
+  sin cambiar su sucursal o versión de credencial.
+- Rojo: tras agregar soporte de identidad y antes de filtro, 3 de 4 pruebas
+  de propiedad fallaron por exposición de datos y modificación ajena; administrador pasó.
+- Rojo de traslado: 1 prueba falló antes de agregar la regla de rechazo.
+- Verde: 5 pruebas de propiedad, incluida HTTP con sesión/filtro/repositorio reales
+  y persistencia en memoria; prueba comprueba rechazo sin modificar estado/pagos.
+- dotnet build pirry-ledger.slnx --no-restore -v q: 0 advertencias, 0 errores.
+- dotnet test pirry-ledger.slnx --no-restore -v q: 496 aprobadas, 0 fallidas:
+  Business 230, AccessControl 157, Permissions 52, Documents 40, Notifications 12,
+  Integration 5. Grupo PruebasDeSucursales: 3 aprobadas.
+- Se generó AddInvoiceIssuer con fábrica de Infrastructure. Intentos iniciales
+  corrigieron una opción no válida y startup Host sin paquete Design; no se instalaron paquetes.
+- Migración aplicada en base configurada con comprobación previa de cero facturas:
+  salida 0 y columna obligatoria verificada. No se imprimió configuración ni se inspeccionó .env.
+- Se rechaza migrar con facturas previas sin emisor; no se inventa atribución histórica.
+- La migración con diseñador se mantiene en unidad lógica aunque supere guía de líneas.
+- No se ejecutó Flutter ni flujo manual con credenciales reales. Deudas compartidas,
+  jornadas y siguientes funcionalidades permanecen en sus ramas planificadas.
+- Verificaciones descritas son del agente; revisión del PR corresponde a Franklin.
+
 ## Continuación — Limpieza ejecutada
 
 - Franklin pidió continuar tras integrar el PR de vista previa; el agente comprobó develop.
