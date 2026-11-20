@@ -3,6 +3,35 @@
 Estado: procedimiento en preparación. No se ejecutó eliminación.
 Rama: `chore/reset-operational-data`, desde develop con el PR de planificación integrado.
 
+## Inventario real ejecutado
+
+El inventario de solo lectura ya se ejecutó contra la conexión configurada,
+cargada mediante DotNetEnv.NoClobber, igual que el Host. No se imprimieron
+valores de configuración ni se inspeccionó .env. La herramienta temporal usa
+Npgsql y DotNetEnv ya compilados con el Host, sin instalar paquetes.
+
+| Grupo | Filas observadas |
+|---|---:|
+| Usuarios / sucursales / asignaciones | 4 / 2 / 4 |
+| Sesiones / activaciones / recuperaciones | 38 / 3 / 0 |
+| Facturas / líneas / pagos / ediciones | 6 / 6 / 4 / 0 |
+| Productos / imágenes | 2 / 2 |
+| Categorías / subcategorías | 1 / 2 |
+| Contador técnico de imágenes | 1 |
+| Solicitudes / concesiones | 4 / 1 |
+| Cola / documentos | 3 / 0 |
+
+Se contrastaron 18 tablas de negocio/acceso y la tabla de migraciones.
+Las relaciones reales incluyen ítems hacia productos: borrar ítems antes de catálogo.
+Manifiestos de claves se guardaron localmente fuera del repositorio.
+Estos conteos son una instantánea; deben repetirse antes de cualquier borrado.
+No prueba ausencia de objetos huérfanos en almacenes externos.
+
+`scripts/maintenance/reset-operational-data.preview.sql` prepara un borrado
+explícito con comparación de filas completas de identidad/acceso y ROLLBACK
+obligatorio al final. No fue ejecutado todavía. No es una limpieza de archivos.
+Contador técnico se recrea con id 1 y valor 0, como migración AddProductImages.
+
 ## Destino y credenciales
 
 Franklin indicó usar la configuración de .env sin leer ni mostrar sus valores.
@@ -40,9 +69,10 @@ Usuarios conservan contraseña, rol, estado y atributos actuales; no se muestran
 - Claves distintas de imágenes/documentos para preparar el manifiesto de objetos.
 - Inventario de tablas reales y relaciones para detectar diferencias con el código.
 
-No se documenta todavía un comando de ejecución: en esta sesión no se localizaron
+No se documenta todavía un comando permanente de ejecución: no se localizaron
 psql ni docker mediante Get-Command y no se instalarán sin autorización.
-El SQL está revisado contra mapeos, pero no ejecutado contra PostgreSQL.
+El inventario sí fue ejecutado mediante herramienta temporal .NET; el borrado
+preparatorio no fue ejecutado. No depende de instalar psql o Docker.
 
 ## Secuencia antes de eliminar
 
@@ -66,5 +96,7 @@ demuestra que no existan objetos huérfanos: inventariarlos requiere revisar alm
 
 - Configuraciones de tabla y columna contrastadas con el SQL.
 - Script de inventario sin DELETE, TRUNCATE ni lectura de columnas de secretos.
-- Pendiente: conexión real, conteos, manifiestos, script de eliminación y ejecución.
+- Completado: conexión real, conteos, relaciones y manifiestos de registros.
+- Pendiente: política de sesiones/códigos, inventario de objetos externos,
+  revisión/ejecución de vista previa y ejecución final de limpieza.
 - No se ejecutaron build ni pruebas: solo documentación y consulta SQL preparatoria.
