@@ -3,6 +3,35 @@
 Estado: procedimiento en preparación. No se ejecutó eliminación.
 Rama: `chore/reset-operational-data`, desde develop con el PR de planificación integrado.
 
+## Inventario real ejecutado
+
+El inventario de solo lectura ya se ejecutó contra la conexión configurada,
+cargada mediante DotNetEnv.NoClobber, igual que el Host. No se imprimieron
+valores de configuración ni se inspeccionó .env. La herramienta temporal usa
+Npgsql y DotNetEnv ya compilados con el Host, sin instalar paquetes.
+
+| Grupo | Filas observadas |
+|---|---:|
+| Usuarios / sucursales / asignaciones | 4 / 2 / 4 |
+| Sesiones / activaciones / recuperaciones | 38 / 3 / 0 |
+| Facturas / líneas / pagos / ediciones | 6 / 6 / 4 / 0 |
+| Productos / imágenes | 2 / 2 |
+| Categorías / subcategorías | 1 / 2 |
+| Contador técnico de imágenes | 1 |
+| Solicitudes / concesiones | 4 / 1 |
+| Cola / documentos | 3 / 0 |
+
+Se contrastaron 18 tablas de negocio/acceso y la tabla de migraciones.
+Las relaciones reales incluyen ítems hacia productos: borrar ítems antes de catálogo.
+Manifiestos de claves se guardaron localmente fuera del repositorio.
+Estos conteos son una instantánea; deben repetirse antes de cualquier borrado.
+No prueba ausencia de objetos huérfanos en almacenes externos.
+
+`scripts/maintenance/reset-operational-data.preview.sql` prepara un borrado
+explícito con comparación de filas completas de identidad/acceso y ROLLBACK
+obligatorio al final. Se ejecutó correctamente con ROLLBACK. No es una limpieza de archivos.
+Contador técnico se recrea con id 1 y valor 0, como migración AddProductImages.
+
 ## Destino y credenciales
 
 Franklin indicó usar la configuración de .env sin leer ni mostrar sus valores.
@@ -16,7 +45,7 @@ ejecución sin publicar secretos. No se deduce el destino por el nombre del repo
 | Acción | Tablas u objetos |
 |---|---|
 | Conservar íntegramente | ac_users, ac_branches y branch_id de usuarios |
-| Pendiente de decisión | ac_sessions, ac_activation_tokens, ac_recovery_codes |
+| Conservar por decisión de Franklin | ac_sessions, ac_activation_tokens, ac_recovery_codes |
 | Retirar | bil_invoices, bil_invoice_items, bil_invoice_payments, bil_invoice_edits |
 | Retirar catálogo | bil_products, bil_product_images, bil_categories, bil_subcategories |
 | Reinicializar | bil_image_revision: conservar la fila técnica requerida por el repositorio |
@@ -40,13 +69,14 @@ Usuarios conservan contraseña, rol, estado y atributos actuales; no se muestran
 - Claves distintas de imágenes/documentos para preparar el manifiesto de objetos.
 - Inventario de tablas reales y relaciones para detectar diferencias con el código.
 
-No se documenta todavía un comando de ejecución: en esta sesión no se localizaron
+No se documenta todavía un comando permanente de ejecución: no se localizaron
 psql ni docker mediante Get-Command y no se instalarán sin autorización.
-El SQL está revisado contra mapeos, pero no ejecutado contra PostgreSQL.
+El inventario sí fue ejecutado mediante herramienta temporal .NET; el borrado
+preparatorio fue verificado con ROLLBACK, sin persistir eliminación. No depende de instalar psql o Docker.
 
 ## Secuencia antes de eliminar
 
-1. Confirmar política de sesiones y códigos; revisar que no interrumpa activaciones.
+1. Conservar sesiones y códigos, según respuesta explícita de Franklin.
 2. Obtener conexión mediante configuración cargada en ejecución, sin imprimir valores.
 3. Ejecutar inventario de lectura y revisar tablas nuevas/desconocidas.
 4. Guardar localmente manifiestos de objetos antes de borrar sus referencias.
@@ -66,5 +96,8 @@ demuestra que no existan objetos huérfanos: inventariarlos requiere revisar alm
 
 - Configuraciones de tabla y columna contrastadas con el SQL.
 - Script de inventario sin DELETE, TRUNCATE ni lectura de columnas de secretos.
-- Pendiente: conexión real, conteos, manifiestos, script de eliminación y ejecución.
+- Completado: conexión real, conteos, relaciones y manifiestos de registros.
+- Vista previa ejecutada: comprobación de filas de identidad/acceso y ROLLBACK correctos.
+- Inventario repetido después: mismos conteos, incluidas 6 facturas, 38 sesiones y 3 activaciones.
+- Pendiente: inventario de objetos externos y revisión/ejecución final de limpieza.
 - No se ejecutaron build ni pruebas: solo documentación y consulta SQL preparatoria.
