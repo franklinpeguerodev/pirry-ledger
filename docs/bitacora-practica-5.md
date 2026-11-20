@@ -77,4 +77,3 @@
 - Franklin revisó reglas en conversación; no se le atribuye ejecución de comandos.
 - Se comprobarán diff, vínculos locales y tamaño de cada commit antes de publicar.
 - La aprobación final de este PR corresponde a Franklin; sin merge ni tag del agente.
-
