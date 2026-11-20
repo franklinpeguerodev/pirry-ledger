@@ -1,5 +1,32 @@
 # Bitácora — Práctica 5
 
+## 2026-11-20 — Base transaccional del centro de notificaciones
+
+- Franklin confirmó integración del PR 106 y autorizó continuar. Se verificó
+  merge b53babd y se inició desde develop limpio.
+- Se presentaron coordinador explícito y extensión de TransactionScope, con
+  ventajas/costos. Franklin aprobó alternativa 1 y ADR 029. Solicitó esperar;
+  se detuvo sin modificar código y luego indicó continuar.
+- Se implementaron contratos IApplicationTransaction, IModuleDatabaseConnection
+  e IModuleTransactionParticipant; coordinador PostgreSQL y conexión por ámbito.
+  Cuatro contextos incorporan exclusivamente su propia persistencia.
+- Cuatro pruebas aisladas pasaron: conexión y transacción únicas, reversión,
+  anidamiento exitoso y fallo interno capturado que impide confirmar afuera.
+- Rojo comprobado retirando temporalmente CommitAsync: la prueba esperaba una
+  confirmación y recibió cero. Se restauró el código y las cuatro pasaron.
+- Compilación de solución: 0 advertencias, 0 errores. Suite completa: 564
+  aprobadas (Billing 286, AccessControl 163, Permissions 52, Documents 40,
+  Notifications 16, Integration 7), 0 fallidas y 0 omitidas.
+- Helper temporal con configuración cargada por aplicación, sin inspeccionar
+  .env ni imprimir valores: PostgreSQL revirtió escrituras reales de Billing
+  y Permisos, vació seguimiento y permitió reutilizar coordinador con éxito.
+  Se retiraron exclusivamente sus facturas y solicitudes temporales.
+- Entrega como PR previo del centro para revisar persistencia por separado.
+  No se conectaron eventos, bandeja o preferencias; tampoco se adaptaron aún
+  transacciones explícitas de jornadas, abonos o permisos. No se declara RF-NOT
+  completado por esta infraestructura. Sin migración, paquetes ni SMTP.
+- Comprobaciones del agente; Franklin revisa PR. Sin merge ni etiqueta.
+
 ## 2026-11-20 — Recuperación explícita y ajustes de ventas
 
 - Franklin confirmó integración del PR 105 y pidió continuar el plan. Se
