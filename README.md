@@ -1,5 +1,20 @@
 # Pirry Ledger
 
+## Iteración en preparación — Práctica 5
+
+La anulación automática se da por concluida por decisión de Franklin. La nueva
+iteración prepara notificaciones, cola con reintentos, jornadas por sucursal,
+abonos y reportes. El código descrito en las secciones actuales sigue siendo
+la referencia de lo implementado; estas ampliaciones todavía no están disponibles.
+
+- [Alcance](docs/current-iteration.md).
+- [Reglas aprobadas](docs/reglas-operativas-practica-5.md).
+- [Criterios previos al desarrollo](docs/criterios-notificaciones-reportes.md).
+- [Ramas, archivos y verificaciones](docs/plan-ejecucion-practica-5.md).
+
+El correo selectivo tiene desviaciones expresas de RF-NOT-06 (ADR 023 y 024).
+No se han ejecutado limpieza de datos ni nuevas migraciones en la preparación.
+
 ERP para un negocio de comida rápida. Práctica 4 — El proyecto en un contenedor, el Manejador de documentos y una API externa.
 
 En este punto el repositorio tiene la cola de email con su persistencia y un
