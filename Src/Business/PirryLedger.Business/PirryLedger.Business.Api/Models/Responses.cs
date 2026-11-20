@@ -133,6 +133,8 @@ public sealed record InvoicePaymentResponse(
 public sealed record InvoiceResponse(
     Guid Id,
     Guid IssuedByUserId,
+    string IssuedByUserName,
+    Guid? BusinessDayId,
     string State,
     bool IsDelivery,
     Guid BranchId,
@@ -150,6 +152,8 @@ public sealed record InvoiceResponse(
         new(
             invoice.Id,
             invoice.IssuedByUserId,
+            invoice.IssuedByUserName,
+            invoice.BusinessDayId,
             invoice.State.ToString(),
             invoice.IsDelivery,
             invoice.BranchId,

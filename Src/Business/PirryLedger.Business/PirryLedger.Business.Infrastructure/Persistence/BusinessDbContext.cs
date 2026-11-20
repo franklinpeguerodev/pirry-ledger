@@ -12,6 +12,7 @@ public sealed class BusinessDbContext : DbContext
     }
 
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<BusinessDay> BusinessDays => Set<BusinessDay>();
 
     public DbSet<Product> Products => Set<Product>();
 

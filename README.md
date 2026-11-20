@@ -1,5 +1,49 @@
 # Pirry Ledger
 
+## Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
+
+La primera factura abre jornada de su sucursal en la fecha calendario de RD.
+Las ventas de madrugada conservan esa fecha. Una abierta que llega a las 16:00
+del día siguiente bloquea emitir con `409` y `code: ClosingRequired`.
+Se pueden seguir resolviendo pendientes y cerrar. No se cierra automáticamente.
+
+| Método y ruta | Resultado |
+|---|---|
+| GET /api/billing/branches/{branchId}/business-days/current | Última jornada y cierre guardado, o null si no existe |
+| POST /api/billing/branches/{branchId}/business-days/{id}/close | Cierra y devuelve último resumen; 409 con facturas/emisores inconclusos |
+| POST /api/billing/branches/{branchId}/business-days/{id}/reopen | Reabre explícitamente antes del límite, sin jornada posterior |
+
+Todas exigen sesión. Estándar solo opera su sucursal; Administrador selecciona
+sucursal. Cierre revisa todos los emisores, sin ampliar acceso a facturas ajenas.
+El aviso de pendientes incluye invoiceId, issuerId e issuerName, sin ítems/pagos.
+Nombre del emisor se conserva desde sesión al emitir.
+
+Emitir cuando la última cerrada aún puede reabrirse devuelve `409` con
+`code: ReopenRequired`. El cliente debe consultar la jornada y solicitar
+reapertura; no ocurre automáticamente. Después del límite abre una nueva.
+
+El cierre guarda vendido, efectivo de ventas, transferencias confirmadas y
+pendientes, fiado de esas ventas y exclusiones por anulación pendiente/aprobada
+y no entrega. No suma abonos de deuda. Cambios posteriores no reescriben cierre.
+Reabrir conserva cierre y fecha, con isReopened; nuevo cierre reemplaza anterior.
+No se mantiene historial de cierres (auditoría futura).
+
+Migración `AddBranchBusinessDays`: tabla de jornadas, último resumen, relación
+interna de factura y nombre histórico del emisor. Exige tabla de facturas vacía;
+no reconstruye jornadas anteriores. Sin paquetes o variables nuevos.
+
+Pruebas sin PostgreSQL ni SMTP, con reloj falso y persistencia/dobles en memoria:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~Jornada -v q
+```
+
+Incluyen límite exacto, madrugada, reapertura, pendientes de compañero,
+rechazo de otra sucursal, exclusión de abonos y anulación pendiente, y cierre
+inmutable tras anular una venta. La prueba HTTP emite, intenta cierre ajeno,
+recibe pendientes, cobra, cierra y reabre usando las rutas/filtro reales.
+Notificaciones, recordatorios CLI y reportes se implementan en sus próximas features.
+
 ## Propiedad de facturas por emisor — RF-NEG-06
 
 Cada factura nueva conserva `issuedByUserId` obtenido de la sesión. En las

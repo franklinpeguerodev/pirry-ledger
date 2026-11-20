@@ -22,6 +22,46 @@ namespace PirryLedger.Business.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.BusinessDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<DateOnly>("BusinessDate")
+                        .HasColumnType("date")
+                        .HasColumnName("business_date");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_open");
+
+                    b.Property<DateTime?>("LastClosedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_closed_at_utc");
+
+                    b.Property<Guid?>("LastClosedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_closed_by_user_id");
+
+                    b.Property<DateTime>("OpenedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("opened_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_bil_business_days_open_branch")
+                        .HasFilter("is_open = TRUE");
+
+                    b.ToTable("bil_business_days", (string)null);
+                });
+
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -61,6 +101,10 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("branch_name");
 
+                    b.Property<Guid?>("BusinessDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_day_id");
+
                     b.Property<string>("DebtorName")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)")
@@ -78,11 +122,19 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("issued_by_user_id");
 
+                    b.Property<string>("IssuedByUserName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("issued_by_user_name");
+
                     b.Property<int>("State")
                         .HasColumnType("integer")
                         .HasColumnName("state");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessDayId");
 
                     b.HasIndex("BranchId", "IssuedByUserId");
 
@@ -347,6 +399,72 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("bil_image_revision", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.BusinessDay", b =>
+                {
+                    b.OwnsOne("PirryLedger.Business.Domain.Entities.BusinessDayClosing", "Closing", b1 =>
+                        {
+                            b1.Property<Guid>("BusinessDayId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<decimal>("Cancelled")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_cancelled");
+
+                            b1.Property<decimal>("Cash")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_cash");
+
+                            b1.Property<decimal>("ConfirmedTransfers")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_confirmed_transfers");
+
+                            b1.Property<decimal>("Debt")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_debt");
+
+                            b1.Property<decimal>("NotDelivered")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_not_delivered");
+
+                            b1.Property<decimal>("PendingCancellation")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_pending_cancellation");
+
+                            b1.Property<decimal>("PendingTransfers")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_pending_transfers");
+
+                            b1.Property<decimal>("Sold")
+                                .HasPrecision(18, 2)
+                                .HasColumnType("numeric(18,2)")
+                                .HasColumnName("closing_sold");
+
+                            b1.HasKey("BusinessDayId");
+
+                            b1.ToTable("bil_business_days");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BusinessDayId");
+                        });
+
+                    b.Navigation("Closing");
+                });
+
+            modelBuilder.Entity("PirryLedger.Business.Domain.Entities.Invoice", b =>
+                {
+                    b.HasOne("PirryLedger.Business.Domain.Entities.BusinessDay", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessDayId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("PirryLedger.Business.Domain.Entities.InvoiceEdit", b =>

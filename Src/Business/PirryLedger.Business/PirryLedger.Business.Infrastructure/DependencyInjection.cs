@@ -26,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.BusinessMigration>();
 
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+        services.AddScoped<IBusinessDayRepository, BusinessDayRepository>();
+        services.AddScoped<ManageBusinessDays>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IProductImageRepository, ProductImageRepository>();
 

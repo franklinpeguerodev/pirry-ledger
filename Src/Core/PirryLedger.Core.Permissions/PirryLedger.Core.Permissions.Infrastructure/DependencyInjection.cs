@@ -35,6 +35,7 @@ public static class DependencyInjection
         // Aqui registramos la implementacion que vive en Infrastructure. El
         // resto del sistema pide IPermissionAuthority por DI.
         services.AddScoped<IPermissionAuthority, EfPermissionAuthority>();
+        services.AddScoped<IPendingInvoiceCancellations, PendingInvoiceCancellations>();
 
         // ADR 012: el negocio pide el permiso en nombre del usuario a traves
         // de este contrato de Core.Contracts. La implementacion vive en

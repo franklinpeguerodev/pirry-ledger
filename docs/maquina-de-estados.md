@@ -1,7 +1,8 @@
 # Máquinas de estados
 
-El sistema tiene dos máquinas de estados independientes: la de la factura, en el
-módulo de negocio, y la de la solicitud de permiso, en la pieza de permisos. Cada
+El sistema controla las transiciones independientes de factura, solicitud de
+permiso y jornada de sucursal. Las dos primeras tienen sus tablas originales;
+la jornada se documenta al final y resuelve sus reglas en BusinessDay. Cada
 una resuelve todas sus transiciones en un único componente, y una transición que
 no aparece en su tabla está prohibida: el sistema la rechaza y el estado no
 cambia (RD-04).
@@ -150,3 +151,22 @@ ensamblado de negocio. `PirryLedger.Business.Api` sí referencia
 `PirryLedger.Core.AccessControl.Api`, y es deliberado: ahí vive `.WithAccess`, el
 punto único donde cada ruta declara su operación (RF-CA-05). Es un enlace de la
 capa Api, no del dominio ni de la aplicación.
+## Jornadas por sucursal — Práctica 5
+
+Jornada y factura son entidades distintas. No se agregan estados a Invoice
+por abrir, cerrar o reabrir una jornada. ADR 026 documenta persistencia y bloqueo.
+
+| Desde | Hacia | Quién | Condición |
+|---|---|---|---|
+| Sin jornada | Abierta | Quien emite | Primera factura válida; apertura y factura en misma transacción |
+| Abierta | Cerrada | Estándar de sucursal o Administrador | Sin facturas inconclusas de ningún emisor |
+| Cerrada | Abierta | Estándar de sucursal o Administrador | Acción explícita; última jornada, sin posterior y antes del límite |
+| Cerrada vencida | Nueva abierta | Quien emite | Primera factura posterior al límite crea jornada con fecha calendario actual |
+
+Una abierta vencida sigue abierta: bloquea únicamente nuevas emisiones hasta
+cerrarla. El límite es 16:00 de RD del día siguiente a la fecha inicial.
+Reabrir mantiene fecha y último resumen, identificado como reabierto; cerrar
+de nuevo reemplaza el resumen. No existe historial de revisiones en esta fase.
+Pendientes de transferencia, fiadas, no entregadas, anuladas y solicitudes
+pendientes de anulación permiten cerrar. Factura Issued sin conclusión bloquea
+e identifica factura/emisor sin conceder al compañero acceso para modificarla.
