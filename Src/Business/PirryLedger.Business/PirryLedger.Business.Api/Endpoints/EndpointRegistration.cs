@@ -207,7 +207,8 @@ public static class EndpointRegistration
                     branch.Id,
                     branch.Name,
                     branch.Address,
-                    cancellationToken);
+                    cancellationToken,
+                    caller.Id);
 
                 return Results.Json(
                     InvoiceResponse.From(invoice),

@@ -26,6 +26,8 @@ public sealed class InvoiceRepository : IInvoiceRepository
     {
         public Guid? BranchId { get; set; }
 
+        public Guid? UserId { get; set; }
+
         public bool IsGlobal { get; set; } = true;
     }
 
@@ -37,12 +39,7 @@ public sealed class InvoiceRepository : IInvoiceRepository
             .Include(invoice => invoice.Edits)
             .Where(invoice => invoice.Id == id);
 
-        branchId ??= _scope.BranchId;
-
-        if (branchId is not null)
-        {
-            query = query.Where(invoice => invoice.BranchId == branchId);
-        }
+        query = ApplyScope(query, branchId);
 
         return await query.FirstOrDefaultAsync(cancellationToken);
     }
@@ -55,14 +52,25 @@ public sealed class InvoiceRepository : IInvoiceRepository
             .Include(invoice => invoice.Edits)
             .AsQueryable();
 
-        branchId ??= _scope.BranchId;
-
-        if (branchId is not null)
-        {
-            query = query.Where(invoice => invoice.BranchId == branchId);
-        }
+        query = ApplyScope(query, branchId);
 
         return await query.ToListAsync(cancellationToken);
+    }
+
+    private IQueryable<Invoice> ApplyScope(IQueryable<Invoice> query, Guid? branchId)
+    {
+        if (!_scope.IsGlobal)
+        {
+            if (_scope.BranchId is null || _scope.UserId is null)
+                return query.Where(invoice => false);
+
+            var ownBranch = _scope.BranchId.Value;
+            var issuer = _scope.UserId.Value;
+            query = query.Where(invoice => invoice.BranchId == ownBranch
+                && invoice.IssuedByUserId == issuer);
+        }
+
+        return branchId is null ? query : query.Where(invoice => invoice.BranchId == branchId);
     }
 
     public async Task AddAsync(Invoice invoice, CancellationToken cancellationToken = default)

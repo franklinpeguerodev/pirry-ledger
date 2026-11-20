@@ -39,6 +39,8 @@ public sealed class Invoice
 
     public Guid BranchId { get; private set; }
 
+    public Guid IssuedByUserId { get; private set; }
+
     public string BranchName { get; private set; } = string.Empty;
 
     public string BranchAddress { get; private set; } = string.Empty;
@@ -78,7 +80,8 @@ public sealed class Invoice
         DateTime issuedAtUtc,
         Guid branchId,
         string branchName,
-        string branchAddress)
+        string branchAddress,
+        Guid issuedByUserId = default)
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -95,6 +98,7 @@ public sealed class Invoice
         IsDelivery = isDelivery;
         IssuedAtUtc = issuedAtUtc;
         BranchId = branchId;
+        IssuedByUserId = issuedByUserId;
         BranchName = branchName;
         BranchAddress = branchAddress;
     }

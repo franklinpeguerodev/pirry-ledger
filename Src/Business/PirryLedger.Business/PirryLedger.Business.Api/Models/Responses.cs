@@ -132,6 +132,7 @@ public sealed record InvoicePaymentResponse(
 
 public sealed record InvoiceResponse(
     Guid Id,
+    Guid IssuedByUserId,
     string State,
     bool IsDelivery,
     Guid BranchId,
@@ -148,6 +149,7 @@ public sealed record InvoiceResponse(
     public static InvoiceResponse From(Invoice invoice) =>
         new(
             invoice.Id,
+            invoice.IssuedByUserId,
             invoice.State.ToString(),
             invoice.IsDelivery,
             invoice.BranchId,

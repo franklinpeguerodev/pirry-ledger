@@ -1,5 +1,31 @@
 # Pirry Ledger
 
+## Propiedad de facturas por emisor — RF-NEG-06
+
+Cada factura nueva conserva `issuedByUserId` obtenido de la sesión. En las
+rutas ordinarias de facturas, un Estándar solo lista y opera las suyas de su
+sucursal. Consultar o intentar modificar una ajena devuelve `404`, aunque sea
+de un compañero de la misma sucursal. Administrador conserva alcance global.
+Un Estándar ya asignado no puede trasladarse a otra sucursal.
+
+La migración `AddInvoiceIssuer` exige que no haya facturas históricas sin
+emisor; rechaza migrar si existen. No asigna identidades ficticias. La base
+de trabajo se limpió antes, preservando usuarios y acceso.
+
+Verificación automatizada sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDePropiedad -v q
+dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeSucursales -v q
+```
+
+La prueba HTTP emite con sesión de Ana y campos falsificados en el cuerpo;
+verifica el emisor real y la sucursal de sesión. Juan, de esa misma sucursal,
+no obtiene la factura ni puede concluirla; estado y pagos quedan intactos.
+La consulta administrativa de todos los emisores también tiene prueba.
+Las consultas específicas de deudas y abonos compartidos por sucursal llegan
+en su feature; esta protección no concede acceso a reportes o historiales.
+
 ## Iteración en preparación — Práctica 5
 
 La anulación automática se da por concluida por decisión de Franklin. La nueva

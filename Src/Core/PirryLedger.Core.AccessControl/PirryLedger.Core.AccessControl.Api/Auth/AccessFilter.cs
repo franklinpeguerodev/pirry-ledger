@@ -267,6 +267,7 @@ public static class AccessFilter
         var scope = context.RequestServices.GetRequiredService<IBranchScopeAccessor>();
         scope.BranchId = user.Role == Role.Administrator ? null : user.BranchId;
         scope.IsGlobal = user.Role == Role.Administrator;
+        scope.UserId = user.Id;
     }
 
     private static IResult InvalidSession() => AccessDenied("Sesion no valida.", isRoleShortage: false);

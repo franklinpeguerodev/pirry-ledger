@@ -6,5 +6,7 @@ public sealed class BranchScopeAccessor : IBranchScopeAccessor
 {
     public Guid? BranchId { get; set; }
 
+    public Guid? UserId { get; set; }
+
     public bool IsGlobal { get; set; }
 }

@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `025-invoice-issuer-scope.md` (2026-11-19) — Invoice issuer persisted and scoped with branch; administrator remains global.
+
 - `023-standard-in-app-notifications.md` (2026-11-19) — Standard notifications use only the internal channel; security mail remains.
 - `024-selective-administrator-email-notifications.md` (2026-11-19) — Selected administrator events use email with individual preferences.
 

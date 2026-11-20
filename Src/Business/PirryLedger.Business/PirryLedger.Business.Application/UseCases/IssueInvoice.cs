@@ -29,14 +29,16 @@ public sealed class IssueInvoice
     public async Task<Invoice> ExecuteAsync(
         IReadOnlyCollection<ProductItemInput> items,
         bool isDelivery,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid issuedByUserId = default)
         => await ExecuteAsync(
             items,
             isDelivery,
             Guid.Empty,
             string.Empty,
             string.Empty,
-            cancellationToken);
+            cancellationToken,
+            issuedByUserId);
 
     public async Task<Invoice> ExecuteAsync(
         IReadOnlyCollection<ProductItemInput> items,
@@ -44,7 +46,8 @@ public sealed class IssueInvoice
         Guid branchId,
         string branchName,
         string branchAddress,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid issuedByUserId = default)
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -68,20 +71,22 @@ public sealed class IssueInvoice
             products.Add(InvoiceItem.Create(product, item.Quantity));
         }
 
-        return await IssueAsync(products, isDelivery, branchId, branchName, branchAddress, cancellationToken);
+        return await IssueAsync(products, isDelivery, branchId, branchName, branchAddress, issuedByUserId, cancellationToken);
     }
 
     public async Task<Invoice> ExecuteAsync(
         IReadOnlyCollection<InvoiceItemInput> items,
         bool isDelivery,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid issuedByUserId = default)
         => await ExecuteAsync(
             items,
             isDelivery,
             Guid.Empty,
             string.Empty,
             string.Empty,
-            cancellationToken);
+            cancellationToken,
+            issuedByUserId);
 
     public async Task<Invoice> ExecuteAsync(
         IReadOnlyCollection<InvoiceItemInput> items,
@@ -89,7 +94,8 @@ public sealed class IssueInvoice
         Guid branchId,
         string branchName,
         string branchAddress,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid issuedByUserId = default)
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -97,7 +103,7 @@ public sealed class IssueInvoice
             .Select(item => InvoiceItem.Create(item.Name, item.UnitPrice, item.Quantity))
             .ToList();
 
-        return await IssueAsync(domainItems, isDelivery, branchId, branchName, branchAddress, cancellationToken);
+        return await IssueAsync(domainItems, isDelivery, branchId, branchName, branchAddress, issuedByUserId, cancellationToken);
     }
 
     private async Task<Invoice> IssueAsync(
@@ -106,10 +112,11 @@ public sealed class IssueInvoice
         Guid branchId,
         string branchName,
         string branchAddress,
+        Guid issuedByUserId,
         CancellationToken cancellationToken)
     {
         var invoice = Invoice.Create();
-        invoice.Issue(items, isDelivery, _clock.UtcNow, branchId, branchName, branchAddress);
+        invoice.Issue(items, isDelivery, _clock.UtcNow, branchId, branchName, branchAddress, issuedByUserId);
         await _invoices.AddAsync(invoice, cancellationToken);
         await _invoices.SaveChangesAsync(cancellationToken);
 
