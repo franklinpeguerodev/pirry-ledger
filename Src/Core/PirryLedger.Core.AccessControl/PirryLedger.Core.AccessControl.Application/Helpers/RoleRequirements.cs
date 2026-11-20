@@ -118,17 +118,19 @@ public static class RoleRequirements
         [Operation.MarkInvoiceAsNotDelivered] = new(AccessLevel.Standard),
         [Operation.CancelInvoice] = new(AccessLevel.Standard),
 
-        // RF-NEG-02: confirmar o rechazar una transferencia, registrar un abono
-        // de deuda y leer el historial de edicion son del Administrator.
+        // RF-NEG-02: resolución de transferencias e historiales son administrativos.
         [Operation.ConfirmInvoiceTransfer] = new(AccessLevel.Administrator),
         [Operation.RejectInvoiceTransfer] = new(AccessLevel.Administrator),
-        [Operation.RegisterDebtPayment] = new(AccessLevel.Administrator),
+        [Operation.RegisterDebtPayment] = new(AccessLevel.AnySession),
+        [Operation.ListDebts] = new(AccessLevel.AnySession),
+        [Operation.GetDebt] = new(AccessLevel.AnySession),
+        [Operation.GetDebtPaymentHistory] = new(AccessLevel.Administrator),
+        [Operation.ConfirmDebtTransfer] = new(AccessLevel.Administrator),
+        [Operation.RejectDebtTransfer] = new(AccessLevel.Administrator),
         [Operation.ListInvoiceEdits] = new(AccessLevel.Administrator),
 
-        // Consultar facturas (RF-NEG-06): las dos rutas declaran AnySession porque
-        // el conjunto de roles es cerrado (Administrator y Standard) y los dos
-        // leen las mismas facturas. AnySession admite todo role existente, asi
-        // que la tabla sigue diciendo a quien admite cada ruta.
+        // RF-NEG-06: exige sesión; el repositorio aplica emisor/sucursal.
+        // La consulta operativa de deudas usa su propio alcance por sucursal.
         [Operation.ListInvoices] = new(AccessLevel.AnySession),
         [Operation.GetInvoice] = new(AccessLevel.AnySession),
         [Operation.GetBusinessDay] = new(AccessLevel.AnySession),

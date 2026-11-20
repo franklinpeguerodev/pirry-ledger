@@ -79,13 +79,13 @@ public sealed class PruebasDeDeuda
     }
 
     [Fact]
-    public void UnAbonoDeDeudaNoTieneMetodo()
+    public void UnAbonoEnEfectivoConservaMetodoSinRecibidoNiCambio()
     {
         // Act
         var abono = InvoicePayment.Debt(100m, Ahora, Admin);
 
         // Assert
-        Assert.Equal(PaymentMethod.None, abono.Method);
+        Assert.Equal(PaymentMethod.Cash, abono.Method);
         Assert.Null(abono.ReceivedAmount);
         Assert.Null(abono.ChangeAmount);
     }

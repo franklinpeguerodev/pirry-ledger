@@ -92,6 +92,9 @@ public sealed class RejectTransferBody
 public sealed class DebtPaymentBody
 {
     public decimal Amount { get; init; }
+    public string? Method { get; init; }
 }
+
+public sealed record RejectDebtTransferBody(string? Reason);
 
 public sealed record ClassificationBody(string? Name);

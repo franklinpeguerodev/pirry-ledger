@@ -26,6 +26,7 @@ public static class EndpointRegistration
     public static IEndpointRouteBuilder MapBusiness(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapBusinessDays();
+        endpoints.MapDebts();
         endpoints.MapGet("/api/billing/categories", (ManageClassification useCase, CancellationToken ct) =>
             RunAsync(async () => Results.Ok(await useCase.ListAsync(ct))))
             .WithAccess(Operation.ListProductClassification);
@@ -359,11 +360,11 @@ public static class EndpointRegistration
             }))
         .WithAccess(Operation.RejectInvoiceTransfer);
 
-        // RF-NEG-02: el Administrator registra un abono de deuda.
+        // RF-NEG-02: Estándar de la sucursal o Administrador registra un abono.
         endpoints.MapPost("/api/billing/invoices/{id:guid}/payments", (
             Guid id,
             DebtPaymentBody body,
-            RegisterDebtPayment useCase,
+            [Microsoft.AspNetCore.Mvc.FromServices] RegisterDebtPayment useCase,
             Authenticate authenticate,
             HttpRequest httpRequest,
             CancellationToken cancellationToken) =>
@@ -377,9 +378,10 @@ public static class EndpointRegistration
                     id,
                     body.Amount,
                     caller.Id,
-                    cancellationToken);
+                    cancellationToken,
+                    DebtEndpoints.ParseMethod(body.Method));
 
-                return Results.Ok(InvoiceResponse.From(invoice));
+                return Results.Ok(DebtSummary.From(invoice));
             }))
         .WithAccess(Operation.RegisterDebtPayment);
 
@@ -399,7 +401,7 @@ public static class EndpointRegistration
                     : caller.BranchId;
                 var invoices = await useCase.ExecuteAsync(branchId, cancellationToken);
 
-                return Results.Ok(invoices.Select(InvoiceResponse.From).ToList());
+                return Results.Ok(invoices.Select(invoice => InvoiceResponse.From(invoice, caller.Role == Role.Administrator)).ToList());
             }))
         .WithAccess(Operation.ListInvoices);
 
@@ -419,7 +421,7 @@ public static class EndpointRegistration
                     : caller.BranchId;
                 var invoice = await useCase.ExecuteAsync(id, branchId, cancellationToken);
 
-                return Results.Ok(InvoiceResponse.From(invoice));
+                return Results.Ok(InvoiceResponse.From(invoice, caller.Role == Role.Administrator));
             }))
         .WithAccess(Operation.GetInvoice);
 
@@ -458,6 +460,10 @@ public static class EndpointRegistration
             return Results.Json(
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (DebtAccessDeniedException error)
+        {
+            return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
         }
         catch (ProductNotFoundException error)
         {

@@ -1,7 +1,7 @@
 namespace PirryLedger.Business.Domain.Enums;
 
-// Un pago de venta se cobra en el mostrador; un abono de deuda lo registra un
-// Administrador y no tiene metodo.
+// Distingue cobro original de venta y abono posterior, ambos con método.
+// Los abonos no se incorporan al efectivo ni a las ventas del cierre.
 public enum PaymentKind
 {
     Sale,

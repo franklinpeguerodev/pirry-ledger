@@ -203,17 +203,27 @@ public class PruebasDelPuntoUnicoDeAcceso
         Assert.Equal(Role.Standard, RoleRequirements.RequiredRole(operation));
     }
 
-    // RF-NEG-02: confirmar o rechazar transferencias, abonar deuda y leer el
-    // historial de edicion son del Administrator.
+    // RF-NEG-02: resolución de transferencias e historiales siguen siendo administrativos.
     [Theory]
     [InlineData(Operation.ConfirmInvoiceTransfer)]
     [InlineData(Operation.RejectInvoiceTransfer)]
-    [InlineData(Operation.RegisterDebtPayment)]
+    [InlineData(Operation.GetDebtPaymentHistory)]
+    [InlineData(Operation.ConfirmDebtTransfer)]
+    [InlineData(Operation.RejectDebtTransfer)]
     [InlineData(Operation.ListInvoiceEdits)]
     public void LasOperacionesDeAdministracionDelNegocioExigenAdministrador(Operation operation)
     {
         Assert.Equal(AccessLevel.Administrator, RoleRequirements.RequiredLevel(operation));
         Assert.Equal(Role.Administrator, RoleRequirements.RequiredRole(operation));
+    }
+
+    [Theory]
+    [InlineData(Operation.RegisterDebtPayment)]
+    [InlineData(Operation.ListDebts)]
+    [InlineData(Operation.GetDebt)]
+    public void LasConsultasYLosAbonosDeDeudaAdmitenSesionValida(Operation operation)
+    {
+        Assert.Equal(AccessLevel.AnySession, RoleRequirements.RequiredLevel(operation));
     }
 
     // Consultar facturas lo puede hacer cualquier sesion valida: el cajero
@@ -303,13 +313,13 @@ public class PruebasDelPuntoUnicoDeAcceso
     // administracion declaradas, contadas desde las rutas reales. Si alguien
     // anade una mas y la deja fuera de administracion, esto salta.
     [Fact]
-    public void HayExactamenteVeinteRutasDeAdministrador()
+    public void HayExactamenteVeintitresRutasDeAdministrador()
     {
         var deAdministracion = RutasReales()
             .Where(Route => Route.RoutePattern.RawText!.StartsWith("/api/admin"))
             .ToList();
 
-        Assert.Equal(20, deAdministracion.Count);
+        Assert.Equal(23, deAdministracion.Count);
 
         foreach (var Route in deAdministracion)
         {

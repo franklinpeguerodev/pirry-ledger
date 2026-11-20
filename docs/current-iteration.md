@@ -16,13 +16,14 @@ Preserve the access-control baseline.
 
 Business decisions: `docs/reglas-operativas-practica-5.md`.
 Acceptance scenarios: `docs/criterios-notificaciones-reportes.md`.
-Preparation authorized 2026-11-19; implementation not yet delivered.
+Preparation authorized 2026-11-19; implementation is being delivered by feature.
 Invoice ownership integrated in develop (ADR 025).
 Scoped repository combines branch and issuer; no standard branch transfers.
-Other Practice 5 features remain pending. Debt-specific cross-issuer queries are
-scheduled for the debt-payments feature; ordinary invoice queries remain private.
-Branch business days implemented in `feature/branch-business-days` (ADR 026),
-pending PR review. Close/reopen and first-invoice opening are coordinated per
+Debt-specific cross-issuer queries and verified payments implemented in
+`feature/debt-payments` (ADR 027), pending PR review. Ordinary invoice queries
+remain private; Standard responses hide debt payment history.
+Branch business days integrated in develop (ADR 026).
+Close/reopen and first-invoice opening are coordinated per
 branch; closed snapshots include pending cancellation exclusions through a Core
 contract. Notifications, reports and full sales-adjustment integration remain
 in subsequent features. No closing revision history is implemented.

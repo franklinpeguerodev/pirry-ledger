@@ -1,7 +1,7 @@
 # Reglas operativas — Práctica 5
 
 Decisiones de Franklin acordadas el 18 y 19 de noviembre de 2026.
-Estado: aprobadas para planificación; todavía no implementadas.
+Estado: reglas aprobadas; avance de implementación en current-iteration.md.
 El enunciado original se conserva separado de estas decisiones del negocio.
 
 ## Identidad y alcance
