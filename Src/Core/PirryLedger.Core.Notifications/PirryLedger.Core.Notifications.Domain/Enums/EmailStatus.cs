@@ -1,8 +1,8 @@
 namespace PirryLedger.Core.Notifications.Domain.Enums;
 
-// Status del Email en la cola. El Status Failed y los reintentos llegan en la
-// semana 11, asi que todavia no existe: se anota aqui para que la semana 11 solo
-// tenga que agregar el valor y su logica, sin cambiar la tabla.
+// Estados persistidos de la cola. Cancelled corresponde a correos notificables
+// retirados por preferencia o elegibilidad. Límite de intentos e incertidumbre
+// se implementan en la siguiente feature del plan, conservando estos ordinales.
 public enum EmailStatus
 {
     // Encolado por la operacion que lo origino. Es el unico Status en el que
@@ -16,4 +16,5 @@ public enum EmailStatus
 
     // Aceptado por el servidor de Email. No se vuelve a enviar nunca mas.
     Sent = 2,
+    Cancelled = 3,
 }

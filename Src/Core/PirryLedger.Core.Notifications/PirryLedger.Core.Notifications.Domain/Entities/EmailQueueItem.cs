@@ -48,6 +48,26 @@ public sealed class EmailQueueItem
     public DateTime? SentAtUtc { get; private set; }
 
     public string? LastError { get; private set; }
+    public Guid? NotificationId { get; private set; }
+    public Guid? NotificationRecipientUserId { get; private set; }
+
+    public static EmailQueueItem ForNotification(Guid notificationId, Guid recipientUserId,
+        string recipient, string subject, string body, DateTime createdAtUtc)
+    {
+        if (notificationId == Guid.Empty || recipientUserId == Guid.Empty)
+            throw new ArgumentException("El correo notificable requiere aviso y destinatario.");
+        var email = Create(recipient, subject, body, createdAtUtc);
+        email.NotificationId = notificationId;
+        email.NotificationRecipientUserId = recipientUserId;
+        return email;
+    }
+
+    public void CancelNotification()
+    {
+        if (NotificationId is null || Status is not (EmailStatus.Pending or EmailStatus.Processing))
+            throw new InvalidOperationException("Solo se puede cancelar un correo notificable pendiente.");
+        Status = EmailStatus.Cancelled;
+    }
 
     // Una sola puerta de entrada: nada escribe la fila directamente.
     public static EmailQueueItem Create(string recipient, string subject, string body, DateTime createdAtUtc)
