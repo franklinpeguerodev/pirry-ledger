@@ -22,6 +22,9 @@ internal sealed class EmailQueueRepository : IEmailQueueRepository
     // memoria.
     public async Task<IReadOnlyList<EmailQueueItem>> ClaimPendingAsync(int limit, CancellationToken cancellationToken = default)
     {
+        if (_context.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("El procesador debe iniciar sin cambios pendientes de otra operación.");
+        _context.ChangeTracker.Clear();
         var emails = await _context.EmailQueueItems
             .FromSqlInterpolated($$"""
                 UPDATE not_email_queue

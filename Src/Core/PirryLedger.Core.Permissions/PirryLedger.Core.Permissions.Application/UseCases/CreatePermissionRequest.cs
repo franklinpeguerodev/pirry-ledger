@@ -1,3 +1,5 @@
+using PirryLedger.Core.Contracts.Notifications;
+using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
@@ -18,6 +20,9 @@ namespace PirryLedger.Core.Permissions.Application.UseCases;
 // valida el nombre del permiso contra el catalogo (RF-GP-01).
 public sealed class CreatePermissionRequest
 {
+    private readonly INotificationPublisher? _notifications;
+    private readonly IApplicationTransaction? _transaction;
+
     private readonly IPermissionRequestRepository _requests;
     private readonly IPermissionAuthority _permissions;
     private readonly Authenticate _authenticate;
@@ -27,18 +32,27 @@ public sealed class CreatePermissionRequest
         IPermissionRequestRepository requests,
         IPermissionAuthority permissions,
         Authenticate authenticate,
-        IClock clock)
+        IClock clock,
+        INotificationPublisher? notifications = null, IApplicationTransaction? transaction = null)
     {
         _requests = requests;
         _permissions = permissions;
         _authenticate = authenticate;
         _clock = clock;
+        _notifications = notifications;
+        _transaction = transaction;
     }
 
     // Devuelve el id de la solicitud creada para que el endpoint pueda
     // responder 202 Accepted con Location al recurso. La solicitud todavia
     // esta en Pending: aprobar y aplicar ocurren en otra operacion.
-    public async Task<Guid> ExecuteAsync(
+    public Task<Guid> ExecuteAsync(
+        string plainToken,
+        string requestedPermission,
+        CancellationToken cancellationToken = default) =>
+        _transaction is null ? ExecuteCoreAsync(plainToken, requestedPermission, cancellationToken) : _transaction.ExecuteAsync(() => ExecuteCoreAsync(plainToken, requestedPermission, cancellationToken), cancellationToken);
+
+    private async Task<Guid> ExecuteCoreAsync(
         string plainToken,
         string requestedPermission,
         CancellationToken cancellationToken = default)
@@ -62,9 +76,12 @@ public sealed class CreatePermissionRequest
         var request = PermissionRequest.Create(
             caller.Id,
             requestedPermission,
-            _clock.UtcNow);
+            _clock.UtcNow, caller.BranchId);
 
         await _requests.SaveAsync(request, cancellationToken);
+        if (_notifications is not null)
+            await _notifications.PublishAsync(new NotificationEvent(NotificationEventKind.PermissionRequested, request.Id,
+                $"{caller.Name} solicitó {request.RequestedPermission}. Sucursal: {request.BranchId}.", request.RequesterId, request.BranchId), cancellationToken);
 
         return request.Id;
     }

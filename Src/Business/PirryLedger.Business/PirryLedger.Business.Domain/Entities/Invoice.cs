@@ -382,7 +382,7 @@ public sealed class Invoice
 
     // PendingVerification -> Paid. Solo si los pagos cubren el total (condicion
     // de la fila). Confirma todas las transferencias.
-    public void ConfirmTransfer()
+    public void ConfirmTransfer(DateTime? resolvedAtUtc = null, Guid? resolvedByUserId = null)
     {
         if (State != InvoiceState.PendingVerification)
         {
@@ -411,14 +411,14 @@ public sealed class Invoice
         {
             if (payment.Method == PaymentMethod.Transfer)
             {
-                payment.Confirm();
+                payment.Confirm(resolvedAtUtc, resolvedByUserId);
             }
         }
     }
 
     // PendingVerification -> InDebt. Las transferencias quedan Rejected y no
     // cuentan; el nombre de la persona que queda debiendo es obligatorio.
-    public void RejectTransfer(string debtorName)
+    public void RejectTransfer(string debtorName, DateTime? resolvedAtUtc = null, Guid? resolvedByUserId = null, string? reason = null)
     {
         if (State != InvoiceState.PendingVerification)
         {
@@ -427,6 +427,8 @@ public sealed class Invoice
         }
 
         var name = NormalizeDebtorName(debtorName);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new InvoiceRuleViolationException("El motivo del rechazo es obligatorio.");
 
         // Los pagos que no son transferencia siguen contando; solo se rechazan
         // las transferencias.
@@ -450,7 +452,7 @@ public sealed class Invoice
         {
             if (payment.Method == PaymentMethod.Transfer)
             {
-                payment.Reject();
+                payment.Reject(resolvedAtUtc, resolvedByUserId, reason?.Trim());
             }
         }
     }

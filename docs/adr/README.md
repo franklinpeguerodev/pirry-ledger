@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `030-notification-event-recipient-keys.md` (2026-11-20) — Stable event/recipient keys without an independent events table.
+
 - `029-explicit-cross-module-transactions.md` (2026-11-20) — Explicit PostgreSQL transaction coordination through module-owned participants.
 
 - `028-explicit-undelivered-invoice-recovery.md` (2026-11-20) — Dedicated recovery operation and original-day sales adjustments.

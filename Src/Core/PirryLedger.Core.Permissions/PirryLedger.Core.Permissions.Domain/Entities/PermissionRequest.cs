@@ -34,6 +34,7 @@ public sealed class PermissionRequest
     public Guid Id { get; private set; }
 
     public Guid RequesterId { get; private set; }
+    public Guid? BranchId { get; private set; }
 
     public string RequestedPermission { get; private set; } = string.Empty;
 
@@ -58,15 +59,18 @@ public sealed class PermissionRequest
     public static PermissionRequest Create(
         Guid requesterId,
         string requestedPermission,
-        DateTime utcNow)
+        DateTime utcNow,
+        Guid? branchId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedPermission);
 
-        return new PermissionRequest(
+        var request = new PermissionRequest(
             Guid.NewGuid(),
             requesterId,
             requestedPermission,
             utcNow);
+        request.BranchId = branchId;
+        return request;
     }
 
     // RF-GP-03: aprobar una solicitud Pending pasa por la maquina de estados

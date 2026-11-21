@@ -21,6 +21,22 @@ internal sealed class PermissionRequestRepository : IPermissionRequestRepository
             return null;
         }
 
+        if (_context.Database.CurrentTransaction is not null)
+        {
+            var tracked = _context.PermissionRequests.Local.FirstOrDefault(request => request.Id == id);
+            if (tracked is not null)
+            {
+                var entry = _context.Entry(tracked);
+                if (entry.State != EntityState.Unchanged)
+                    throw new InvalidOperationException("La solicitud tiene cambios pendientes de guardar.");
+                entry.State = EntityState.Detached;
+            }
+            // Resolver con el estado actual bajo bloqueo evita dos resoluciones de Pending.
+            return await _context.PermissionRequests.FromSqlInterpolated($"""
+                SELECT * FROM per_permission_requests WHERE id = {id} FOR UPDATE
+                """).FirstOrDefaultAsync(cancellationToken);
+        }
+
         return await _context.PermissionRequests
             .FirstOrDefaultAsync(request => request.Id == id, cancellationToken);
     }

@@ -35,6 +35,7 @@ public sealed class BusinessDay
     public DateTime? LastClosedAtUtc { get; private set; }
 
     public Guid? LastClosedByUserId { get; private set; }
+    public Guid? LastClosingEventId { get; private set; }
 
     public BusinessDayClosing? Closing { get; private set; }
 
@@ -83,6 +84,7 @@ public sealed class BusinessDay
         }
 
         Closing = closing;
+        LastClosingEventId = Guid.NewGuid();
         LastClosedAtUtc = now;
         LastClosedByUserId = userId;
         IsOpen = nextState == BusinessDayState.Open;

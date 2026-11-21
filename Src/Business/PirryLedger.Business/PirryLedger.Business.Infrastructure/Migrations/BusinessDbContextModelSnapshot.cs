@@ -48,6 +48,10 @@ namespace PirryLedger.Business.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("last_closed_by_user_id");
 
+                    b.Property<Guid?>("LastClosingEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_closing_event_id");
+
                     b.Property<DateTime>("OpenedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("opened_at_utc");

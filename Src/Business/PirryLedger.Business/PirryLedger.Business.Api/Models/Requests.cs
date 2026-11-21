@@ -87,6 +87,7 @@ public sealed class EditItemsBody
 public sealed class RejectTransferBody
 {
     public string? DebtorName { get; init; }
+    public string? Reason { get; init; }
 }
 
 public sealed class DebtPaymentBody

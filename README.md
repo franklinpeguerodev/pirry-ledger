@@ -1,5 +1,83 @@
 # Pirry Ledger
 
+## Eventos y preferencias de notificación — ADR 030
+
+Solicitudes de permiso y operaciones de facturación publican avisos al guardar.
+Solo reciben cuentas activas: significa habilitadas, aunque no tengan sesión
+abierta. AccessControl entrega destinatarios por contrato; cada módulo conserva
+sus propias tablas (RD-03). No se consulta ni modifica información de otro módulo.
+
+| Evento | Destinatarios activos | Canales |
+|---|---|---|
+| Solicitud de permiso creada | Todos los Administradores | Interno y correo según preferencia |
+| Permiso aprobado o rechazado | Solicitante, con motivo al rechazar | Interno |
+| Transferencia registrada, venta o abono | Todos los Administradores | Interno |
+| Transferencia de venta confirmada o rechazada | Emisor de la factura | Interno |
+| Transferencia de abono confirmada o rechazada | Usuario que registró el abono | Interno, incluso si es Administrador |
+| Factura dejada fiada o abono en efectivo | Todos los Administradores | Interno |
+| Cada cierre de jornada | Todos los Administradores, indicando sucursal | Interno |
+
+Una recuperación por transferencia produce el aviso de transferencia registrada.
+Reabrir una jornada no produce aviso propio. Recordatorios de más de cuatro días
+y jornada vencida se conectarán mediante CLI en su entrega posterior.
+
+Cada Administrador consulta o cambia exclusivamente su preferencia:
+
+| Método y ruta | Resultado |
+|---|---|
+| GET /api/notifications/email-preference | 200 con emailEnabled, inicialmente true |
+| PUT /api/notifications/email-preference | Cuerpo obligatorio {"emailEnabled":false} o true; 204 |
+
+Sin sesión: 401. Estándar: 403. Cuerpo sin emailEnabled o con null: 400 sin cambios.
+No se acepta elegir otro destinatario. Desactivar cancela correos notificables
+pendientes; reactivar afecta eventos nuevos. No afecta activación o recuperación.
+Antes de SMTP se revalida cuenta activa, rol Administrador y preferencia; si ya
+no corresponde, el correo queda Cancelled. No se retira un correo ya entregado.
+
+La operación, aviso interno y correo en cola comparten una transacción PostgreSQL
+explícita (ADR 029); SMTP corre aparte. La clave estable tipo/origen y el índice
+único evento/destinatario evitan repetir avisos. Cada correo notificable referencia
+un aviso con índice único. No existe tabla adicional de eventos. Cada cierre válido
+recibe identidad propia; solo se conserva el identificador del último cierre,
+sin historial de revisiones. Las resoluciones de permisos leen el estado actual
+bajo bloqueo de fila para impedir aprobaciones/rechazos simultáneos.
+
+Migraciones AddNotificationDeliveryPolicy, AddPermissionRequestBranch y
+AddBusinessDayClosingEvent: clave de evento, enlace de correo, preferencias,
+sucursal conservada en solicitud y último identificador de cierre. No agregan
+FK entre módulos ni reconstruyen datos históricos. Se aplican con el mecanismo
+de migraciones existente; no hay variables ni paquetes nuevos.
+
+El rechazo de una transferencia de venta exige ahora motivo:
+`{"debtorName":"Luis Gomez","reason":"No se recibió la transferencia"}`.
+El aviso identifica factura/pago y motivo; la autorización sigue siendo administrativa.
+
+Verificación ejecutada:
+
+```powershell
+dotnet build pirry-ledger.slnx --no-restore -v q
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v minimal
+```
+
+Build: 0 errores, una advertencia NU1900 por consulta de vulnerabilidades de NuGet
+sin acceso de red. Suite: 612 aprobadas, 0 fallidas/omitidas. Incluye 19 casos de
+publicación/política, cuatro de revalidación antes de SMTP, siete de eventos de
+facturación, dos de selección activa, dos de solicitud/publicación atómicas y un
+caso HTTP de preferencias con autorización real. Se comprobó en rojo que cambiar
+la clave estable por una aleatoria duplica destinatarios (esperado 2, obtenido 4);
+se restauró el código y la suite pasó.
+
+Comprobación PostgreSQL separada con DI de producción y datos temporales:
+publicación por permisos, ventas, abonos y cierres; preferencia/cancelación;
+fallo de aviso revierte cobro/pagos; publicación concurrente sin duplicados;
+resolución recarga estado y bloquea una segunda transacción. Datos propios
+retirados o revertidos, sin ejecutar SMTP ni inspeccionar .env.
+
+RF-NOT-06 conserva la desviación de negocio documentada en ADR 023/024:
+el correo selectivo no equivale a cumplimiento universal ni excepción académica.
+Cinco intentos, consulta administrativa de cola, tratamiento de envío incierto y
+recordatorios temporales siguen pendientes; esta sección no los declara terminados.
+
 ## Bandeja propia de notificaciones — RF-NOT-04, RF-NOT-05
 
 Administrador y Estándar consultan exclusivamente sus avisos con sesión válida.
@@ -30,9 +108,8 @@ PostgreSQL verificado aparte: consulta sin lectura automática, marcado individu
 y general por propietario, fecha inicial conservada desde contexto nuevo y aviso
 ajeno intacto. Solo se retiraron los avisos temporales propios de la comprobación.
 
-Esta entrega prepara consulta y lectura. Los productores de eventos, selección
-de destinatarios activos y preferencias se conectan en el siguiente PR; no se
-declara que solicitudes o facturas ya generen avisos automáticamente.
+Los productores, destinatarios activos y preferencias se conectan mediante el
+centro descrito arriba. La consulta mantiene lectura explícita y propiedad.
 
 ## Coordinación transaccional entre módulos — ADR 029
 
@@ -43,10 +120,9 @@ La conexión compartida vive durante el ámbito de DI y no es propiedad de los
 contextos individuales. Las llamadas anidadas comparten la transacción exterior.
 Un fallo anidado obliga a revertir aunque el llamador capture la excepción.
 
-Esta entrega prepara la infraestructura del centro de notificaciones. Todavía
-no conecta eventos de negocio ni sustituye las transacciones existentes de
-jornadas, abonos o permisos. Esas adaptaciones y la bandeja siguen pendientes.
-SMTP conserva su proceso independiente. No requiere migración ni variables nuevas.
+El centro conecta eventos de negocio y adapta jornadas, abonos y permisos para
+participar en esta transacción. SMTP conserva su proceso independiente. El
+coordinador no requiere variables nuevas; las migraciones del centro se listan arriba.
 
 Verificación sin PostgreSQL ni SMTP:
 
@@ -87,7 +163,7 @@ Solicitar anulación excluye venta y efectivo, aprobar mantiene exclusión como
 anulado y rechazar reincorpora a la jornada original. No entregado también queda
 excluido hasta recuperarse. Las cifras separan transferencias confirmadas y
 pendientes, fiado y exclusiones; abonos de deuda permanecen fuera del cierre.
-Los reportes y notificaciones se conectarán en sus features posteriores.
+Los eventos se conectan en el centro; reportes permanecen en su feature posterior.
 
 Pruebas reproducibles sin PostgreSQL ni SMTP:
 
@@ -147,7 +223,7 @@ Las pruebas HTTP usan consultas EF reales en memoria y sustituyen únicamente
 el bloqueo PostgreSQL; la concurrencia física se verifica aparte. Se cubren
 compañeros, sucursales, pagos pendientes, rechazo sin motivo, historial oculto,
 deuda saldada, pagos con caja cerrada y confirmación por el propio Administrador.
-Avisos y recordatorios de abonos siguen pendientes de sus features.
+Los avisos de abonos están conectados; recordatorios temporales siguen pendientes.
 
 ## Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
 
@@ -2748,7 +2824,7 @@ Pedir Post "/api/billing/invoices/$transferencia/transfers/confirm" $adminHeader
 - Cobrar con transferencia: `200`, `state` `PendingVerification`.
 - Confirmar con el cajero: `403`.
 - Confirmar con el Administrador: `200`, `state` `Paid`.
-- Rechazar (`/transfers/reject` con `{"debtorName":"Luis Gomez"}`): `200`, `state`
+- Rechazar (`/transfers/reject` con `{"debtorName":"Luis Gomez","reason":"No llegó"}`): `200`, `state`
   `InDebt`, y la transferencia queda `Rejected`, así que no cuenta para el pagado.
 
 #### Delivery, edición e historial (RF-NEG-02)
@@ -3218,7 +3294,7 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 | `POST` | `/api/billing/invoices/{id}/not-delivered` | Marca como no entregada una factura de delivery. Responde `200`. |
 | `POST` | `/api/billing/invoices/{id}/cancel` | Anula. Desde `Issued` responde `200`; desde `Paid` o `InDebt` exige la concesión `CancelInvoice:<id>` y, si no la hay, responde `403` o `409` con el mensaje del permiso. |
 | `POST` | `/api/billing/invoices/{id}/transfers/confirm` | Confirma una transferencia en verificación pendiente. Exige `Administrator`. Responde `200`. |
-| `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"..."}`. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"...","reason":"..."}`; motivo obligatorio. Exige `Administrator`. Responde `200`. |
 | `POST` | `/api/billing/invoices/{id}/payments` | Registra abono: amount y method (Cash o Transfer). Estándar de sucursal o Administrador; responde 200 con DebtSummary. |
 | `GET` | `/api/billing/invoices` | Lista las facturas con sus ítems y pagos. Cualquier sesión válida. Responde `200`. |
 | `GET` | `/api/billing/invoices/{id}` | Devuelve una factura. Cualquier sesión válida. Responde `200` o `404`. |

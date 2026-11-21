@@ -1,6 +1,6 @@
 # ADR 029 - Explicit cross-module transactions
 
-- **Estado:** aceptada; implementación en curso
+- **Estado:** aceptada; coordinador e integración de eventos implementados
 - **Fecha:** 2026-11-20
 - **Requisitos:** RD-01, RD-03, RD-09, RF-NOT-01, RF-NOT-02, RF-NOT-03, RF-NOT-08
 - **Decide:** Franklin. **Redacta:** el agente, con autorización expresa.
@@ -30,6 +30,8 @@ tras reversión para no conservar cambios que PostgreSQL no confirmó.
 Los bloqueos de sucursal y factura permanecen dentro de esa transacción;
 los flujos adaptados no abren una segunda transacción incompatible. Se verifica
 la reversión real entre módulos antes de declarar la integración terminada.
+Las resoluciones de permisos leen la solicitud actual bajo bloqueo de fila;
+así una lectura anterior del contexto no permite resolver de nuevo Pending.
 
 ## Alternativas consideradas
 

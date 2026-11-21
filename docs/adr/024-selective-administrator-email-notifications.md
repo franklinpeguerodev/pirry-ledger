@@ -1,6 +1,6 @@
 # ADR 024 - Selective administrator email notifications
 
-- **Estado:** aceptada por Franklin para el negocio; implementación pendiente.
+- **Estado:** aceptada por Franklin; política y preferencias implementadas, avisos temporales CLI pendientes.
 - **Fecha:** 2026-11-19
 - **Requisitos:** RF-NOT-01, RF-NOT-03, RF-NOT-06, RF-NOT-07
 - **Decide:** Franklin. **Redacta:** el agente.

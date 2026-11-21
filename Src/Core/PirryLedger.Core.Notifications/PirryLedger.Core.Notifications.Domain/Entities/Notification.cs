@@ -10,6 +10,7 @@ public sealed class Notification
     public string Body { get; private set; } = string.Empty;
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? ReadAtUtc { get; private set; }
+    public string? EventKey { get; private set; }
 
     public void MarkRead(DateTime readAtUtc)
     {
@@ -18,7 +19,7 @@ public sealed class Notification
         ReadAtUtc ??= readAtUtc;
     }
 
-    public static Notification Create(Guid recipientUserId, string subject, string body, DateTime createdAtUtc)
+    public static Notification Create(Guid recipientUserId, string subject, string body, DateTime createdAtUtc, string? eventKey = null)
     {
         if (recipientUserId == Guid.Empty)
             throw new ArgumentException("El destinatario es obligatorio.", nameof(recipientUserId));
@@ -28,11 +29,13 @@ public sealed class Notification
             throw new ArgumentException("El contenido del aviso es obligatorio.", nameof(body));
         if (createdAtUtc.Kind != DateTimeKind.Utc)
             throw new ArgumentException("La fecha del aviso debe estar en UTC.", nameof(createdAtUtc));
+        if (eventKey is not null && (string.IsNullOrWhiteSpace(eventKey) || eventKey.Length > 160))
+            throw new ArgumentException("La clave del evento debe contener entre 1 y 160 caracteres.", nameof(eventKey));
 
         return new Notification
         {
             Id = Guid.NewGuid(), RecipientUserId = recipientUserId,
-            Subject = subject.Trim(), Body = body.Trim(), CreatedAtUtc = createdAtUtc
+            Subject = subject.Trim(), Body = body.Trim(), CreatedAtUtc = createdAtUtc, EventKey = eventKey
         };
     }
 }

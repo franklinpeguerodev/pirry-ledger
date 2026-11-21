@@ -1,6 +1,6 @@
 # Notifications and outgoing mail queue
 
-## Practice 5 extension (planned)
+## Practice 5 extension (partially implemented)
 
 Source: Práctica 5, sections 1.2 and 1.3. The original minimal queue below
 remains a delivered baseline. The following text is the newer assignment;

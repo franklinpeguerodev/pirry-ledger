@@ -20,10 +20,12 @@ public sealed partial class NotificationsDbContext : DbContext
 
     public DbSet<EmailQueueItem> EmailQueueItems => Set<EmailQueueItem>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new EmailQueueItemConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationPreferenceConfiguration());
     }
 }

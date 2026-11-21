@@ -6,6 +6,7 @@ using PirryLedger.Business.Domain.Enums;
 using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
+using PirryLedger.Core.Contracts.Notifications;
 
 namespace PirryLedger.Business.Application.UseCases;
 
@@ -15,14 +16,16 @@ public sealed class ManageDebtPayments
     private readonly IBranchScopeAccessor _scope;
     private readonly IPendingInvoiceCancellations _cancellations;
     private readonly IClock _clock;
+    private readonly INotificationPublisher? _notifications;
 
     public ManageDebtPayments(IDebtRepository debts, IBranchScopeAccessor scope,
-        IPendingInvoiceCancellations cancellations, IClock clock)
+        IPendingInvoiceCancellations cancellations, IClock clock, INotificationPublisher? notifications = null)
     {
         _debts = debts;
         _scope = scope;
         _cancellations = cancellations;
         _clock = clock;
+        _notifications = notifications;
     }
 
     public async Task<IReadOnlyList<DebtSummary>> ListAsync(Guid? branchId = null,
@@ -59,6 +62,14 @@ public sealed class ManageDebtPayments
 
             invoice.RegisterDebtPayment(amount, _clock.UtcNow, _scope.UserId!.Value, method);
             await _debts.SaveAsync(cancellationToken);
+            if (_notifications is not null)
+            {
+                var payment = invoice.Payments.Last();
+                await _notifications.PublishAsync(new NotificationEvent(method == PaymentMethod.Cash
+                    ? NotificationEventKind.DebtCashPayment : NotificationEventKind.TransferRegistered,
+                    payment.Id, $"Abono de {amount:F2} a factura {invoice.Id}. Sucursal: {invoice.BranchName}.",
+                    BranchId: invoice.BranchId), cancellationToken);
+            }
             return invoice;
         }, cancellationToken);
     }
@@ -70,6 +81,15 @@ public sealed class ManageDebtPayments
         {
             invoice.ConfirmDebtTransfer(paymentId, _clock.UtcNow, _scope.UserId!.Value);
             await _debts.SaveAsync(cancellationToken);
+            if (_notifications is not null)
+            {
+                var payment = invoice.Payments.Single(payment => payment.Id == paymentId);
+                await _notifications.PublishAsync(new NotificationEvent(payment.Kind == PaymentKind.Debt
+                    ? NotificationEventKind.DebtTransferConfirmed : NotificationEventKind.TransferConfirmed,
+                    payment.Id, $"Transferencia de factura {invoice.Id} confirmada.",
+                    payment.Kind == PaymentKind.Debt ? payment.RegisteredByUserId : invoice.IssuedByUserId,
+                    invoice.BranchId), cancellationToken);
+            }
             return invoice;
         }, cancellationToken);
     }
@@ -82,6 +102,15 @@ public sealed class ManageDebtPayments
         {
             invoice.RejectDebtTransfer(paymentId, _clock.UtcNow, _scope.UserId!.Value, reason);
             await _debts.SaveAsync(cancellationToken);
+            if (_notifications is not null)
+            {
+                var payment = invoice.Payments.Single(payment => payment.Id == paymentId);
+                await _notifications.PublishAsync(new NotificationEvent(payment.Kind == PaymentKind.Debt
+                    ? NotificationEventKind.DebtTransferRejected : NotificationEventKind.TransferRejected,
+                    payment.Id, $"Transferencia de factura {invoice.Id} rechazada. Motivo: {payment.RejectionReason}.",
+                    payment.Kind == PaymentKind.Debt ? payment.RegisteredByUserId : invoice.IssuedByUserId,
+                    invoice.BranchId), cancellationToken);
+            }
             return invoice;
         }, cancellationToken);
     }

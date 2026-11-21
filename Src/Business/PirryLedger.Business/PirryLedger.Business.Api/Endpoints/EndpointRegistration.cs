@@ -356,10 +356,12 @@ public static class EndpointRegistration
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
+                if (string.IsNullOrWhiteSpace(body.Reason))
+                    throw new InvoiceRuleViolationException("El motivo del rechazo es obligatorio.");
                 var invoice = await useCase.ExecuteAsync(
                     id,
                     body.DebtorName ?? string.Empty,
-                    cancellationToken);
+                    cancellationToken, body.Reason);
 
                 return Results.Ok(InvoiceResponse.From(invoice));
             }))

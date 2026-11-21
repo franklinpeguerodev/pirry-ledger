@@ -5,11 +5,12 @@ using PirryLedger.Business.Domain.Rules;
 using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
+using PirryLedger.Core.Contracts.Notifications;
 
 namespace PirryLedger.Business.Application.UseCases;
 
 public sealed class ManageBusinessDays(IBusinessDayRepository days, IBranchScopeAccessor scope,
-    IPendingInvoiceCancellations cancellations, IClock clock)
+    IPendingInvoiceCancellations cancellations, IClock clock, INotificationPublisher? notifications = null)
 {
     public Task<BusinessDay?> CurrentAsync(Guid branch, CancellationToken ct = default)
     {
@@ -42,6 +43,11 @@ public sealed class ManageBusinessDays(IBusinessDayRepository days, IBranchScope
             if (unfinished.Length > 0) throw new UnfinishedInvoicesException(unfinished);
             day.Close(InvoiceSalesCalculation.Calculate(invoices, pending), clock.UtcNow, scope.UserId!.Value);
             await days.SaveAsync(ct);
+            if (notifications is not null)
+                await notifications.PublishAsync(new NotificationEvent(NotificationEventKind.BusinessDayClosed,
+                    day.LastClosingEventId!.Value,
+                    $"Cierre de {invoices.FirstOrDefault()?.BranchName ?? branch.ToString()}. Jornada {day.BusinessDate:yyyy-MM-dd}. Vendido: {day.Closing!.Sold:F2}.",
+                    BranchId: branch), ct);
             return day;
         }, ct);
 

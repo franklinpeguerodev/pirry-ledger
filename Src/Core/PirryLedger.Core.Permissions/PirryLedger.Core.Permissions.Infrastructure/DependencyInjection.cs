@@ -1,3 +1,4 @@
+using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Contracts.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,7 +57,9 @@ public static class DependencyInjection
             provider.GetRequiredService<IPermissionRequestRepository>(),
             provider.GetRequiredService<IPermissionAuthority>(),
             provider.GetRequiredService<Authenticate>(),
-            provider.GetRequiredService<IClock>()));
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<INotificationPublisher>(),
+            provider.GetRequiredService<IApplicationTransaction>()));
 
         services.AddScoped<ListOwnPermissionRequests>(provider => new ListOwnPermissionRequests(
             provider.GetRequiredService<IPermissionRequestRepository>(),
@@ -74,12 +77,16 @@ public static class DependencyInjection
             // Permissions solo lo pide; no conoce PasswordResetIssuer.
             provider.GetRequiredService<IPasswordResetIssuer>(),
             provider.GetRequiredService<IClock>(),
-            provider.GetService<IApprovedInvoiceCancellation>()));
+            provider.GetService<IApprovedInvoiceCancellation>(),
+            provider.GetRequiredService<INotificationPublisher>(),
+            provider.GetRequiredService<IApplicationTransaction>()));
 
         services.AddScoped<RejectPermissionRequest>(provider => new RejectPermissionRequest(
             provider.GetRequiredService<IPermissionRequestRepository>(),
             provider.GetRequiredService<Authenticate>(),
-            provider.GetRequiredService<IClock>()));
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<INotificationPublisher>(),
+            provider.GetRequiredService<IApplicationTransaction>()));
 
         return services;
     }

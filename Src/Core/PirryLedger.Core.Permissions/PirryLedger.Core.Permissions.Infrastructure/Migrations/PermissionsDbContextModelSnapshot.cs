@@ -78,6 +78,10 @@ namespace PirryLedger.Core.Permissions.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("approver_id");
 
+                    b.Property<Guid?>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");

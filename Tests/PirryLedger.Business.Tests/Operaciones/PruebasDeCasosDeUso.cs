@@ -160,7 +160,7 @@ public sealed class PruebasDeCasosDeUso
         var useCase = new RejectInvoiceTransfer(repository);
 
         // Act
-        await useCase.ExecuteAsync(invoice.Id, "Ana Perez");
+        await useCase.ExecuteAsync(invoice.Id, "Ana Perez", reason: "No llegó");
 
         // Assert
         Assert.Equal(InvoiceState.InDebt, invoice.State);

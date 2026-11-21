@@ -186,3 +186,12 @@ usa la transición existente InDebt -> Paid; rechazar deja InDebt y conserva
 saldo, con motivo obligatorio. Los metadatos del pago guardan resolución y actor.
 La fecha de pago completo es su registro, sin cambiar emisión ni jornada.
 El historial solo se expone al Administrador. Véase ADR 027.
+
+## Correo notificable — Práctica 5
+
+Desactivar correo cancela únicamente pendientes vinculados a avisos de ese
+Administrador (Pending -> Cancelled). Antes de enviar, una cuenta inactiva,
+un cambio de rol o preferencia deshabilitada cancela también el reclamado
+(Processing -> Cancelled). Activación/recuperación no se vinculan a esos avisos.
+Esta ampliación no cambia las transiciones de factura; reintentos limitados y
+resultado incierto pertenecen a la siguiente entrega de cola.
