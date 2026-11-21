@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<INotificationRecipientDirectory, NotificationRecipientDirectory>();
         services.AddScoped<IBranchRepository, BranchRepository>();
         services.AddScoped<IBranchDirectory, BranchDirectory>();
         services.AddScoped<IBranchScopeAccessor, BranchScopeAccessor>();
