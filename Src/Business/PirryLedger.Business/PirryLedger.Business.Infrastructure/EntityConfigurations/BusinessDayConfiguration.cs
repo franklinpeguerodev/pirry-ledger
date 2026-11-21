@@ -10,6 +10,7 @@ public sealed class BusinessDayConfiguration : IEntityTypeConfiguration<Business
     {
         builder.ToTable("bil_business_days");
         builder.HasKey(businessDay => businessDay.Id);
+        builder.Property(businessDay => businessDay.LastClosingEventId).HasColumnName("last_closing_event_id");
         builder.Property(businessDay => businessDay.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(businessDay => businessDay.BranchId).HasColumnName("branch_id");
         builder.Property(businessDay => businessDay.BusinessDate).HasColumnName("business_date");

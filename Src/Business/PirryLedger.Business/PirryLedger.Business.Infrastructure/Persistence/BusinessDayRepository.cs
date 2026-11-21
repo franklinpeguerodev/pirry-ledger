@@ -1,26 +1,31 @@
+using PirryLedger.Core.Contracts.Persistence;
 using Microsoft.EntityFrameworkCore;
 using PirryLedger.Business.Application.Ports;
 using PirryLedger.Business.Domain.Entities;
 
 namespace PirryLedger.Business.Infrastructure.Persistence;
 
-public sealed class BusinessDayRepository(BusinessDbContext context) : IBusinessDayRepository
+public sealed class BusinessDayRepository(BusinessDbContext context, IApplicationTransaction? coordinator = null) : IBusinessDayRepository
 {
-    public async Task<T> InBranchTransactionAsync<T>(Guid branchId, Func<Task<T>> action, CancellationToken ct)
+    public Task<T> InBranchTransactionAsync<T>(Guid branchId, Func<Task<T>> action, CancellationToken ct) =>
+        coordinator is null ? ExecuteLockedAsync(branchId, action, ct)
+            : coordinator.ExecuteAsync(() => ExecuteLockedAsync(branchId, action, ct), ct);
+
+    private async Task<T> ExecuteLockedAsync<T>(Guid branchId, Func<Task<T>> action, CancellationToken ct)
     {
-        await using var transaction = await context.Database.BeginTransactionAsync(ct);
+        await using var transaction = context.Database.CurrentTransaction is null ? await context.Database.BeginTransactionAsync(ct) : null;
         try
         {
             // Mismo espacio de claves para apertura, emisión, cierre y reapertura.
             await context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended({branchId.ToString()}, 530026))", ct);
             var result = await action();
-            await transaction.CommitAsync(ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
             return result;
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None);
+            if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
             context.ChangeTracker.Clear();
             throw;
         }

@@ -1,3 +1,4 @@
+using PirryLedger.Core.Contracts.Persistence;
 using Microsoft.EntityFrameworkCore;
 using PirryLedger.Business.Application.Exceptions;
 using PirryLedger.Business.Application.Ports;
@@ -9,10 +10,12 @@ namespace PirryLedger.Business.Infrastructure.Persistence;
 public sealed class DebtRepository : IDebtRepository
 {
     private readonly BusinessDbContext _context;
+    private readonly IApplicationTransaction? _coordinator;
 
-    public DebtRepository(BusinessDbContext context)
+    public DebtRepository(BusinessDbContext context, IApplicationTransaction? coordinator = null)
     {
         _context = context;
+        _coordinator = coordinator;
     }
 
     private IQueryable<Invoice> Query(Guid? branchId) => _context.Invoices
@@ -29,7 +32,12 @@ public sealed class DebtRepository : IDebtRepository
     public Task<Invoice?> FindAsync(Guid invoiceId, Guid? branchId, CancellationToken cancellationToken) =>
         Query(branchId).SingleOrDefaultAsync(invoice => invoice.Id == invoiceId, cancellationToken);
 
-    public async Task<T> InInvoiceTransactionAsync<T>(Guid invoiceId, Guid? branchId,
+    public Task<T> InInvoiceTransactionAsync<T>(Guid invoiceId, Guid? branchId,
+        Func<Invoice, Task<T>> action, CancellationToken cancellationToken) =>
+        _coordinator is null ? ExecuteLockedAsync(invoiceId, branchId, action, cancellationToken)
+            : _coordinator.ExecuteAsync(() => ExecuteLockedAsync(invoiceId, branchId, action, cancellationToken), cancellationToken);
+
+    private async Task<T> ExecuteLockedAsync<T>(Guid invoiceId, Guid? branchId,
         Func<Invoice, Task<T>> action, CancellationToken cancellationToken)
     {
         if (_context.ChangeTracker.HasChanges())
@@ -39,7 +47,7 @@ public sealed class DebtRepository : IDebtRepository
 
         // Leer estado actual bajo bloqueo, incluso si el contexto se reutilizó.
         _context.ChangeTracker.Clear();
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = _context.Database.CurrentTransaction is null ? await _context.Database.BeginTransactionAsync(cancellationToken) : null;
         try
         {
             var global = branchId is null;
@@ -56,12 +64,12 @@ public sealed class DebtRepository : IDebtRepository
                 ?? throw new InvoiceNotFoundException();
 
             var result = await action(invoice);
-            await transaction.CommitAsync(cancellationToken);
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
             return result;
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None);
+            if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
             _context.ChangeTracker.Clear();
             throw;
         }
