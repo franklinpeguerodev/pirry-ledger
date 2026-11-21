@@ -1,5 +1,70 @@
 # Bitácora — Práctica 5
 
+## 2026-11-21 — Cola acotada y consulta administrativa
+
+- Franklin confirmó aprobado PR 109; el agente verificó integración e6f4f08 en
+  develop y creó feature/email-queue-retries desde esa base limpia.
+- Se presentaron enviador único y coordinación por mensaje. Franklin eligió
+  alternativa 1 y autorizó ADR 031; el alcance es SMTP, no avisos internos.
+- Prueba real inicial falló: dos conexiones sin pooling Npgsql usaban el mismo
+  pg_backend_pid y ambas obtenían bloqueo de sesión. Se retiró el bloqueo de
+  diagnóstico y se comprobó cero residuales. No se ocultó el fallo ni se declaró
+  exclusión verificada. Franklin autorizó adaptar a bloqueo transaccional en
+  conexión exclusiva, sin escrituras de negocio, tabla o variables nuevas.
+- Adaptación real aprobada: primer enviador entra, segundo no entra, finalizar
+  libera para siguiente. Se verifica coordinación antes de nuevos reclamos.
+  La transacción de coordinación permanece durante SMTP, separada de las
+  escrituras de cola y sin bloquear facturación/sucursales.
+- Rojo de dominio: quinto fallo esperaba Failed y obtuvo Pending. Se implementó
+  límite cinco, Failed/Uncertain conservando ordinales, fechas UTC y error seguro.
+  Cada correo tiene un intento por ejecución, sin espera adicional. Inciertos
+  nunca se reenvían automáticamente; pérdida de coordinación aborta.
+- Reclamo individual durable y resultado guardado por mensaje; una interrupción
+  no reclama el resto del lote. Fallo al guardar aceptación conserva Processing
+  en PostgreSQL y la siguiente ejecución lo considera incierto.
+- Transporte distingue conexión/autenticación fallida o rechazo explícito de
+  pérdida de confirmación durante envío. Cerrar sesión fallando tras aceptación
+  no cambia el éxito. Textos controlados sin respuestas SMTP crudas ni trazas.
+- GET /api/notifications/email-queue: solo Administrador; filtros por estado,
+  creación UTC y paginación; metadata sin cuerpos/enlaces de acceso. Consulta
+  no modifica datos y filtra errores históricos desconocidos a mensaje genérico.
+- Se adaptaron dobles existentes al reclamo individual. La prueba previa de
+  fallo ahora usa EmailDeliveryException conocido; se conserva rechazo sin
+  cambios y se añade error desconocido -> Uncertain. SavedCount pasa de dos a
+  uno porque una ejecución sin mensajes ya no guarda un lote vacío.
+- HTTP usa consulta real EF en memoria; se agregó referencia de proyecto a
+  Notifications.Infrastructure en pruebas, sin paquetes nuevos. Primer build
+  detectó esa referencia faltante y luego setters faltantes del doble de alcance;
+  se corrigieron antes de verificar suite completa.
+- Migración 20261121055232_AddEmailQueueOutcomes generada con herramienta existente
+  y aplicada en PostgreSQL: fechas opcionales sin reconstruir historia; Pending
+  históricos con >=5 intentos quedan Failed. No se inspeccionó .env ni se
+  imprimieron valores; herramientas cargan configuración igual que el Host.
+- Agente ejecutó dotnet build pirry-ledger.slnx --no-restore -v q: 0 errores,
+  una advertencia NU1900 por consulta de vulnerabilidades restringida.
+  dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q:
+  632 aprobadas, 0 fallidas/omitidas: Notifications 62, AccessControl 171,
+  Billing 298, Permissions 54, Documents 40, Integration 7.
+- PostgreSQL con procesador/repositorio reales y esquema temporal: cinco fallos,
+  sexto reclamo rechazado, enviados/inciertos sin repetición, recuperación real
+  y fallo al guardar aceptación. Esquema/tablas/datos revertidos, sin procesar
+  mensajes existentes. SMTP local en loopback probó aceptación seguida de cierre,
+  rechazo explícito y pérdida de respuesta; sin entregas externas.
+- Comando real dotnet run --project Src/Host/PirryLedger.Host -- --send-mail:
+  ejecutado con bloqueo ocupado, informó enviador activo y terminó sin tomar
+  correos. El seed administrativo se deshabilitó en el proceso de prueba.
+  No se verificó recepción en buzón externo ni Docker (no disponible en PATH).
+- Revisión final detectó seguimiento de destinatario entre mensajes del mismo
+  comando. Se añadió lectura actual sin seguimiento al repositorio propio de
+  AccessControl y la consulta del directorio la utiliza. Prueba con dos contextos
+  desactiva al Administrador después de cargarlo. Mutación a lectura anterior
+  produjo Assert.Null fallido; se restauró y verificó. Referencia adicional a
+  AccessControl.Infrastructure solo en pruebas, sin paquetes ni consultas ajenas.
+- README, iteración, plan, máquina de estados y ADR reflejan comportamiento.
+  Recordatorios CLI y reportes siguen pendientes; desviación RF-NOT-06 se conserva.
+  Commits lógicos con migración/diseñador juntos; bitácora separada. Evidencia
+  ejecutada por agente, sin atribuir comandos a Franklin. Sin merge ni etiqueta.
+
 ## 2026-11-20 — Eventos, destinatarios activos y preferencias
 
 - Franklin autorizó alternativa 1 para ADR 030: clave estable en cada aviso,
