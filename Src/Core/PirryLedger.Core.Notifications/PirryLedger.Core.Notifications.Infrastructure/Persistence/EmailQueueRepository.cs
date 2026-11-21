@@ -14,35 +14,56 @@ internal sealed class EmailQueueRepository : IEmailQueueRepository
         _context = context;
     }
 
-    // RF-NOT-12. El reclamo es una sola sentencia: UPDATE con un subquery que
-    // pide filas con FOR UPDATE SKIP LOCKED. Si dos procesos ejecutan el emisor
-    // a la vez, el primero marca sus filas como Processing y el segundo, al
-    // mirar, ya no las ve como Pending. Por eso el segundo no puede duplicar
-    // ningun envio, y por eso el Status cambia en la base y no despues en
-    // memoria.
-    public async Task<IReadOnlyList<EmailQueueItem>> ClaimPendingAsync(int limit, CancellationToken cancellationToken = default)
+    // El lote es una selección; cada reclamo posterior verifica estado y límite
+    // en PostgreSQL. El bloqueo del procesador coordina recuperación y envíos.
+    public async Task<IReadOnlyList<EmailQueueItem>> ListPendingAsync(int limit, CancellationToken cancellationToken = default)
     {
-        if (_context.ChangeTracker.HasChanges())
-            throw new InvalidOperationException("El procesador debe iniciar sin cambios pendientes de otra operación.");
-        _context.ChangeTracker.Clear();
+        ResetTracking();
+        return await _context.EmailQueueItems.AsNoTracking()
+            .Where(email => email.Status == EmailStatus.Pending && email.Attempts < EmailQueueItem.MaximumAttempts)
+            .OrderBy(email => email.CreatedAtUtc).ThenBy(email => email.Id).Take(limit).ToListAsync(cancellationToken);
+    }
+
+    public async Task<EmailQueueItem?> ClaimAsync(Guid id, DateTime attemptedAtUtc, CancellationToken cancellationToken = default)
+    {
+        ResetTracking();
         var emails = await _context.EmailQueueItems
             .FromSqlInterpolated($$"""
                 UPDATE not_email_queue
                 SET status = {{(int)EmailStatus.Processing}},
-                    attempts = attempts + 1
-                WHERE id IN (
-                    SELECT id
-                    FROM not_email_queue
-                    WHERE status = {{(int)EmailStatus.Pending}}
-                    ORDER BY created_at_utc
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT {{limit}}
-                )
+                    attempts = attempts + 1,
+                    last_attempt_at_utc = {{attemptedAtUtc}},
+                    status_changed_at_utc = {{attemptedAtUtc}}
+                WHERE id = {{id}} AND status = {{(int)EmailStatus.Pending}}
+                    AND attempts < {{EmailQueueItem.MaximumAttempts}}
                 RETURNING *;
                 """)
             .ToListAsync(cancellationToken);
 
-        return emails;
+        return emails.SingleOrDefault();
+    }
+
+    public Task<int> RecoverInterruptedAsync(DateTime changedAtUtc, CancellationToken cancellationToken = default)
+    {
+        ResetTracking();
+        return _context.EmailQueueItems.Where(email => email.Status == EmailStatus.Processing)
+            .ExecuteUpdateAsync(update => update.SetProperty(email => email.Status, EmailStatus.Uncertain)
+                .SetProperty(email => email.LastError, EmailQueueErrors.Uncertain)
+                .SetProperty(email => email.StatusChangedAtUtc, changedAtUtc), cancellationToken);
+    }
+
+    public async Task CancelPendingNotificationAsync(Guid id, DateTime changedAtUtc, CancellationToken cancellationToken = default)
+    {
+        await _context.EmailQueueItems.Where(email => email.Id == id && email.Status == EmailStatus.Pending && email.NotificationId != null)
+            .ExecuteUpdateAsync(update => update.SetProperty(email => email.Status, EmailStatus.Cancelled)
+                .SetProperty(email => email.StatusChangedAtUtc, changedAtUtc), cancellationToken);
+    }
+
+    private void ResetTracking()
+    {
+        if (_context.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("El procesador debe iniciar sin cambios pendientes de otra operación.");
+        _context.ChangeTracker.Clear();
     }
 
     public Task SaveAsync(CancellationToken cancellationToken = default)
@@ -53,6 +74,6 @@ internal sealed class EmailQueueRepository : IEmailQueueRepository
     public async Task<int> CountPendingAsync(CancellationToken cancellationToken = default)
     {
         return await _context.EmailQueueItems
-            .CountAsync(email => email.Status == EmailStatus.Pending, cancellationToken);
+            .CountAsync(email => email.Status == EmailStatus.Pending && email.Attempts < EmailQueueItem.MaximumAttempts, cancellationToken);
     }
 }
