@@ -1,5 +1,6 @@
 using PirryLedger.Core.Notifications.Domain.Enums;
 using PirryLedger.Core.Contracts.Time;
+using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Notifications.Domain.Entities;
 
 namespace PirryLedger.Core.Notifications.Application;
@@ -17,15 +18,21 @@ public sealed class ProcessEmailQueue
     private readonly IEmailQueueRepository _repository;
     private readonly IEmailTransporter _transporter;
     private readonly IClock _clock;
+    private readonly INotificationRecipientDirectory? _directory;
+    private readonly INotificationDeliveryStore? _delivery;
 
     public ProcessEmailQueue(
         IEmailQueueRepository repository,
         IEmailTransporter transporter,
-        IClock clock)
+        IClock clock,
+        INotificationRecipientDirectory? directory = null,
+        INotificationDeliveryStore? delivery = null)
     {
         _repository = repository;
         _transporter = transporter;
         _clock = clock;
+        _directory = directory;
+        _delivery = delivery;
     }
 
     public async Task<ProcessingResult> ExecuteAsync(int batch = DefaultBatch, CancellationToken cancellationToken = default)
@@ -38,14 +45,28 @@ public sealed class ProcessEmailQueue
         var emails = await _repository.ClaimPendingAsync(batch, cancellationToken);
 
         var failures = new List<DeliveryFailure>();
+        var sent = 0;
 
         foreach (var email in emails)
         {
             try
             {
+                if (email.NotificationId is not null)
+                {
+                    if (_directory is null || _delivery is null || email.NotificationRecipientUserId is not { } recipientId)
+                        throw new InvalidOperationException("No se puede verificar el destinatario del correo notificable.");
+                    var recipient = await _directory.FindActiveAsync(recipientId, cancellationToken);
+                    if (recipient is not { IsAdministrator: true }
+                        || !await _delivery.EmailEnabledAsync(recipientId, cancellationToken))
+                    {
+                        email.CancelNotification();
+                        continue;
+                    }
+                }
                 await _transporter.SendAsync(email.Recipient, email.Subject, email.Body, cancellationToken);
 
                 email.MarkSent(_clock.UtcNow);
+                sent++;
             }
             catch (Exception exception)
             {
@@ -60,6 +81,6 @@ public sealed class ProcessEmailQueue
 
         await _repository.SaveAsync(cancellationToken);
 
-        return new ProcessingResult(emails.Count, emails.Count - failures.Count, failures);
+        return new ProcessingResult(emails.Count, sent, failures);
     }
 }
