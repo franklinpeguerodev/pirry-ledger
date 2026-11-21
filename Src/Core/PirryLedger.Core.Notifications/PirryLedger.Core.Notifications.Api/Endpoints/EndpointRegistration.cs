@@ -28,6 +28,18 @@ public static class EndpointRegistration
             CancellationToken cancellationToken) => RunAsync(async () =>
                 Results.Ok(new { marked = await inbox.MarkAllReadAsync(cancellationToken) })))
             .WithAccess(Operation.MarkAllNotificationsRead);
+        endpoints.MapGet("/api/notifications/email-preference", ([FromServices] ManageNotificationPreference preferences,
+            CancellationToken cancellationToken) => RunAsync(async () =>
+                Results.Ok(new { emailEnabled = await preferences.GetAsync(cancellationToken) })))
+            .WithAccess(Operation.GetNotificationEmailPreference);
+        endpoints.MapPut("/api/notifications/email-preference", (NotificationEmailPreferenceBody body,
+            [FromServices] ManageNotificationPreference preferences, CancellationToken cancellationToken) => RunAsync(async () =>
+            {
+                if (body.EmailEnabled is not { } enabled)
+                    return Results.BadRequest(new { message = "Debe indicar si desea habilitar el correo." });
+                await preferences.SetAsync(enabled, cancellationToken);
+                return Results.NoContent();
+            })).WithAccess(Operation.UpdateNotificationEmailPreference);
         return endpoints;
     }
 
@@ -42,5 +54,11 @@ public static class EndpointRegistration
         {
             return Results.Json(new { message = error.Message }, statusCode: StatusCodes.Status401Unauthorized);
         }
+        catch (NotificationPreferenceDeniedException error)
+        {
+            return Results.Json(new { message = error.Message }, statusCode: StatusCodes.Status403Forbidden);
+        }
     }
 }
+
+public sealed record NotificationEmailPreferenceBody(bool? EmailEnabled);

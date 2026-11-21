@@ -120,6 +120,8 @@ public enum Operation
     ListOwnNotifications,
     MarkNotificationRead,
     MarkAllNotificationsRead,
+    GetNotificationEmailPreference,
+    UpdateNotificationEmailPreference,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica
