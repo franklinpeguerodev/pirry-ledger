@@ -212,6 +212,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.GetDebtPaymentHistory)]
     [InlineData(Operation.GetNotificationEmailPreference)]
     [InlineData(Operation.UpdateNotificationEmailPreference)]
+    [InlineData(Operation.InspectEmailQueue)]
     [InlineData(Operation.ConfirmDebtTransfer)]
     [InlineData(Operation.RejectDebtTransfer)]
     [InlineData(Operation.ListInvoiceEdits)]

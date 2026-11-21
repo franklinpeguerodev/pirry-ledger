@@ -9,7 +9,7 @@ public sealed class NotificationRecipientDirectory(IUserRepository users) : INot
 {
     public async Task<NotificationRecipient?> FindActiveAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await users.FindByIdAsync(userId, cancellationToken);
+        var user = await users.FindCurrentByIdAsync(userId, cancellationToken);
         return user is { Active: true } ? From(user) : null;
     }
 

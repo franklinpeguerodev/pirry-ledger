@@ -119,6 +119,7 @@ public static class RoleRequirements
         [Operation.MarkAllNotificationsRead] = new(AccessLevel.AnySession),
         [Operation.GetNotificationEmailPreference] = new(AccessLevel.Administrator),
         [Operation.UpdateNotificationEmailPreference] = new(AccessLevel.Administrator),
+        [Operation.InspectEmailQueue] = new(AccessLevel.Administrator),
         [Operation.LeaveInvoiceAsDebt] = new(AccessLevel.Standard),
         [Operation.EditInvoiceItems] = new(AccessLevel.Standard),
         [Operation.MarkInvoiceAsNotDelivered] = new(AccessLevel.Standard),
