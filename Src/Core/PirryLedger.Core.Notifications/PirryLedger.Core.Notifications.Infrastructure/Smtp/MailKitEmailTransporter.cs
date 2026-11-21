@@ -21,10 +21,11 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
         if (!_configuration.IsConfigured)
         {
             throw new EmailDeliveryException(
-                "Faltan las variables de entorno del servidor de Email (RF-NOT-13). Revisa el README.");
+                EmailQueueErrors.Configuration);
         }
 
         using var client = new SmtpClient();
+        var submissionStarted = false;
 
         try
         {
@@ -48,27 +49,33 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
             message.Subject = subject;
             message.Body = new TextPart("plain") { Text = body };
 
+            submissionStarted = true;
             await client.SendAsync(message, cancellationToken);
         }
         catch (EmailDeliveryException)
         {
             throw;
         }
-        catch (OperationCanceledException)
+        catch (SmtpCommandException)
         {
-            throw;
+            throw new EmailDeliveryException(EmailQueueErrors.Rejected);
         }
-        catch (Exception exception)
+        catch (FormatException) when (!submissionStarted)
         {
-            throw new EmailDeliveryException(
-                $"No se pudo entregar el Email a {recipient} por {_configuration.Server}:{_configuration.Port}. {Mask(exception.Message)}",
-                new Exception(Mask(exception.ToString())));
+            throw new EmailDeliveryException(EmailQueueErrors.Configuration);
+        }
+        catch (Exception)
+        {
+            throw new EmailDeliveryException(submissionStarted ? EmailQueueErrors.Uncertain : EmailQueueErrors.Connection,
+                isUncertain: submissionStarted);
         }
         finally
         {
             if (client.IsConnected)
             {
-                await client.DisconnectAsync(true, CancellationToken.None);
+                // La aceptación de SendAsync no cambia si falla cerrar la sesión.
+                try { await client.DisconnectAsync(true, CancellationToken.None); }
+                catch (Exception) { }
             }
         }
     }
@@ -81,23 +88,4 @@ internal sealed class MailKitEmailTransporter : IEmailTransporter
         _ => SecureSocketOptions.StartTls,
     };
 
-    // RD-08: un error jamas debe filtrar credenciales. El User y la contrasena
-    // son valores de variables de entorno (RD-10), asi que si una libreria
-    // los repite en su message, ese message no puede guardarse ni mostrarse tal cual.
-    private string Mask(string text)
-    {
-        var result = text;
-
-        if (!string.IsNullOrWhiteSpace(_configuration.User))
-        {
-            result = result.Replace(_configuration.User, "[User SMTP]", StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (!string.IsNullOrWhiteSpace(_configuration.Password))
-        {
-            result = result.Replace(_configuration.Password, "[contrasena SMTP]", StringComparison.Ordinal);
-        }
-
-        return result;
-    }
 }

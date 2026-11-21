@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `031-single-email-queue-processor.md` (2026-11-21) — Single sender, bounded retries and uncertain delivery coordinated by an exclusive PostgreSQL transaction.
+
 - `030-notification-event-recipient-keys.md` (2026-11-20) — Stable event/recipient keys without an independent events table.
 
 - `029-explicit-cross-module-transactions.md` (2026-11-20) — Explicit PostgreSQL transaction coordination through module-owned participants.

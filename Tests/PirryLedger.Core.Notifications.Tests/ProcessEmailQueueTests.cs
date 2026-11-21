@@ -31,7 +31,7 @@ public sealed class ProcessEmailQueueTests
         Assert.Equal(EmailStatus.Sent, email.Status);
         Assert.Equal(1, email.Attempts);
         Assert.Equal(UtcNow, email.SentAtUtc);
-        Assert.Equal(2, repository.SavedCount);
+        Assert.Equal(1, repository.SavedCount);
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class ProcessEmailQueueTests
         var repository = new InMemoryRepository(email);
         var transporter = new InMemoryTransporter
         {
-            Error = new InvalidOperationException("SMTP no disponible.")
+            Error = new EmailDeliveryException(EmailQueueErrors.Connection)
         };
         var processor = CreateProcessor(repository, transporter);
 
@@ -51,7 +51,8 @@ public sealed class ProcessEmailQueueTests
         Assert.Equal(1, result.Pending);
         Assert.Equal(0, result.Sent);
         Assert.Equal("ana@example.com", failure.Recipient);
-        Assert.Equal("SMTP no disponible.", failure.Error);
+        Assert.Equal(EmailQueueErrors.Connection, failure.Error);
+        Assert.Equal(EmailQueueErrors.Connection, email.LastError);
         Assert.Equal(EmailStatus.Pending, email.Status);
         Assert.Equal(1, email.Attempts);
         Assert.Null(email.SentAtUtc);
@@ -73,7 +74,7 @@ public sealed class ProcessEmailQueueTests
     private static ProcessEmailQueue CreateProcessor(
         InMemoryRepository repository,
         InMemoryTransporter transporter) =>
-        new(repository, transporter, new FixedClock(UtcNow));
+        new(repository, transporter, new FixedClock(UtcNow), new BloqueoDeCola());
 
     private static EmailQueueItem CreateEmail() =>
         EmailQueueItem.Create(
@@ -82,45 +83,7 @@ public sealed class ProcessEmailQueueTests
             "Body",
             UtcNow.AddMinutes(-1));
 
-    private sealed class InMemoryRepository : IEmailQueueRepository
-    {
-        private readonly List<EmailQueueItem> _emails;
-
-        public InMemoryRepository(params EmailQueueItem[] emails)
-        {
-            _emails = [.. emails];
-        }
-
-        public int SavedCount { get; private set; }
-
-        public Task<IReadOnlyList<EmailQueueItem>> ClaimPendingAsync(
-            int limit,
-            CancellationToken cancellationToken = default)
-        {
-            var pending = _emails
-                .Where(email => email.Status == EmailStatus.Pending)
-                .Take(limit)
-                .ToList();
-
-            foreach (var email in pending)
-            {
-                email.Claim();
-            }
-
-            return Task.FromResult<IReadOnlyList<EmailQueueItem>>(pending);
-        }
-
-        public Task SaveAsync(CancellationToken cancellationToken = default)
-        {
-            SavedCount++;
-            return Task.CompletedTask;
-        }
-
-        public Task<int> CountPendingAsync(
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(_emails.Count(email =>
-                email.Status == EmailStatus.Pending));
-    }
+    private sealed class InMemoryRepository(params EmailQueueItem[] emails) : ColaDePrueba(emails);
 
     private sealed class InMemoryTransporter : IEmailTransporter
     {

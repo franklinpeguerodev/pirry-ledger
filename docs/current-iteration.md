@@ -35,11 +35,16 @@ Notification-center prerequisite integrated in develop (ADR 029, PR 107).
 Own inbox integrated in develop (PR 108):
 list without automatic reading, mark one/all with server-side ownership.
 Notification producers, active-recipient selection and administrator email preferences
-implemented in feature/notification-center, pending PR review (ADR 030).
+integrated in develop (ADR 030, PR 109).
 Billing and Permissions operations join the explicit common transaction; source
 operation, internal notice and linked mail commit or roll back together.
 Stable event/recipient keys prevent duplicate deliveries without an events table.
-Five-attempt queue, administrative inspection and temporal reminder CLI remain pending.
+Five-attempt queue and administrative inspection implemented in
+feature/email-queue-retries, pending PR review (ADR 031). Session-lock exclusion
+failed in the configured environment; Franklin authorized an exclusive coordination
+transaction, verified with concurrent connections. Interrupted and uncertain
+deliveries are not retried; safe metadata inspection is administrative only.
+Temporal reminder CLI remains pending.
 Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
 Identity/access rows were preserved and operational counts verified as zero.

@@ -15,6 +15,19 @@ public static class EndpointRegistration
 {
     public static IEndpointRouteBuilder MapNotifications(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapGet("/api/notifications/email-queue", (string? status, DateTime? fromUtc, DateTime? toUtc,
+            int? offset, int? limit, [FromServices] InspectEmailQueue inspection, CancellationToken cancellationToken) => RunAsync(async () =>
+            {
+                EmailStatus? selected = null;
+                if (status is not null)
+                {
+                    if (!Enum.TryParse<EmailStatus>(status, true, out var parsed) || !Enum.IsDefined(parsed))
+                        return Results.BadRequest(new { message = "El estado de correo indicado no existe." });
+                    selected = parsed;
+                }
+                return Results.Ok(await inspection.ExecuteAsync(new EmailQueueFilter(selected, fromUtc, toUtc,
+                    offset ?? 0, limit ?? 50), cancellationToken));
+            })).WithAccess(Operation.InspectEmailQueue);
         endpoints.MapGet("/api/notifications", ([FromServices] ManageNotificationInbox inbox, CancellationToken cancellationToken) =>
             RunAsync(async () => Results.Ok(await inbox.ListAsync(cancellationToken))))
             .WithAccess(Operation.ListOwnNotifications);
@@ -57,6 +70,14 @@ public static class EndpointRegistration
         catch (NotificationPreferenceDeniedException error)
         {
             return Results.Json(new { message = error.Message }, statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (EmailQueueInspectionDeniedException error)
+        {
+            return Results.Json(new { message = error.Message }, statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (ArgumentException)
+        {
+            return Results.BadRequest(new { message = "Los filtros de cola no son válidos; use fechas UTC ordenadas, offset no negativo y limit entre 1 y 100." });
         }
     }
 }

@@ -137,10 +137,26 @@ if (args.Any(argument => string.Equals(argument, SendMailCommand, StringComparis
     await using var scope = app.Services.CreateAsyncScope();
 
     var processor = scope.ServiceProvider.GetRequiredService<ProcessEmailQueue>();
-    var result = await processor.ExecuteAsync();
+    ProcessingResult result;
+    try { result = await processor.ExecuteAsync(); }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("No se pudo completar el procesamiento de correos. Consulte la cola; no se reenvían entregas inciertas automáticamente.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    if (result.AlreadyRunning)
+    {
+        Console.WriteLine("Ya hay un enviador de correos activo; esta ejecución no tomó mensajes.");
+        return;
+    }
 
     Console.WriteLine($"Correos tomados: {result.Pending}");
     Console.WriteLine($"Correos enviados: {result.Sent}");
+    Console.WriteLine($"Correos fallidos definitivos: {result.Failed}");
+    Console.WriteLine($"Correos con entrega incierta: {result.Uncertain}");
+    Console.WriteLine($"Correos cancelados: {result.Cancelled}");
 
     if (result.Failures.Count == 0)
     {
@@ -163,7 +179,7 @@ if (args.Any(argument => string.Equals(argument, SendMailCommand, StringComparis
     else if (result.Sent == 0)
     {
         Console.WriteLine(
-            "Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.");
+            "Consulte la cola: solo se reintentan pendientes con menos de cinco intentos; fallidos e inciertos no se reenvían.");
     }
     else
     {

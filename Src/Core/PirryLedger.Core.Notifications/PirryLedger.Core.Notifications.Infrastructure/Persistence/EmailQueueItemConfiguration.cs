@@ -57,6 +57,8 @@ internal sealed class EmailQueueItemConfiguration : IEntityTypeConfiguration<Ema
 
         builder.Property(email => email.LastError)
             .HasColumnName("last_error");
+        builder.Property(email => email.LastAttemptAtUtc).HasColumnName("last_attempt_at_utc");
+        builder.Property(email => email.StatusChangedAtUtc).HasColumnName("status_changed_at_utc");
 
         // El emisor filtra por Status y ordena por fecha de creacion.
         builder.HasIndex(email => new { email.Status, email.CreatedAtUtc })

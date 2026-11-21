@@ -1,5 +1,79 @@
 # Pirry Ledger
 
+## Cola de correos: cinco intentos y consulta — ADR 031
+
+RF-NOT-09/10/11/12: el comando independiente procesa hasta 50 correos del lote,
+con un intento por correo en cada ejecución. No agrega espera ni backoff; un
+fallo conocido vuelve a Pending y el quinto termina en Failed. No hay reenvío
+manual ni reintento de Failed, Sent, Cancelled o Uncertain.
+
+| Estado persistido | Significado |
+|---|---|
+| Pending (0) | Espera otro intento, con menos de cinco realizados |
+| Processing (1) | Se reclamó individualmente y aún no se guardó resultado |
+| Sent (2) | SMTP confirmó aceptación; no garantiza lectura ni llegada al buzón |
+| Cancelled (3) | Notificable retirado por preferencia o elegibilidad |
+| Failed (4) | Se agotaron los cinco intentos conocidos |
+| Uncertain (5) | No se pudo confirmar la entrega; no se reenvía automáticamente |
+
+Solo trabaja un enviador. Una segunda ejecución termina con aviso de que ya hay
+otro activo, sin reclamar mensajes. El bloqueo usa una transacción de coordinación
+en conexión exclusiva, verificada antes de nuevos reclamos. No escribe datos de
+negocio ni bloquea facturación, sucursales o avisos internos. La transacción se
+mantiene durante el comando, incluido SMTP; no se agrega tabla ni configuración.
+El bloqueo de sesión propuesto inicialmente falló en el entorno por reutilización
+de sesiones; Franklin autorizó la adaptación y su prueba real está en la bitácora.
+
+Al obtener el bloqueo, Processing dejados por ejecuciones interrumpidas pasan a
+Uncertain. Cada resultado se guarda antes de continuar con el siguiente correo.
+Si SMTP acepta pero guardar falla, el comando se interrumpe: la próxima ejecución
+no vuelve a enviar ese Processing. Fallar al desconectar después de aceptación
+no invalida Sent. Conexión/autenticación fallida o rechazo explícito permiten el
+reintento limitado; perder la respuesta durante el envío produce Uncertain.
+Si se pierde la conexión de coordinación, se aborta antes de nuevos reclamos.
+
+La preferencia, cuenta activa y rol se revisan antes del intento. La cuenta se
+consulta sin reutilizar entidades seguidas de envíos anteriores. Cancelar un
+pendiente por inelegibilidad no consume intento. Activación/recuperación mantienen
+su independencia de la preferencia, con el mismo límite y estados de entrega.
+
+GET /api/notifications/email-queue requiere Administrador y sesión válida.
+Estándar recibe 403; sin sesión, 401. No modifica la cola. Filtros opcionales:
+status (nombre de estado), fromUtc/toUtc (fecha de creación UTC, inclusivas),
+offset (desde cero) y limit (1–100, predeterminado 50). Fechas invertidas,
+estado desconocido o paginación inválida producen 400. Respuesta con items y total.
+Cada fila contiene id, recipient, subject, status, attempts, createdAtUtc,
+sentAtUtc, lastAttemptAtUtc, statusChangedAtUtc y lastError seguro. No expone
+cuerpos, enlaces/códigos de acceso, trazas ni respuestas SMTP crudas. Errores
+históricos desconocidos se muestran como mensaje genérico.
+
+Migración AddEmailQueueOutcomes: dos fechas UTC opcionales; no inventa fechas
+históricas. Pendientes históricos con cinco o más intentos quedan Failed y no
+se reclaman. Se conservan ordinales anteriores. Durante actualización no deben
+coexistir enviadores antiguos que desconocen el bloqueo, límite y estado incierto.
+No se agregan paquetes o variables. Recordatorios CLI y reportes siguen pendientes.
+
+Verificación ejecutada:
+
+```powershell
+dotnet build pirry-ledger.slnx --no-restore -v q
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+```
+
+Build: 0 errores, una advertencia NU1900 por consulta de vulnerabilidades sin
+acceso de red. Suite completa: 632 aprobadas, 0 fallidas/omitidas. Rojo inicial:
+se esperaba Failed tras el quinto fallo y se obtuvo Pending; regla corregida.
+Pruebas cubren límite, sexto intento rechazado, incertidumbre, exclusión, pérdida
+de coordinación, rechazo sin cambios, autorización HTTP, filtros y errores seguros.
+
+PostgreSQL: dos conexiones reales verificaron exclusión y liberación. Procesador
+y repositorio reales en esquema temporal verificaron resultados, recuperación y
+fallo al guardar aceptación, revirtiendo esquema y datos. SMTP de prueba local
+verificó aceptación seguida de desconexión, rechazo explícito y pérdida de respuesta.
+Sin entregas externas ni procesamiento de mensajes existentes. El comando real
+--send-mail se verificó con bloqueo ocupado: terminó sin tomar mensajes.
+No se verificó Docker en esta entrega: no está disponible en PATH.
+
 ## Eventos y preferencias de notificación — ADR 030
 
 Solicitudes de permiso y operaciones de facturación publican avisos al guardar.
@@ -75,8 +149,8 @@ retirados o revertidos, sin ejecutar SMTP ni inspeccionar .env.
 
 RF-NOT-06 conserva la desviación de negocio documentada en ADR 023/024:
 el correo selectivo no equivale a cumplimiento universal ni excepción académica.
-Cinco intentos, consulta administrativa de cola, tratamiento de envío incierto y
-recordatorios temporales siguen pendientes; esta sección no los declara terminados.
+Cinco intentos, consulta administrativa y tratamiento incierto están implementados
+como se describe arriba. Los recordatorios temporales siguen pendientes.
 
 ## Bandeja propia de notificaciones — RF-NOT-04, RF-NOT-05
 
@@ -1111,31 +1185,19 @@ y el resto de las operaciones del proyecto siguen respondiendo.
 
 ### Cómo enviar el email pendiente
 
-El enviador es un proceso aparte (RF-NOT-09): no manda emails dentro de la
-operación que los encola. Se lanza con un comando, no arranca solo:
+El enviador es un proceso aparte (RF-NOT-09). Puede ejecutarse con la API en
+marcha o detenida; mantiene el protocolo y los límites del ADR 031 descritos arriba.
 
 ```powershell
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Funciona en cualquier terminal, con la API detenida o en marcha, da igual.
-
-Imprime siempre un resumen y una línea final que depende del resultado. Sin
-credenciales SMTP válidas, un email pendiente produce esto:
-
-```
-Correos tomados: 1
-Correos enviados: 0
-Correos fallidos: 1
-  - ana@ejemplo.com: No se pudo entregar el email a ana@ejemplo.com por smtp.gmail.com:587. 534 5.7.9 Please log in with your web browser and then try again. ...
-Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
-```
-
-Son cuatro ramas distintas y solo una se cumple a la vez. Los correos que fallan
-vuelven a `Pending` con `attempts` incrementado: no se pierden. Sin email
-pendiente la cuarta línea es `No habia correos pendientes de enviar.`; si hubo
-envíos, es `Los correos enviados no se volveran a enviar aunque se ejecute el
-comando otra vez.`
+El resumen distingue tomados, enviados, fallos definitivos, inciertos y cancelados.
+Los errores conocidos muestran texto controlado. Solo Pending con menos de cinco
+intentos admite otra ejecución; inciertos nunca vuelven automáticamente a Pending.
+Si ya existe un enviador activo, el comando informa y termina sin tomar mensajes.
+Este último caso se comprobó con el comando real y un bloqueo ocupado, sin enviar
+correos existentes. La aceptación/rechazo SMTP se probó por separado en loopback.
 
 ### Paso opcional: SMTP real con Gmail
 
@@ -2144,26 +2206,10 @@ Después del envío, `status = 2` y `sent_at_utc` tiene valor.
 
 #### RF-NOT-12 — no se reenvía un email ya enviado
 
-Ejecuta el enviador dos veces seguidas con un email pendiente:
-
-```powershell
-dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
-dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
-```
-
-La primera ejecución envía; la segunda responde, con las cuatro líneas que el
-comando imprime siempre:
-
-```
-Correos tomados: 0
-Correos enviados: 0
-Correos fallidos: 0
-No habia correos pendientes de enviar.
-```
-
-Y el email sigue con `attempts = 1`: no se reclamó dos veces. Con dos emisores
-corriendo a la vez sobre tres emails pendientes, uno toma los tres y el otro
-toma cero.
+El procesador solo reclama Pending con menos de cinco intentos. Sent y Uncertain
+quedan fuera de toda nueva ejecución. Dos enviadores no toman trabajo al mismo
+tiempo: el segundo informa bloqueo ocupado. El resultado se verifica con pruebas
+y PostgreSQL como se documenta en la sección de cola del ADR 031.
 
 #### RF-NOT-13 — las credenciales vienen de variables de entorno
 
@@ -2177,20 +2223,13 @@ el entorno manda sobre el `.env` y el archivo se quedaría sin efecto.
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Con la contraseña sin definir, `SmtpConfiguration.EstaConfigurada` es `false` y
-el transporte se niega a enviar. El email sigue en la cola como pendiente y el
-proceso informa:
-
-```
-Correos tomados: 1
-Correos enviados: 0
-Correos fallidos: 1
-  - <recipient>: Faltan las variables de entorno del servidor de Email (RF-NOT-13). Revisa el README.
-Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
-```
-
-Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
-`[User SMTP]` y `[contrasena SMTP]` antes de mostrarse o guardarse.
+Con configuración incompleta, SmtpConfiguration.IsConfigured es false y el
+transporte registra un fallo conocido con mensaje controlado. No se imprimen
+usuario, contraseña, host, respuesta SMTP cruda ni traza. Al quinto fallo termina
+en Failed. La consulta administrativa nunca devuelve el cuerpo con enlaces de acceso.
+La prueba de configuración real incompleta sobre la cola operativa no se ejecutó
+en esta entrega, para no procesar correos existentes; el transporte local y los
+dobles prueban clasificación, persistencia y límite por separado.
 
 ### 3.6 Máquina de estados del negocio
 
@@ -3578,8 +3617,9 @@ recuperación, cambio autenticado o restablecimiento forzado.
 
 `not_email_queue` tiene las columnas que exige el diseño: `id`,
 `recipient`, `subject`, `body`, `status`, `attempts`, `created_at_utc`,
-`sent_at_utc` y `last_error`. `last_error` existe desde el principio pero
-todavía no se escribe: llega en la semana 11.
+`sent_at_utc` y `last_error`, además de los vínculos notificables y las fechas
+`last_attempt_at_utc` y `status_changed_at_utc`. Práctica 5 escribe error seguro,
+limita intentos y expone metadatos solo al Administrador (ADR 031).
 
 ### Qué NO incluye
 
@@ -3589,9 +3629,8 @@ todavía no se escribe: llega en la semana 11.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
   `docs/adr/001-session-credential.md`.
-- **Reintentos automáticos, estado fallido y escritura de `last_error`** en el
-  envío de email. Llega en la semana 11.
-- **Vista de administración de la cola.** Llega en la semana 11.
+- **Reenvío manual de fallidos o inciertos.** La cola de Práctica 5 permite
+  consultar esos estados, sin volver a enviar mensajes terminales.
 - **Registros de auditoría** de las operaciones administrativas (RF-CA-08, 13,
   20). Quedan para la semana 14; la protección de último Administrador active de
   RF-CA-20 es una regla de negocio de esta iteración, no un sustituto de la

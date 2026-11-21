@@ -44,5 +44,6 @@ Activation, password recovery and forced reset send emails. Since this practice,
 - SMTP credentials are read from environment variables (RF-NOT-13, RD-10). Any server works: a personal email account with an app password, or a test service.
 - The email is really received: at grading time the professor registers with their own email and opens the link.
 
-Retries, failed state, last error and admin consultation are now planned in
-Practice 5. This historical baseline does not describe them as implemented.
+Retries, failed/uncertain states, safe last error and admin consultation are
+implemented in Practice 5 (ADR 031). Temporal reminders remain pending.
+The historical baseline above does not describe these later extensions.

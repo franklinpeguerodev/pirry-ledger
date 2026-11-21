@@ -191,7 +191,20 @@ El historial solo se expone al Administrador. Véase ADR 027.
 
 Desactivar correo cancela únicamente pendientes vinculados a avisos de ese
 Administrador (Pending -> Cancelled). Antes de enviar, una cuenta inactiva,
-un cambio de rol o preferencia deshabilitada cancela también el reclamado
-(Processing -> Cancelled). Activación/recuperación no se vinculan a esos avisos.
-Esta ampliación no cambia las transiciones de factura; reintentos limitados y
-resultado incierto pertenecen a la siguiente entrega de cola.
+un cambio de rol o preferencia deshabilitada cancela el pendiente antes de
+reclamarlo (Pending -> Cancelled), sin consumir intento. Activación/recuperación
+no se vinculan a esos avisos.
+Esta ampliación no cambia las transiciones de factura. ADR 031 completa la cola:
+
+| Desde | Hacia | Condición |
+|---|---|---|
+| Pending | Processing | Reclamo persistido individual, menos de cinco intentos |
+| Processing | Sent | SMTP confirma aceptación y se guarda resultado |
+| Processing | Pending | Fallo conocido con menos de cinco intentos |
+| Processing | Failed | Quinto fallo conocido |
+| Processing | Uncertain | Resultado desconocido o procesamiento interrumpido |
+
+Sent, Cancelled, Failed y Uncertain no admiten otro reclamo. Solo el enviador
+que obtiene el bloqueo de coordinación recupera Processing anteriores como
+Uncertain. Un fallo al guardar aceptación interrumpe el comando y conserva el
+Processing persistido; no se convierte falsamente en un fallo reenviable.
