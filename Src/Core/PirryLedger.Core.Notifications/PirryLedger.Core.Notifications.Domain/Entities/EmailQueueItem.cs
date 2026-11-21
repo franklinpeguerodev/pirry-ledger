@@ -14,6 +14,7 @@ namespace PirryLedger.Core.Notifications.Domain.Entities;
 // duplicado de RF-NOT-12.
 public sealed class EmailQueueItem
 {
+    public const int MaximumAttempts = 5;
     private EmailQueueItem()
     {
     }
@@ -29,6 +30,7 @@ public sealed class EmailQueueItem
         CreatedAtUtc = createdAtUtc;
         SentAtUtc = null;
         LastError = null;
+        StatusChangedAtUtc = createdAtUtc;
     }
 
     public Guid Id { get; private set; }
@@ -48,6 +50,8 @@ public sealed class EmailQueueItem
     public DateTime? SentAtUtc { get; private set; }
 
     public string? LastError { get; private set; }
+    public DateTime? LastAttemptAtUtc { get; private set; }
+    public DateTime? StatusChangedAtUtc { get; private set; }
     public Guid? NotificationId { get; private set; }
     public Guid? NotificationRecipientUserId { get; private set; }
 
@@ -62,16 +66,19 @@ public sealed class EmailQueueItem
         return email;
     }
 
-    public void CancelNotification()
+    public void CancelNotification(DateTime? changedAtUtc = null)
     {
+        ValidateUtc(changedAtUtc);
         if (NotificationId is null || Status is not (EmailStatus.Pending or EmailStatus.Processing))
             throw new InvalidOperationException("Solo se puede cancelar un correo notificable pendiente.");
         Status = EmailStatus.Cancelled;
+        StatusChangedAtUtc = changedAtUtc;
     }
 
     // Una sola puerta de entrada: nada escribe la fila directamente.
     public static EmailQueueItem Create(string recipient, string subject, string body, DateTime createdAtUtc)
     {
+        ValidateUtc(createdAtUtc);
         if (string.IsNullOrWhiteSpace(recipient))
         {
             throw new ArgumentException("El destinatario es obligatorio.", nameof(recipient));
@@ -88,9 +95,10 @@ public sealed class EmailQueueItem
     // El emisor toma el Email. De Pending a Processing es el unico salto que
     // permite despues marcar Sent, asi que dos procesos que lean la cola a
     // la vez no pueden enviar el mismo Email.
-    public void Claim()
+    public void Claim(DateTime? startedAtUtc = null)
     {
-        if (Status != EmailStatus.Pending)
+        ValidateUtc(startedAtUtc);
+        if (Status != EmailStatus.Pending || Attempts >= MaximumAttempts)
         {
             throw new InvalidOperationException(
                 $"Solo un Email Pending se puede reclamar. Status actual: {Status}.");
@@ -98,10 +106,13 @@ public sealed class EmailQueueItem
 
         Status = EmailStatus.Processing;
         Attempts++;
+        LastAttemptAtUtc = startedAtUtc;
+        StatusChangedAtUtc = startedAtUtc;
     }
 
     public void MarkSent(DateTime utcNow)
     {
+        ValidateUtc(utcNow);
         if (Status != EmailStatus.Processing)
         {
             throw new InvalidOperationException(
@@ -110,19 +121,37 @@ public sealed class EmailQueueItem
 
         Status = EmailStatus.Sent;
         SentAtUtc = utcNow;
+        StatusChangedAtUtc = utcNow;
     }
 
-    // El transporte falla. El Email vuelve a Pending para que la proxima
-    // ejecucion del emisor lo intente otra vez. No hay reintento automatico:
-    // el emisor corre cuando alguien lo lanza.
-    public void Release()
+    // Un fallo conocido permite otro intento, salvo al agotar el máximo.
+    public void Release(string safeError = "No se pudo entregar el correo.", DateTime? changedAtUtc = null)
     {
+        ValidateUtc(changedAtUtc);
         if (Status != EmailStatus.Processing)
         {
             throw new InvalidOperationException(
                 $"Solo un Email Processing se puede Release. Status actual: {Status}.");
         }
 
-        Status = EmailStatus.Pending;
+        Status = Attempts >= MaximumAttempts ? EmailStatus.Failed : EmailStatus.Pending;
+        LastError = EmailQueueErrors.Safe(safeError);
+        StatusChangedAtUtc = changedAtUtc;
+    }
+
+    public void MarkUncertain(DateTime changedAtUtc)
+    {
+        ValidateUtc(changedAtUtc);
+        if (Status != EmailStatus.Processing)
+            throw new InvalidOperationException("Solo un correo en procesamiento puede quedar incierto.");
+        Status = EmailStatus.Uncertain;
+        LastError = EmailQueueErrors.Uncertain;
+        StatusChangedAtUtc = changedAtUtc;
+    }
+
+    private static void ValidateUtc(DateTime? value)
+    {
+        if (value is { Kind: not DateTimeKind.Utc })
+            throw new ArgumentException("Las fechas del correo deben estar en UTC.");
     }
 }
