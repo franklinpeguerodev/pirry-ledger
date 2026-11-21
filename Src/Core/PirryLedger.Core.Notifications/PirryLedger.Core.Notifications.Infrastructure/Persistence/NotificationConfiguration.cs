@@ -16,6 +16,8 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.Property(notification => notification.Body).HasColumnName("body").IsRequired();
         builder.Property(notification => notification.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(notification => notification.ReadAtUtc).HasColumnName("read_at_utc");
+        builder.Property(notification => notification.EventKey).HasColumnName("event_key").HasMaxLength(160);
+        builder.HasIndex(notification => new { notification.EventKey, notification.RecipientUserId }).IsUnique();
         builder.HasIndex(notification => new { notification.RecipientUserId, notification.CreatedAtUtc });
     }
 }

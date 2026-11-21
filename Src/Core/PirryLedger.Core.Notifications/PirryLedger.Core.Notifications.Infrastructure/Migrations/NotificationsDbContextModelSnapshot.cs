@@ -46,6 +46,14 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("last_error");
 
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_id");
+
+                    b.Property<Guid?>("NotificationRecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_recipient_user_id");
+
                     b.Property<string>("Recipient")
                         .IsRequired()
                         .HasMaxLength(320)
@@ -67,6 +75,9 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                         .HasColumnName("subject");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("NotificationId")
+                        .IsUnique();
 
                     b.HasIndex("Status", "CreatedAtUtc")
                         .HasDatabaseName("ix_not_email_queue_status_created_at");
@@ -90,6 +101,11 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<string>("EventKey")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("event_key");
+
                     b.Property<DateTime?>("ReadAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("read_at_utc");
@@ -106,9 +122,40 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EventKey", "RecipientUserId")
+                        .IsUnique();
+
                     b.HasIndex("RecipientUserId", "CreatedAtUtc");
 
                     b.ToTable("not_notifications", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.NotificationPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<bool>("EmailEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("email_enabled");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("not_notification_preferences", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.EmailQueueItem", b =>
+                {
+                    b.HasOne("PirryLedger.Core.Notifications.Domain.Entities.Notification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

@@ -41,6 +41,9 @@ public static class DependencyInjection
         services.AddScoped<ProcessEmailQueue>();
         services.AddScoped<INotificationInboxRepository, NotificationInboxRepository>();
         services.AddScoped<ManageNotificationInbox>();
+        services.AddScoped<INotificationDeliveryStore, NotificationDeliveryStore>();
+        services.AddScoped<INotificationPublisher, PublishNotification>();
+        services.AddScoped<ManageNotificationPreference>();
 
         return services;
     }
