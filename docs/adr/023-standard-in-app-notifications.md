@@ -1,6 +1,6 @@
 # ADR 023 - Standard in-app notifications
 
-- **Estado:** aceptada por Franklin; bandeja implementada, productores de eventos pendientes.
+- **Estado:** aceptada por Franklin; bandeja y productores de eventos implementados.
 - **Fecha:** 2026-11-19
 - **Requisitos:** RF-NOT-02, RF-NOT-04, RF-NOT-06, RF-NOT-07
 - **Decide:** Franklin. **Redacta:** el agente.
@@ -33,5 +33,7 @@ por el profesor ni a cumplimiento íntegro de esos criterios académicos.
 Notification conserva destinatario, contenido y fechas UTC. Consulta y marcado
 se restringen al usuario autenticado en servidor. Consultar no marca; las
 acciones individual/general conservan primera fecha de lectura. No se expone
-eliminación ni creación arbitraria por API. La persistencia de esta bandeja no
-significa que ya estén conectados los productores o la selección de usuarios activos.
+eliminación ni creación arbitraria por API. La persistencia de esta bandeja
+se complementa con productores y selección de cuentas activas mediante contratos
+propios de AccessControl (ADR 030). Las resoluciones al Estándar son internas;
+la política no modifica los correos de activación o recuperación.

@@ -29,13 +29,17 @@ contract. Dedicated undelivered recovery and shared sales calculations are
 integrated in develop (ADR 028, PR 106).
 Only the Standard issuer recovers, retaining the original invoice/day and
 leaving saved closings unchanged. Pending cancellation exclusions and resolution
-are covered across Billing and Permissions. Notifications and reports remain
-in subsequent features. No closing revision history is implemented.
+are covered across Billing and Permissions. Reports remain in subsequent
+features; notification delivery status follows below. No closing revision history is implemented.
 Notification-center prerequisite integrated in develop (ADR 029, PR 107).
-Own inbox implemented in feature/notification-inbox, pending PR review:
+Own inbox integrated in develop (PR 108):
 list without automatic reading, mark one/all with server-side ownership.
-Notification producers, active-recipient selection and preferences remain pending;
-existing explicit transaction flows must be adapted before wrapping those operations.
+Notification producers, active-recipient selection and administrator email preferences
+implemented in feature/notification-center, pending PR review (ADR 030).
+Billing and Permissions operations join the explicit common transaction; source
+operation, internal notice and linked mail commit or roll back together.
+Stable event/recipient keys prevent duplicate deliveries without an events table.
+Five-attempt queue, administrative inspection and temporal reminder CLI remain pending.
 Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
 Identity/access rows were preserved and operational counts verified as zero.

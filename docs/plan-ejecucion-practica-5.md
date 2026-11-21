@@ -5,9 +5,9 @@ Autorizado comenzar el 2026-11-19. Reglas completas en
 Estado: preparación, limpieza, propiedad, jornadas y abonos integrados.
 Ajustes de ventas y recuperación explícita integrados mediante PR 106.
 El bloque 6 se entrega por responsabilidades: base transaccional integrada
-`feature/cross-module-transactions` (ADR 029), bandeja propia en
-`feature/notification-inbox` y luego eventos/preferencias en `feature/notification-center`.
-Ni la base ni la bandeja aislada constituyen entrega de eventos automáticos.
+`feature/cross-module-transactions` (ADR 029) y `feature/notification-inbox`
+integradas; eventos y preferencias implementados en `feature/notification-center`,
+pendientes de revisión del PR (ADR 030). Cola ampliada y recordatorios CLI pendientes.
 Los bloques posteriores conservan el orden y alcance de este plan.
 
 ## Git y dependencias
