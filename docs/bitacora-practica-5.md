@@ -1,5 +1,52 @@
 # Bitácora — Práctica 5
 
+## 2026-11-20 — Eventos, destinatarios activos y preferencias
+
+- Franklin autorizó alternativa 1 para ADR 030: clave estable en cada aviso,
+  índice único evento/destinatario y correo vinculado único, sin tabla de eventos.
+  Se continúa feature/notification-center desde develop con PR 108 integrado.
+- Activo significa cuenta habilitada, sin exigir sesión abierta. AccessControl
+  publica destinatarios por contrato; Notifications centraliza audiencia/canal.
+  Estándar recibe interno; Administrador configura correo propio, habilitado
+  inicialmente. Desactivar cancela pendientes notificables y no activación/recuperación.
+  Se revalidan cuenta, rol y preferencia antes de SMTP.
+- Se conectaron solicitudes/resoluciones de permisos, transferencias, fiado,
+  abonos y cada cierre. Resolución de abono avisa al registrador, incluso si es
+  Administrador, solo internamente. Sucursal queda conservada en solicitud.
+- Operación, avisos y correo comparten coordinador explícito. Jornadas/abonos
+  conservan bloqueos aprobados; resolver permiso lee bajo bloqueo de fila y
+  recarga estado aunque el contexto hubiera consultado antes. Recuperación de
+  contraseña conserva emisión posterior a aprobación según ADR 014.
+- Rechazo de transferencia de venta exige motivo en API, aplicación y dominio;
+  tres llamadas existentes de pruebas incluyen ahora el motivo, sin debilitar
+  sus aserciones. Se verifica rechazo sin motivo sin cambiar estado/pagos.
+- Migraciones generadas con herramientas existentes: 20261121021247
+  AddNotificationDeliveryPolicy, 20261121021256 AddPermissionRequestBranch y
+  20261121021304 AddBusinessDayClosingEvent. Fecha UTC corresponde a madrugada
+  del 21; fecha local de trabajo es 20. Aplicadas en PostgreSQL sin reconstruir
+  datos históricos ni agregar FK entre módulos o paquetes.
+- Mutación de clave estable por Guid aleatorio produjo rojo esperado: dos
+  destinatarios esperados, cuatro obtenidos. Código restaurado antes de suite.
+- Agente ejecutó dotnet build pirry-ledger.slnx --no-restore -v q:
+  0 errores, una advertencia NU1900 por consulta de vulnerabilidades bloqueada.
+  dotnet test pirry-ledger.slnx --configuration Release --no-restore -v minimal:
+  612 aprobadas, 0 fallidas/omitidas (Billing 296, AccessControl 170,
+  Notifications 45, Permissions 54, Documents 40, Integration 7).
+- Prueba PostgreSQL con DI de producción: matriz, preferencias, cancelación,
+  branch de solicitud, cierres distintos, reversión de cobro/pagos por fallo de
+  aviso, dos publicaciones simultáneas sin duplicados y bloqueo de resolución.
+  Datos temporales revertidos o retirados; sin SMTP, sin inspección de .env
+  ni impresión de secretos. La herramienta carga configuración igual que el Host.
+- No se comprobó recepción SMTP real ni composición Docker en esta entrega;
+  docker no está disponible en PATH. Cola ampliada, cinco intentos, consulta
+  administrativa, envío incierto, recordatorios CLI y reportes siguen pendientes.
+  RF-NOT-06 conserva desviación explícita ADR 023/024, sin excepción académica.
+- Commits por contratos, persistencia, política, productores, API y documentos;
+  migraciones con diseñador/snapshot y pruebas completas son unidades coherentes
+  que pueden superar 200 líneas según autorización de Franklin. Bitácora separada.
+- Franklin revisó alternativas y autorizó ejecución; no se le atribuye correr
+  los comandos anteriores. PR sujeto a su revisión; sin merge ni etiqueta.
+
 ## 2026-11-20 — Bandeja propia de notificaciones
 
 - Franklin pidió continuar. Se verificó merge 0d183d2 del PR 107 y se inició
