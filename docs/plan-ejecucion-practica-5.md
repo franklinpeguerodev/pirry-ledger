@@ -6,8 +6,11 @@ Estado: preparación, limpieza, propiedad, jornadas y abonos integrados.
 Ajustes de ventas y recuperación explícita integrados mediante PR 106.
 El bloque 6 se entrega por responsabilidades: base transaccional integrada
 `feature/cross-module-transactions` (ADR 029) y `feature/notification-inbox`
-integradas; eventos y preferencias implementados en `feature/notification-center`,
-pendientes de revisión del PR (ADR 030). Cola ampliada y recordatorios CLI pendientes.
+integradas; eventos y preferencias integrados mediante PR 109 (ADR 030).
+Cola ampliada implementada en `feature/email-queue-retries`, pendiente de PR:
+cinco intentos, consulta y tratamiento incierto (ADR 031). Tras fallo de exclusión
+por sesión, Franklin autorizó bloqueo transaccional exclusivo, verificado.
+Recordatorios CLI pendientes.
 Los bloques posteriores conservan el orden y alcance de este plan.
 
 ## Git y dependencias

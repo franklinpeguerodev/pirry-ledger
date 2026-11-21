@@ -51,7 +51,8 @@ public sealed class NotificationDeliveryStore(NotificationsDbContext context, IC
         if (!enabled)
             await context.EmailQueueItems.Where(email => email.NotificationRecipientUserId == userId
                 && email.NotificationId != null && email.Status == EmailStatus.Pending)
-                .ExecuteUpdateAsync(update => update.SetProperty(email => email.Status, EmailStatus.Cancelled), cancellationToken);
+                .ExecuteUpdateAsync(update => update.SetProperty(email => email.Status, EmailStatus.Cancelled)
+                    .SetProperty(email => email.StatusChangedAtUtc, changedAtUtc), cancellationToken);
     }
 
     private async Task LockRecipientAsync(Guid userId, CancellationToken cancellationToken)

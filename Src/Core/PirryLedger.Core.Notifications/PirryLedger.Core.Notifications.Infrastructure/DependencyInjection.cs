@@ -37,6 +37,9 @@ public static class DependencyInjection
         services.AddSingleton(smtp);
         services.AddSingleton<IEmailTransporter, MailKitEmailTransporter>();
         services.AddScoped<IEmailQueueRepository, EmailQueueRepository>();
+        services.AddScoped<IEmailQueueProcessingLock>(_ => new PostgresEmailQueueProcessingLock(connectionString));
+        services.AddScoped<IEmailQueueInspection, EmailQueueInspection>();
+        services.AddScoped<InspectEmailQueue>();
         services.AddScoped<IEmailQueue, EmailQueue>();
         services.AddScoped<ProcessEmailQueue>();
         services.AddScoped<INotificationInboxRepository, NotificationInboxRepository>();
