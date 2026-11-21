@@ -10,7 +10,7 @@ namespace PirryLedger.Core.Permissions.Infrastructure.Persistence;
 // per_*. El vinculo entre modulos ocurre por Interfaces en
 // PirryLedger.Core.Contracts (IPermissionAuthority, IUserRepository), no por
 // relaciones directas entre tablas (RD-01).
-public sealed class PermissionsDbContext : DbContext
+public sealed partial class PermissionsDbContext : DbContext
 {
     public PermissionsDbContext(DbContextOptions<PermissionsDbContext> options)
         : base(options)

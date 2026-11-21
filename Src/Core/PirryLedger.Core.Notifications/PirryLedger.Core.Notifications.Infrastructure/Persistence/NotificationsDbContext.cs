@@ -11,7 +11,7 @@ namespace PirryLedger.Core.Notifications.Infrastructure;
 //
 // El context se registra aqui y no en el Host, que solo llama a
 // AddNotifications (RD-01).
-public sealed class NotificationsDbContext : DbContext
+public sealed partial class NotificationsDbContext : DbContext
 {
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options)
         : base(options)

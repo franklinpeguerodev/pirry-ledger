@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `029-explicit-cross-module-transactions.md` (2026-11-20) — Explicit PostgreSQL transaction coordination through module-owned participants.
+
 - `028-explicit-undelivered-invoice-recovery.md` (2026-11-20) — Dedicated recovery operation and original-day sales adjustments.
 
 - `027-branch-debt-payments.md` (2026-11-20) — Branch-scoped debt access, row-locked payments and administrative history.

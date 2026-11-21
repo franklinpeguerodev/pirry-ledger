@@ -3,7 +3,10 @@
 Autorizado comenzar el 2026-11-19. Reglas completas en
 `reglas-operativas-practica-5.md`; criterios en `criterios-notificaciones-reportes.md`.
 Estado: preparación, limpieza, propiedad, jornadas y abonos integrados.
-Ajustes de ventas y recuperación explícita implementados, pendientes de revisión del PR.
+Ajustes de ventas y recuperación explícita integrados mediante PR 106.
+El bloque 6 se entrega en dos PR dependientes: base transaccional
+`feature/cross-module-transactions` (ADR 029) y luego `feature/notification-center`.
+La base transaccional no constituye entrega de la bandeja ni de eventos.
 Los bloques posteriores conservan el orden y alcance de este plan.
 
 ## Git y dependencias
