@@ -39,6 +39,8 @@ public static class DependencyInjection
         services.AddScoped<IEmailQueueRepository, EmailQueueRepository>();
         services.AddScoped<IEmailQueue, EmailQueue>();
         services.AddScoped<ProcessEmailQueue>();
+        services.AddScoped<INotificationInboxRepository, NotificationInboxRepository>();
+        services.AddScoped<ManageNotificationInbox>();
 
         return services;
     }
