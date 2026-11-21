@@ -1,3 +1,5 @@
+using PirryLedger.Core.Contracts.Notifications;
+using PirryLedger.Core.Contracts.Persistence;
 using System.Transactions;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Auth;
@@ -22,6 +24,9 @@ namespace PirryLedger.Core.Permissions.Application.UseCases;
 // como exige current-iteration.md punto 2.
 public sealed class ApprovePermissionRequest
 {
+    private readonly INotificationPublisher? _notifications;
+    private readonly IApplicationTransaction? _transaction;
+
     private readonly IPermissionRequestRepository _requests;
     private readonly IPermissionGrantRepository _grants;
     private readonly Authenticate _authenticate;
@@ -35,17 +40,40 @@ public sealed class ApprovePermissionRequest
         Authenticate authenticate,
         IPasswordResetIssuer passwordResetIssuer,
         IClock clock,
-        IApprovedInvoiceCancellation? invoiceCancellation = null)
+        IApprovedInvoiceCancellation? invoiceCancellation = null,
+        INotificationPublisher? notifications = null, IApplicationTransaction? transaction = null)
     {
         _requests = requests;
         _grants = grants;
         _authenticate = authenticate;
         _passwordResetIssuer = passwordResetIssuer;
         _clock = clock;
+        _notifications = notifications;
+        _transaction = transaction;
         _invoiceCancellation = invoiceCancellation;
     }
 
     public async Task ExecuteAsync(
+        string plainToken,
+        Guid requestId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_transaction is null)
+        {
+            await ExecuteCoreAsync(plainToken, requestId, cancellationToken);
+            return;
+        }
+        var resolved = await _transaction.ExecuteAsync(async () =>
+        {
+            await ExecuteCoreAsync(plainToken, requestId, cancellationToken);
+            return await _requests.FindByIdAsync(requestId, cancellationToken);
+        }, cancellationToken);
+        // ADR 014: emisión de recuperación conserva su flujo posterior a aprobación.
+        if (resolved?.RequestedPermission == PermissionNames.ResetPassword)
+            await _passwordResetIssuer.IssueAsync(resolved.RequesterId, cancellationToken);
+    }
+
+    private async Task ExecuteCoreAsync(
         string plainToken,
         Guid requestId,
         CancellationToken cancellationToken = default)
@@ -58,7 +86,7 @@ public sealed class ApprovePermissionRequest
             RoleRequirements.RequiredRole(Operation.ApprovePermissionRequest),
             cancellationToken);
 
-        using var transaction = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+        using var transaction = _transaction is null ? new TransactionScope(TransactionScopeAsyncFlowOption.Enabled) : null;
         var request = await _requests.FindByIdAsync(requestId, cancellationToken);
 
         if (request is null)
@@ -95,11 +123,14 @@ public sealed class ApprovePermissionRequest
             request.Approve(caller.Id, now);
             request.MarkApplied(now);
             await _requests.SaveAsync(request, cancellationToken);
-            transaction.Complete();
+            if (_notifications is not null)
+                await _notifications.PublishAsync(new NotificationEvent(NotificationEventKind.PermissionApproved, request.Id,
+                    $"Su solicitud de {request.RequestedPermission} fue aprobada.", request.RequesterId, request.BranchId), cancellationToken);
+            transaction?.Complete();
             return;
         }
 
-        transaction.Dispose();
+        transaction?.Dispose();
 
         // RF-GP-03: aprobar registra aprobador e instante UTC.
         request.Approve(caller.Id, now);
@@ -121,6 +152,9 @@ public sealed class ApprovePermissionRequest
 
         await _grants.SaveAsync(grant, cancellationToken);
         await _requests.SaveAsync(request, cancellationToken);
+        if (_notifications is not null)
+            await _notifications.PublishAsync(new NotificationEvent(NotificationEventKind.PermissionApproved, request.Id,
+                $"Su solicitud de {request.RequestedPermission} fue aprobada.", request.RequesterId, request.BranchId), cancellationToken);
 
         // ADR 014: aprobar un ResetPassword es lo que dispara el codigo de
         // recuperacion. Hasta aqui no se emitio nada, asi que "codigo valido"
@@ -129,7 +163,7 @@ public sealed class ApprovePermissionRequest
         // Va despues de guardar la concesion a proposito: si el envio falla, la
         // concesion ya existe y el Administrador puede reintentar con
         // force-reset (ADR 014, consecuencias).
-        if (request.RequestedPermission == PermissionNames.ResetPassword)
+        if (_transaction is null && request.RequestedPermission == PermissionNames.ResetPassword)
         {
             await _passwordResetIssuer.IssueAsync(request.RequesterId, cancellationToken);
         }

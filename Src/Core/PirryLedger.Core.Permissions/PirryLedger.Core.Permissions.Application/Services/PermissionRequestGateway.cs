@@ -1,3 +1,5 @@
+using PirryLedger.Core.Contracts.Notifications;
+using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.Contracts.Permissions;
 using PirryLedger.Core.Contracts.Time;
 using PirryLedger.Core.Permissions.Application.Ports;
@@ -12,6 +14,10 @@ namespace PirryLedger.Core.Permissions.Application.Services;
 // programacion del llamante, no una peticion HTTP, por eso ArgumentException.
 public sealed class PermissionRequestGateway : IPermissionRequestGateway
 {
+    private readonly INotificationPublisher? _notifications;
+    private readonly IApplicationTransaction? _transaction;
+    private readonly INotificationRecipientDirectory? _directory;
+
     private readonly IPermissionRequestRepository _requests;
     private readonly IPermissionAuthority _permissions;
     private readonly IClock _clock;
@@ -19,14 +25,24 @@ public sealed class PermissionRequestGateway : IPermissionRequestGateway
     public PermissionRequestGateway(
         IPermissionRequestRepository requests,
         IPermissionAuthority permissions,
-        IClock clock)
+        IClock clock,
+        INotificationPublisher? notifications = null, IApplicationTransaction? transaction = null, INotificationRecipientDirectory? directory = null)
     {
         _requests = requests;
         _permissions = permissions;
         _clock = clock;
+        _notifications = notifications;
+        _transaction = transaction;
+        _directory = directory;
     }
 
-    public async Task<PermissionRequestOutcome> RequestAsync(
+    public Task<PermissionRequestOutcome> RequestAsync(
+        Guid requesterId,
+        string permissionName,
+        CancellationToken cancellationToken = default) =>
+        _transaction is null ? RequestCoreAsync(requesterId, permissionName, cancellationToken) : _transaction.ExecuteAsync(() => RequestCoreAsync(requesterId, permissionName, cancellationToken), cancellationToken);
+
+    private async Task<PermissionRequestOutcome> RequestCoreAsync(
         Guid requesterId,
         string permissionName,
         CancellationToken cancellationToken = default)
@@ -57,12 +73,19 @@ public sealed class PermissionRequestGateway : IPermissionRequestGateway
             return PermissionRequestOutcome.AlreadyPending;
         }
 
+        var requester = _directory is null ? null : await _directory.FindActiveAsync(requesterId, cancellationToken);
+        if (_directory is not null && requester is null)
+            throw new ArgumentException("El solicitante no está activo.", nameof(requesterId));
+
         var request = PermissionRequest.Create(
             requesterId,
             permissionName,
-            _clock.UtcNow);
+            _clock.UtcNow, requester?.BranchId);
 
         await _requests.SaveAsync(request, cancellationToken);
+        if (_notifications is not null)
+            await _notifications.PublishAsync(new NotificationEvent(NotificationEventKind.PermissionRequested, request.Id,
+                $"{requester?.Name ?? "Usuario"} solicitó {request.RequestedPermission}. Sucursal: {request.BranchId}.", request.RequesterId, request.BranchId), cancellationToken);
 
         return PermissionRequestOutcome.Created;
     }
