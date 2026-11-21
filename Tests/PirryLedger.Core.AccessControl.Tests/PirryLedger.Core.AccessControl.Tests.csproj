@@ -49,4 +49,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Api\PirryLedger.Core.Notifications.Api.csproj" />
+  </ItemGroup>
 </Project>

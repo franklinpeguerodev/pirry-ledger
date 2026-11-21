@@ -114,6 +114,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
         _app.UseMiddleware<RequestRateLimitMiddleware>();
 
         _app.MapBusiness();
+        PirryLedger.Core.Notifications.Api.EndpointRegistration.MapNotifications(_app);
 
         _app.StartAsync().GetAwaiter().GetResult();
 

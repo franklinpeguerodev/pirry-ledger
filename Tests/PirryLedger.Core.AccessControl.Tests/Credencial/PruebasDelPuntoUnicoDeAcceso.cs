@@ -107,6 +107,7 @@ public class PruebasDelPuntoUnicoDeAcceso
         app.MapPermissions();
         app.MapBusiness();
         app.MapDocuments();
+        PirryLedger.Core.Notifications.Api.EndpointRegistration.MapNotifications(app);
 
         return ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(fuente => fuente.Endpoints)
@@ -222,6 +223,9 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.RegisterDebtPayment)]
     [InlineData(Operation.ListDebts)]
     [InlineData(Operation.GetDebt)]
+    [InlineData(Operation.ListOwnNotifications)]
+    [InlineData(Operation.MarkNotificationRead)]
+    [InlineData(Operation.MarkAllNotificationsRead)]
     public void LasConsultasYLosAbonosDeDeudaAdmitenSesionValida(Operation operation)
     {
         Assert.Equal(AccessLevel.AnySession, RoleRequirements.RequiredLevel(operation));
