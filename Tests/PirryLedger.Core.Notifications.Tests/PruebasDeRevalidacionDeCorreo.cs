@@ -19,13 +19,14 @@ public sealed class PruebasDeRevalidacionDeCorreo
         var user = Guid.NewGuid();
         var email = EmailQueueItem.ForNotification(Guid.NewGuid(), user, "prueba@ejemplo.com", "Aviso", "Contenido", Ahora);
         var transport = new Transporte();
-        var processor = new ProcessEmailQueue(new Cola(email), transport, new Reloj(),
+        var processor = new ProcessEmailQueue(new Cola(email), transport, new Reloj(), new BloqueoDeCola(),
             new Directorio(active ? new NotificationRecipient(user, email.Recipient, admin, null) : null), new Almacen(enabled));
 
         var result = await processor.ExecuteAsync();
 
         Assert.Equal(EmailStatus.Cancelled, email.Status);
         Assert.Equal(0, transport.Calls);
+        Assert.Equal(0, email.Attempts);
         Assert.Equal(0, result.Sent);
         Assert.Null(email.SentAtUtc);
     }
@@ -35,7 +36,7 @@ public sealed class PruebasDeRevalidacionDeCorreo
     {
         var email = EmailQueueItem.Create("prueba@ejemplo.com", "Activación", "Contenido", Ahora);
         var transport = new Transporte();
-        var processor = new ProcessEmailQueue(new Cola(email), transport, new Reloj(), new Directorio(null), new Almacen(false));
+        var processor = new ProcessEmailQueue(new Cola(email), transport, new Reloj(), new BloqueoDeCola(), new Directorio(null), new Almacen(false));
 
         var result = await processor.ExecuteAsync();
 
@@ -44,17 +45,8 @@ public sealed class PruebasDeRevalidacionDeCorreo
         Assert.Equal(1, result.Sent);
     }
 
-    private sealed class Cola(EmailQueueItem email) : IEmailQueueRepository
-    {
-        public Task<IReadOnlyList<EmailQueueItem>> ClaimPendingAsync(int limit, CancellationToken cancellationToken = default)
-        {
-            if (email.Status != EmailStatus.Pending) return Task.FromResult<IReadOnlyList<EmailQueueItem>>([]);
-            email.Claim();
-            return Task.FromResult<IReadOnlyList<EmailQueueItem>>([email]);
-        }
-        public Task SaveAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<int> CountPendingAsync(CancellationToken cancellationToken = default) => Task.FromResult(email.Status == EmailStatus.Pending ? 1 : 0);
-    }
+    private sealed class Cola(EmailQueueItem email) : ColaDePrueba(email);
+
     private sealed class Transporte : IEmailTransporter
     {
         public int Calls { get; private set; }

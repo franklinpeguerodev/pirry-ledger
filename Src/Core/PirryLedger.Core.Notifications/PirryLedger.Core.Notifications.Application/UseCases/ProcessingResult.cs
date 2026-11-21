@@ -11,7 +11,11 @@ public sealed record DeliveryFailure(string Recipient, string Error);
 public sealed record ProcessingResult(
     int Pending,
     int Sent,
-    IReadOnlyList<DeliveryFailure> Failures)
+    IReadOnlyList<DeliveryFailure> Failures,
+    int Uncertain = 0,
+    int Failed = 0,
+    int Cancelled = 0,
+    bool AlreadyRunning = false)
 {
     public int Total => Pending;
 }
