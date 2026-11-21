@@ -1,5 +1,39 @@
 # Pirry Ledger
 
+## Bandeja propia de notificaciones — RF-NOT-04, RF-NOT-05
+
+Administrador y Estándar consultan exclusivamente sus avisos con sesión válida.
+El destinatario se obtiene de la sesión; no se acepta un usuario desde la petición.
+
+| Método y ruta | Comportamiento |
+|---|---|
+| GET /api/notifications | Avisos propios, más recientes primero; consultar no marca como visto |
+| POST /api/notifications/{id}/read | Marca un aviso propio; devuelve 204 |
+| POST /api/notifications/read-all | Marca los propios pendientes; devuelve 200 con marked |
+
+Cada aviso devuelve id, subject, body, createdAtUtc y readAtUtc. Fecha de lectura
+nula significa sin ver. Repetir el marcado conserva la primera fecha y no vuelve
+a contar el aviso en marcado general. Aviso ajeno o inexistente responde 404 sin
+modificar datos; sin sesión responde 401. No hay eliminación de avisos.
+
+Migración AddInternalNotifications: tabla not_notifications con destinatario,
+contenido y fechas UTC, e índice de consulta por usuario/fecha. No añade FK hacia
+tablas de otros módulos. La cola SMTP existente permanece independiente.
+
+```powershell
+dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeBandejaDeNotificaciones -v q
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeBandejaPorHttp -v q
+```
+
+Resultados: seis pruebas de bandeja y dos HTTP, con ambos roles y filtro real.
+PostgreSQL verificado aparte: consulta sin lectura automática, marcado individual
+y general por propietario, fecha inicial conservada desde contexto nuevo y aviso
+ajeno intacto. Solo se retiraron los avisos temporales propios de la comprobación.
+
+Esta entrega prepara consulta y lectura. Los productores de eventos, selección
+de destinatarios activos y preferencias se conectan en el siguiente PR; no se
+declara que solicitudes o facturas ya generen avisos automáticamente.
+
 ## Coordinación transaccional entre módulos — ADR 029
 
 IApplicationTransaction permite ejecutar escrituras de varios módulos en una

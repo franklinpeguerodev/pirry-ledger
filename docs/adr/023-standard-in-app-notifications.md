@@ -1,6 +1,6 @@
 # ADR 023 - Standard in-app notifications
 
-- **Estado:** aceptada por Franklin para el negocio; implementación pendiente.
+- **Estado:** aceptada por Franklin; bandeja implementada, productores de eventos pendientes.
 - **Fecha:** 2026-11-19
 - **Requisitos:** RF-NOT-02, RF-NOT-04, RF-NOT-06, RF-NOT-07
 - **Decide:** Franklin. **Redacta:** el agente.
@@ -27,3 +27,11 @@ los correos de activación y recuperación de contraseña.
 Se conservan bandeja propia y lectura explícita. Esta decisión se aparta de
 RF-NOT-06 y limita RF-NOT-07 al Administrador. No equivale a excepción aprobada
 por el profesor ni a cumplimiento íntegro de esos criterios académicos.
+
+## Implementación de bandeja — 2026-11-20
+
+Notification conserva destinatario, contenido y fechas UTC. Consulta y marcado
+se restringen al usuario autenticado en servidor. Consultar no marca; las
+acciones individual/general conservan primera fecha de lectura. No se expone
+eliminación ni creación arbitraria por API. La persistencia de esta bandeja no
+significa que ya estén conectados los productores o la selección de usuarios activos.

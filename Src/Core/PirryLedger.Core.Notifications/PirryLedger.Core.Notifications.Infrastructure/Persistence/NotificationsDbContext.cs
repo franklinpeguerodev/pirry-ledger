@@ -19,9 +19,11 @@ public sealed partial class NotificationsDbContext : DbContext
     }
 
     public DbSet<EmailQueueItem> EmailQueueItems => Set<EmailQueueItem>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new EmailQueueItemConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationConfiguration());
     }
 }

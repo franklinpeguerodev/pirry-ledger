@@ -31,10 +31,11 @@ Only the Standard issuer recovers, retaining the original invoice/day and
 leaving saved closings unchanged. Pending cancellation exclusions and resolution
 are covered across Billing and Permissions. Notifications and reports remain
 in subsequent features. No closing revision history is implemented.
-Notification-center prerequisite: explicit cross-module transaction coordinator
-and module-owned participants implemented under ADR 029, pending PR review.
-No notification events or inbox are connected yet; existing explicit transaction
-flows must be adapted before using the coordinator around those operations.
+Notification-center prerequisite integrated in develop (ADR 029, PR 107).
+Own inbox implemented in feature/notification-inbox, pending PR review:
+list without automatic reading, mark one/all with server-side ownership.
+Notification producers, active-recipient selection and preferences remain pending;
+existing explicit transaction flows must be adapted before wrapping those operations.
 Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
 See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
 Identity/access rows were preserved and operational counts verified as zero.

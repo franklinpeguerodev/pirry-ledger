@@ -1,5 +1,36 @@
 # Bitácora — Práctica 5
 
+## 2026-11-20 — Bandeja propia de notificaciones
+
+- Franklin pidió continuar. Se verificó merge 0d183d2 del PR 107 y se inició
+  siguiente entrega desde develop limpio. Bandeja separada de eventos/preferencias
+  para revisar RF-NOT-04/05 de forma independiente, sin declarar bloque 6 completo.
+- Notification y tabla propia; consulta por sesión sin lectura automática.
+  Marcado individual y general solo de propios, persistido y con primera fecha
+  conservada; aviso ajeno/inexistente no se distingue y no puede modificarse.
+- Tres rutas protegidas AnySession, incorporadas también a la prueba de metadatos
+  del punto único de acceso. Dos casos HTTP recorren Administrador y Estándar.
+- Se generó AddInternalNotifications mediante factory del módulo. El primer
+  intento con Host como startup no tenía EF Design; se utilizó Infrastructure,
+  que ya tiene ese paquete. No se instaló ningún paquete nuevo.
+- Se restauraron referencias existentes tras agregar dependencia de API a pruebas.
+  NuGet dejó NU1900 al consultar vulnerabilidades por restricción de red;
+  se reintentó fuera del sandbox, sin eliminar la comprobación ni ocultar aviso.
+- Build: 0 errores, 1 advertencia NU1900. Suite completa: 575 aprobadas,
+  0 fallidas/omitidas (Billing 288, AccessControl 166, Permissions 52,
+  Documents 40, Notifications 22 e Integration 7).
+- Seis pruebas de bandeja y dos HTTP aprobadas. Mutación del guard de identidad
+  produjo fallo esperado por ausencia de NotificationSessionRequiredException;
+  código restaurado antes de publicar y suite de bandeja nuevamente en verde.
+- Migración aplicada en PostgreSQL. Verificación real: listados propios sin
+  marcarlos, rechazo ajeno, marcado individual/general, repetición sin cambiar
+  fecha, persistencia en nuevo contexto y aviso ajeno intacto.
+  Se retiraron exclusivamente avisos temporales propios. Configuración cargada
+  por aplicación sin inspección de .env ni impresión de valores; sin SMTP.
+- README, iteración, plan y ADR 023 reflejan alcance parcial. Productores,
+  destinatarios activos, preferencias y adaptación de transacciones pendientes.
+  Evidencia del agente; Franklin revisa PR. Sin merge ni etiqueta.
+
 ## 2026-11-20 — Base transaccional del centro de notificaciones
 
 - Franklin confirmó integración del PR 106 y autorizó continuar. Se verificó

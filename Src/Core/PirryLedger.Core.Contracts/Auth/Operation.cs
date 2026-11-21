@@ -117,6 +117,9 @@ public enum Operation
     ConfirmDebtTransfer,
     RejectDebtTransfer,
     RecoverUndeliveredInvoice,
+    ListOwnNotifications,
+    MarkNotificationRead,
+    MarkAllNotificationsRead,
 }
 
 // Los niveles de Requirement. El orden va de menos a mas: una ruta publica

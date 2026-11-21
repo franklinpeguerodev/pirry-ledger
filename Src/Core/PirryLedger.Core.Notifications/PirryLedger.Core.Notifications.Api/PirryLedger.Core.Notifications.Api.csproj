@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\..\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Api\PirryLedger.Core.AccessControl.Api.csproj" />
     <ProjectReference Include="..\PirryLedger.Core.Notifications.Application\PirryLedger.Core.Notifications.Application.csproj" />
   </ItemGroup>
 
