@@ -1,6 +1,9 @@
 # ADR 007 - Mail sender: CLI command `--send-mail` in the Host
 
 - **Estado:** aceptada
+- **Extensión Práctica 5:** ADR 031 conserva el comando y completa límite de
+  intentos, consulta, error seguro e incertidumbre. Sustituye la concurrencia
+  libre de enviadores por un único procesador con bloqueo transaccional exclusivo.
 - **Fecha:** 2026-10-04
 - **Requisitos:** RF-NOT-08, RF-NOT-09, RF-NOT-12; RD-08, RD-09, RD-10
 - **Decide:** Franklin. **Redacta:** el agente.
