@@ -1,5 +1,39 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Verificación Docker en Codespace
+
+- Franklin autorizó probar Docker en su Codespace y reiteró no leer .env ni
+  usar Python. El borrador Python no se ejecutó; se canceló su entrada incompleta.
+  Las verificaciones se hicieron con Docker, .NET/xUnit, curl y jq.
+- Se comprobó develop 7e53a79, PR 115 integrado. La composición implícita falló
+  por variables ausentes; --env-file .env.example permitió construir y arrancar
+  los servicios sin inspeccionar ni modificar .env ni instalar herramientas.
+- Docker 29.9.2-2, Compose v5.6.1, SDK 10.0.403. Migrador Exited (0).
+  Suite Linux: 709 aprobadas, cero fallidas/omitidas; salida 0 y sin NU1900 en log.
+- Datos exclusivamente sintéticos. Se verificaron los seis recorridos del README:
+  activación, sesiones/roles, recuperación, permisos, Billing y documento.
+  Activación/recuperación recibidas en Mailpit y utilizadas; repetición rechazada.
+- down sin -v y up -d recrearon contenedores. Mismo documento descargado con
+  SHA-256 idéntico; sesión y venta persistidas. Se conservaron los dos volúmenes.
+- Reportes administrativos devolvieron 200; Estándar 403. Rango vacío y filtro
+  de producto comprobados. Reapertura y anulación automática aprobada funcionaron;
+  cobrar factura anulada fue rechazado sin cambio. Cierre final: venta/efectivo
+  100, anulado 100 separado. Consulta final histórica: una factura vendida, 100.
+- Se corrigió una ruta de prueba equivocada conforme al contrato; el 404 era
+  del comando. También se corrigió extracción inicial de enlace sin revelar código.
+- Bandeja propia, rechazo de aviso ajeno y preferencia de correo comprobados.
+  Cinco fallos SMTP controlados dejaron Failed/5; sexta pasada sin tomar mensajes.
+  Comando combinado terminó sin casos vencidos ni correos; mailer restaurado.
+- El aviso de GSSAPI ausente no impidió entrega SMTP a Mailpit; no se modificó
+  la imagen ni se afirma prueba de Kerberos/correo externo. Sin Python ni R2.
+- El agente actualizó evidencia, README, iteración, criterios e índices en
+  chore/docker-acceptance desde origin/develop. Commit documental coherente de
+  239 líneas cambiadas; se supera la guía para sincronizar evidencia y estados.
+  Bitácora separada; vínculos y diff comprobados. Sin cambios de producción.
+- Franklin dirigió y autorizó; las ejecuciones son del agente. Quedan revisión
+  del PR, desviación RF-NOT-06 sin excepción académica y autorización de tag.
+  No se fusionó ni etiquetó la entrega. Datos de prueba conservados en Codespace.
+
 ## 2026-11-26 — Revisión acumulada sobre la versión integrada
 
 - Franklin aprobó PR 114 y pidió continuar. Se comprobó integración 2aa76d6,
