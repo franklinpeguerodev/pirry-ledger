@@ -158,6 +158,30 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                     b.ToTable("not_notification_preferences", (string)null);
                 });
 
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.OverdueNotificationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("event_key");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventKey")
+                        .IsUnique();
+
+                    b.ToTable("not_overdue_notification_records", (string)null);
+                });
+
             modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.EmailQueueItem", b =>
                 {
                     b.HasOne("PirryLedger.Core.Notifications.Domain.Entities.Notification", null)
