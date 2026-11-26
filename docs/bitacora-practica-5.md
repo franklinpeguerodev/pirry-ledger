@@ -1,5 +1,51 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Avisos únicos de atraso y trabajador CLI
+
+- Franklin aprobó PR 110; se verificó base develop 5457422 y se creó
+  feature/overdue-notification-reminders. Decisiones acordadas el 25 de noviembre:
+  control propio de Notifications, trabajador 1A, 2B con espera de 30 s,
+  revalidación 3A, continuidad 4A sin duplicados, exclusión 5A y cupo 6B.
+- ADR 032 autorizado: una tabla adicional, claves únicas por caso y entrega,
+  sin marcas en Billing ni módulo general de auditoría. Máximo 50 casos nuevos
+  confirmados; registrados, resueltos y fallidos no consumen cupo.
+- Billing expone reglas, candidatos y revalidación por Core.Contracts. Consulta
+  sus propias tablas; bloquea factura/pago o sucursal mientras se publica.
+  Incluye venta, pago parcial y abono; excluye anulada, no solicitud pendiente.
+- Marca, avisos y correos confirman o revierten juntos por caso. Un fallo permite
+  continuar los siguientes y la fase SMTP, sin consumir marca ni duplicar al reintentar.
+  Sin destinatarios también se registra; no hay entrega retroactiva.
+- SMTP revalida origen antes de reclamar: resuelto cancela sin intento; fallo de
+  comprobación conserva Pending y aborta esa fase. Aviso y control permanecen.
+- Se conservan --send-mail y cinco intentos; se agregan --notify-overdue y
+  --process-notifications. Docker espera 30 s tras terminar el combinado, incluido
+  SMTP. También cambia la cadencia de activación y recuperación; no implementa push.
+- Se adaptaron constructores en pruebas existentes y se amplió la comprobación
+  de destinatarios actuales entre casos, sin debilitar aserciones previas.
+- Rojo por mutación: >=96 h hizo fallar el caso de límite exacto; se restauró >.
+  Otra mutación retiró dos defensas de unicidad: Assert.Single obtuvo dos eventos.
+  Se restauró el archivo original y se verificó nuevamente Notifications en verde.
+- El agente ejecutó dotnet build pirry-ledger.slnx --no-restore -v q: 0 errores,
+  1 NU1900 por consulta de vulnerabilidades de NuGet sin red. Ejecutó dotnet test
+  pirry-ledger.slnx --configuration Release --no-restore -v q: 659 aprobadas,
+  0 fallidas/omitidas (74 Notifications, 313 Billing, 171 AccessControl,
+  54 Permissions, 40 Documents y 7 Integration).
+- Prueba externa temporal con configuración de entorno equivalente al Host,
+  sin inspeccionar .env: el sandbox impidió SSL; se repitió con autorización
+  de red. Se aplicó AddOverdueNotificationRecords en PostgreSQL y verificaron
+  consultas, límite, bloqueos frente a otra conexión, simultaneidad sin duplicados,
+  rollback después de insertar entrega, reintento y caso sin destinatarios.
+  Se retiraron exclusivamente los datos temporales; no hubo correos externos.
+- Los tres CLI reales se comprobaron sin atrasos existentes y con bloqueo SMTP
+  ocupado: revisión registró cero; combinado y enviador no tomaron mensajes.
+- docker compose up --build no pudo ejecutarse: docker no está en PATH. No se
+  afirma validación de contenedores ni de una entrega SMTP externa en este bloque.
+- Documentación, criterios, reglas, índice y ADR acompañan el cambio. Se mantiene
+  desviación RF-NOT-06, reportes y revisión acumulada pendientes. Franklin revisa
+  el PR; no se le atribuyen comandos ni se hace merge o etiqueta.
+- La migración con diseñador y algunas unidades de origen/procesamiento exceden
+  200 líneas para conservar cambios coherentes, conforme a autorización previa.
+
 ## 2026-11-21 — Cola acotada y consulta administrativa
 
 - Franklin confirmó aprobado PR 109; el agente verificó integración e6f4f08 en
