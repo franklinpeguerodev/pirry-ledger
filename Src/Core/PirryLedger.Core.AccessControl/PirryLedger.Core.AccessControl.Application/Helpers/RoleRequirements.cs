@@ -70,6 +70,7 @@ public static class RoleRequirements
 
         // RF-CA-21: listar usuarios es de Administrator, y un Standard recibe
         // rechazo (el mismo 403 que en las otras cuatro).
+        [Operation.ViewPermissionRequestReport] = new(AccessLevel.Administrator),
         [Operation.ListUsers] = new(AccessLevel.Administrator),
 
         // RF-CA-08: cambiar el role lo hace un Administrator.

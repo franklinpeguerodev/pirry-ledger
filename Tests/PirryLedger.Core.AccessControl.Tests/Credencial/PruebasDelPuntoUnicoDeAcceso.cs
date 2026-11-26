@@ -30,6 +30,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     // parametros al construir la Route y falla si no encuentra el servicio.
     private static readonly Type[] ServiciosDeLasRutas =
     [
+        typeof(PirryLedger.Core.Reports.Application.GetPermissionRequestReport),
         typeof(CreateUserByAdministrator),
         typeof(ActivateAccount),
         typeof(ResendActivationLink),
@@ -103,6 +104,7 @@ public class PruebasDelPuntoUnicoDeAcceso
 
         var app = builder.Build();
 
+        PirryLedger.Core.Reports.Api.EndpointRegistration.MapReports(app);
         app.MapAccessControl();
         app.MapPermissions();
         app.MapBusiness();
@@ -213,6 +215,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     [InlineData(Operation.GetNotificationEmailPreference)]
     [InlineData(Operation.UpdateNotificationEmailPreference)]
     [InlineData(Operation.InspectEmailQueue)]
+    [InlineData(Operation.ViewPermissionRequestReport)]
     [InlineData(Operation.ConfirmDebtTransfer)]
     [InlineData(Operation.RejectDebtTransfer)]
     [InlineData(Operation.ListInvoiceEdits)]
