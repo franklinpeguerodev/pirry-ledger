@@ -1,6 +1,8 @@
 # Reports
 
-Source: Práctica 5, section 1.4. Core and business reports implemented; accumulated acceptance pending.
+Source: Práctica 5, section 1.4. Core and business reports integrated through PR 114.
+Integrated tests and SQL checks passed; deployment acceptance remains open.
+See ../aceptacion-practica-5.md for evidence and limits.
 The assignment text below is kept in the professor's original Spanish.
 
 | ID | Requisito | Criterio de aceptación |

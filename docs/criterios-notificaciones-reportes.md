@@ -124,3 +124,10 @@ se verifican aparte mediante instrucciones ejecutadas del README.
 - Cambio concurrente de factura/permiso no mezcla cifras de una respuesta.
   La siguiente consulta refleja los cambios. La sesión rechaza escrituras.
 - Cambios posteriores actualizan venta original y mantienen el cierre guardado.
+
+## Evidencia de revisión acumulada
+
+La ejecución del 2026-11-26 sobre develop 2aa76d6 se registra en
+[aceptacion-practica-5.md](aceptacion-practica-5.md). Distingue pruebas aprobadas,
+comprobaciones externas y criterios todavía sin ejecutar; no cambia los criterios
+originales ni declara cumplida la persistencia tras reiniciar Docker.

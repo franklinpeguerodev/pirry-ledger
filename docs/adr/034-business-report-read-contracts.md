@@ -1,6 +1,6 @@
 # ADR 034 - Business report read contracts
 
-- **Estado:** aceptada e implementada; revisión del PR pendiente
+- **Estado:** aceptada e implementada; integrada mediante PR 114
 - **Fecha:** 2026-11-26
 - **Requisitos:** RF-REP-02, RF-REP-03, RF-REP-04, RF-REP-05, RD-03, RD-09, RD-11
 - **Decide:** Franklin. Autoriza decisiones 1–8 del bloque.
