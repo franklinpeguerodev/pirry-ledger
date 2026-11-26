@@ -31,6 +31,7 @@ public class PruebasDelPuntoUnicoDeAcceso
     private static readonly Type[] ServiciosDeLasRutas =
     [
         typeof(PirryLedger.Core.Reports.Application.GetPermissionRequestReport),
+        typeof(PirryLedger.Core.Reports.Application.GetBusinessReports),
         typeof(CreateUserByAdministrator),
         typeof(ActivateAccount),
         typeof(ResendActivationLink),

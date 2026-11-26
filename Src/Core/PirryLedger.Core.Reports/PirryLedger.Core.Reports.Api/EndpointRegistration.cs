@@ -28,6 +28,7 @@ public static class EndpointRegistration
                 return Results.Json(new { message = error.Message }, statusCode: 403);
             }
         }).WithAccess(Operation.ViewPermissionRequestReport);
+        endpoints.MapBusinessReports();
         return endpoints;
     }
 }
