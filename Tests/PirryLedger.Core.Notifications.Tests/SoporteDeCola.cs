@@ -4,6 +4,11 @@ using PirryLedger.Core.Notifications.Domain.Enums;
 
 namespace PirryLedger.Core.Notifications.Tests;
 
+internal sealed class ElegibilidadDePrueba(bool relevant = true) : INotificationEmailEligibility
+{
+    public Task<bool> IsRelevantAsync(Guid notificationId, CancellationToken cancellationToken = default) => Task.FromResult(relevant);
+}
+
 internal sealed class BloqueoDeCola : IEmailQueueProcessingLock
 {
     public bool Active { get; private set; }

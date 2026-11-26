@@ -20,12 +20,14 @@ public sealed class ProcessEmailQueue
     private readonly INotificationRecipientDirectory? _directory;
     private readonly INotificationDeliveryStore? _delivery;
     private readonly IEmailQueueProcessingLock _processingLock;
+    private readonly INotificationEmailEligibility _eligibility;
 
     public ProcessEmailQueue(
         IEmailQueueRepository repository,
         IEmailTransporter transporter,
         IClock clock,
         IEmailQueueProcessingLock processingLock,
+        INotificationEmailEligibility eligibility,
         INotificationRecipientDirectory? directory = null,
         INotificationDeliveryStore? delivery = null)
     {
@@ -35,6 +37,7 @@ public sealed class ProcessEmailQueue
         _directory = directory;
         _delivery = delivery;
         _processingLock = processingLock ?? throw new ArgumentNullException(nameof(processingLock));
+        _eligibility = eligibility;
     }
 
     public async Task<ProcessingResult> ExecuteAsync(int batch = DefaultBatch, CancellationToken cancellationToken = default)
@@ -65,7 +68,8 @@ public sealed class ProcessEmailQueue
                     throw new InvalidOperationException("No se puede verificar el destinatario del correo notificable.");
                 var recipient = await _directory.FindActiveAsync(recipientId, cancellationToken);
                 if (recipient is not { IsAdministrator: true }
-                    || !await _delivery.EmailEnabledAsync(recipientId, cancellationToken))
+                    || !await _delivery.EmailEnabledAsync(recipientId, cancellationToken)
+                    || !await _eligibility.IsRelevantAsync(pending.NotificationId.Value, cancellationToken))
                 {
                     await _repository.CancelPendingNotificationAsync(pending.Id, _clock.UtcNow, cancellationToken);
                     cancelled++;

@@ -14,7 +14,7 @@ public sealed class NotificationRecipientDirectory(IUserRepository users) : INot
     }
 
     public async Task<IReadOnlyList<NotificationRecipient>> ListActiveAdministratorsAsync(CancellationToken cancellationToken = default) =>
-        (await users.ListAsync(cancellationToken)).Where(user => user.Active && user.Role == Role.Administrator)
+        (await users.ListCurrentAsync(cancellationToken)).Where(user => user.Active && user.Role == Role.Administrator)
             .Select(From).ToArray();
 
     private static NotificationRecipient From(User user) =>

@@ -50,6 +50,9 @@ internal sealed class UserRepository : IUserRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<User>> ListCurrentAsync(CancellationToken cancellationToken = default) =>
+        await _context.Users.AsNoTracking().OrderBy(user => user.Email).ToListAsync(cancellationToken);
+
     // RF-CA-20: cuenta solo los ACTIVOS, porque un Administrator desactivado no
     // puede volver a entrar a Reactivate a nadie. Si se contaran tambien los
     // inactivos, el ultimo Administrator Active podria desactivarse y el
