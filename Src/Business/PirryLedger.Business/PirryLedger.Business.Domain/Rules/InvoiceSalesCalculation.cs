@@ -6,10 +6,13 @@ namespace PirryLedger.Business.Domain.Rules;
 // Cifras de facturación actuales. El cierre guarda una copia de este resultado.
 public static class InvoiceSalesCalculation
 {
+    public static IReadOnlyList<InvoiceState> IncludedStates { get; } =
+        Array.AsReadOnly(new[] { InvoiceState.Paid, InvoiceState.InDebt, InvoiceState.PendingVerification });
+
     public static BusinessDayClosing Calculate(IReadOnlyList<Invoice> invoices, IReadOnlySet<Guid> pendingCancellations)
     {
         var included = invoices.Where(invoice => !pendingCancellations.Contains(invoice.Id)
-            && invoice.State is InvoiceState.Paid or InvoiceState.InDebt or InvoiceState.PendingVerification).ToArray();
+            && IncludedStates.Contains(invoice.State)).ToArray();
         var payments = included.SelectMany(invoice => invoice.Payments)
             .Where(payment => payment.Kind == PaymentKind.Sale).ToArray();
 
