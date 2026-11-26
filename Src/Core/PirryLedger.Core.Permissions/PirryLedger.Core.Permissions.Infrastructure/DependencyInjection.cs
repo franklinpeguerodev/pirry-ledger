@@ -1,3 +1,4 @@
+using PirryLedger.Core.Contracts.Reports;
 using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Contracts.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -41,6 +42,7 @@ public static class DependencyInjection
         // IPermissionAuthority es el contrato que vive en Core.Contracts.
         // Aqui registramos la implementacion que vive en Infrastructure. El
         // resto del sistema pide IPermissionAuthority por DI.
+        services.AddScoped<IPermissionRequestReportSource, PermissionRequestReportSource>();
         services.AddScoped<IPermissionAuthority, EfPermissionAuthority>();
         services.AddScoped<IPendingInvoiceCancellations, PendingInvoiceCancellations>();
 
