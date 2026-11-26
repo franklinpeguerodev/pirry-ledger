@@ -101,6 +101,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
 
         builder.Services.AddScoped<IBranchDirectory, DirectorioDeSucursalesEnMemoria>();
 
+        builder.Services.AddScoped<PirryLedger.Core.Reports.Application.GetPermissionRequestReport>();
         configure?.Invoke(builder.Services);
 
         _app = builder.Build();
@@ -114,6 +115,7 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
         _app.UseMiddleware<RequestRateLimitMiddleware>();
 
         _app.MapBusiness();
+        PirryLedger.Core.Reports.Api.EndpointRegistration.MapReports(_app);
         PirryLedger.Core.Notifications.Api.EndpointRegistration.MapNotifications(_app);
 
         _app.StartAsync().GetAwaiter().GetResult();
@@ -294,6 +296,8 @@ internal sealed class RepositorioDeSesionesEnMemoria : ISessionRepository
 // factura, que no se ejecuta en estas pruebas.
 internal sealed class DirectorioDeSucursalesEnMemoria : IBranchDirectory
 {
+        public Task<IReadOnlyList<BranchScope>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
     public Task<BranchScope?> FindAsync(Guid branchId, CancellationToken cancellationToken = default) =>
         Task.FromResult<BranchScope?>(null);
 }

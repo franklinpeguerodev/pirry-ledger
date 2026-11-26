@@ -28,4 +28,8 @@
     <ProjectReference Include="..\..\Business\PirryLedger.Business\PirryLedger.Business.Api\PirryLedger.Business.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../Core/PirryLedger.Core.Reports/PirryLedger.Core.Reports.Infrastructure/PirryLedger.Core.Reports.Infrastructure.csproj" />
+    <ProjectReference Include="../../Core/PirryLedger.Core.Reports/PirryLedger.Core.Reports.Api/PirryLedger.Core.Reports.Api.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,5 +1,46 @@
 # Pirry Ledger
 
+## Reporte administrativo de solicitudes — ADR 033
+
+RF-REP-01/03/04/05. GET /api/reports/permission-requests exige sesión de
+Administrador. from y to son fechas obligatorias yyyy-MM-dd e incluyen ambos días
+calendario de RD. Filtra la fecha de solicitud y muestra el estado actual.
+Una solicitud del 1 de noviembre aplicada después cuenta como Applied al volver
+a consultar ese período. Cada solicitud se cuenta una sola vez.
+
+Consulta comprobada por HTTP:
+GET /api/reports/permission-requests?from=2026-11-01&to=2026-11-02
+
+branchIds es opcional y permite repetir el parámetro para seleccionar varias
+sucursales. Omitirlo selecciona todas. El identificador global Todas también
+selecciona todas. Un UUID vacío o inexistente devuelve 400. Sin sesión devuelve
+401; Estándar recibe 403. Fechas ausentes, mal formadas o invertidas devuelven
+400. La última fecha admitida debe permitir calcular el inicio del día siguiente.
+
+Respuesta con from, to, branches y counts. Cada sucursal tiene branchId,
+branchName, isGlobal y counts. Cada counts incluye pending, approved, applied,
+rejected y total, también con cero. Las sucursales seleccionadas sin solicitudes
+se incluyen con cero. El grupo isGlobal corresponde a solicitudes administrativas
+guardadas en Todas, contadas una vez. El counts general suma los grupos.
+Los nombres de sucursal provienen del directorio actual de AccessControl.
+
+Permissions agrupa por sucursal y estado en PostgreSQL después de filtrar rango
+UTC y sucursales. Reports recibe agregados por Core.Contracts y compone el resultado.
+El límite final SQL es exclusivo al inicio del día posterior. Reports tiene
+Domain, Application, Infrastructure, Api y su propio proyecto de pruebas.
+La implementación reutiliza dependencias existentes. No agrega tablas.
+
+Verificación:
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+dotnet build Src/Host/PirryLedger.Host --no-restore -v q
+
+Pruebas cubren UTC/RD, extremos, ceros, estado único, sucursales, Todas,
+rechazos sin consultar datos y autorización HTTP. Una mutación que omitía el
+último día fue detectada y la regla se restauró. PostgreSQL real confirmó
+GroupBy, rangos distintos, sucursales y estado actual con datos revertidos.
+La enumeración de rutas incluye Reports y comprueba su declaración de acceso.
+Los reportes del negocio y revisión acumulada siguen pendientes.
+
 ## Sucursal obligatoria en solicitudes de permiso
 
 RF-GP-01, RD-06 y RD-09. Cada solicitud conserva la sucursal al crearse.

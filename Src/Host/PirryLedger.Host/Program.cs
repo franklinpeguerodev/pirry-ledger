@@ -1,3 +1,5 @@
+using PirryLedger.Core.Reports.Api;
+using PirryLedger.Core.Reports.Infrastructure;
 using PirryLedger.Core.Notifications.Api;
 using PirryLedger.Core.Notifications.Application;
 using PirryLedger.Core.AccessControl.Api;
@@ -70,6 +72,7 @@ builder.Services.AddNotifications(
     connection,
     EnvironmentConfiguration.ReadSmtp(builder.Configuration) ?? SmtpConfiguration.Empty);
 builder.Services.AddPermissions(connection);
+builder.Services.AddReports();
 
 // Almacenamiento de imagenes (ADR 015). Las siete variables son obligatorias:
 // si falta una, la aplicacion no arranca y dice cual. Se lee antes de
@@ -272,6 +275,7 @@ app.UseMiddleware<PirryLedger.Core.AccessControl.Api.RequestRateLimitMiddleware>
 app.MapAccessControl();
 app.MapNotifications();
 app.MapPermissions();
+app.MapReports();
 app.MapBusiness();
 app.MapDocuments();
 

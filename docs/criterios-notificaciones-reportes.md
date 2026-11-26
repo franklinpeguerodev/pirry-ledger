@@ -101,3 +101,13 @@ se verifican aparte mediante instrucciones ejecutadas del README.
 - La fábrica rechaza sucursal vacía y la base rechaza null o UUID vacío.
 - La migración exige corrección revisada si existen filas sin sucursal y no
   atribuye automáticamente una sucursal histórica.
+
+## Contrato del reporte Core aprobado — RF-REP-01/03/04/05
+
+- Solicitud del día 1 aplicada el día 2 aparece Applied al consultar el día 1.
+- Siempre existen cuatro cantidades y total, con cero si falta actividad.
+- Una o varias sucursales filtran antes de agrupar; respuesta incluye desglose y total.
+- Todas incluye solicitudes administrativas una vez, sin repartirlas en sucursales físicas.
+- from y to obligatorios, calendario RD inclusivo. Parámetros inválidos rechazan
+  antes de consultar origen; Estándar tampoco consulta cantidades.
+- No hay grupo de solicitudes sin sucursal tras la corrección PR 112.

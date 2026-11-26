@@ -91,6 +91,8 @@ public sealed class PruebasDeJornadaPorHttp
 
     private sealed class Directorio(Guid branch) : IBranchDirectory
     {
+        public Task<IReadOnlyList<BranchScope>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<BranchScope?> FindAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(id == branch ? new BranchScope(id, "Sucursal", "Dirección", false) : null);
     }

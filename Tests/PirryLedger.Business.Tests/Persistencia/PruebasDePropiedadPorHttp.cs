@@ -68,6 +68,8 @@ public sealed class PruebasDePropiedadPorHttp
 
     private sealed class SucursalDePrueba(Guid id) : IBranchDirectory
     {
+        public Task<IReadOnlyList<BranchScope>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<BranchScope?> FindAsync(Guid branchId, CancellationToken cancellationToken = default) =>
             Task.FromResult(branchId == id ? new BranchScope(id, "Sucursal", "Dirección", false) : null);
     }

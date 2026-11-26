@@ -1,6 +1,6 @@
 # Reports
 
-Source: Práctica 5, section 1.4. Planned, not implemented.
+Source: Práctica 5, section 1.4. Core permission report implemented; business reports pending.
 The assignment text below is kept in the professor's original Spanish.
 
 | ID | Requisito | Criterio de aceptación |

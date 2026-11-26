@@ -1,5 +1,38 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Reporte Core con agregación al consultar
+
+- Franklin confirmó PR 112 integrado. Se verificó develop aaa4de7 y se actualizó
+  feature/core-permission-reports, aún sin commits propios, a esa base.
+- Aprobó 1A, 2A, 3A, 5A y 6A, con ADR 033. El caso 4A fue sustituido por
+  sucursal obligatoria o Todas para Administrador mediante el fix integrado.
+- Se creó Reports con cuatro capas y proyecto de pruebas propio. Permissions
+  agrega sus tablas mediante Core.Contracts. AccessControl expone listado de
+  sucursales por su directorio. No se agregaron tablas ni bibliotecas distintas
+  de las usadas ya en la solución. Restore reutilizó dependencias existentes.
+- GET /api/reports/permission-requests exige Administrador. Fechas obligatorias
+  RD inclusivas, estado actual, cuatro cantidades con ceros por sucursal y total.
+  Todas incluye grupo administrativo una vez. Sucursales inválidas rechazan.
+- Una mutación eliminó el último día: falló la prueba temporal. Se restauró.
+  La primera revisión completa detectó que el escenario de enumeración de rutas
+  aún no mapeaba Reports. Se incorporó ruta y caso de rol, sin debilitar aserciones.
+- Pruebas HTTP verificaron 401, 403, Administrador 200, fechas incompletas e
+  invertidas, selección válida y sucursal inexistente sin consultar origen.
+- dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q:
+  672 aprobadas, cero fallidas/omitidas. Reports 7, Billing 314, AccessControl 172,
+  Permissions 58, Notifications 74, Documents 40 e Integration 7.
+- dotnet build Src/Host/PirryLedger.Host --no-restore -v q:
+  cero errores y advertencias.
+- PostgreSQL real: GroupBy, extremos, distintos rangos, sucursal y estado actual
+  verificados con solicitudes temporales dentro de transacción revertida.
+  Herramienta externa con configuración del Host, sin inspeccionar .env.
+- README, criterios, contexto, plan, índice y ADR acompañan el PR. Se documenta
+  el contrato de parámetros y respuesta. El agente ejecutó las verificaciones.
+  Franklin revisa el PR. Reportes de negocio y aceptación acumulada pendientes.
+- Inicialización del módulo con capas, integración y pruebas en una unidad lógica
+  mayor de 200 líneas, conforme a autorización previa.
+- No se ejecutó Docker en esta entrega por ausencia del comando en la máquina.
+
 ## 2026-11-26 — Sucursal obligatoria en solicitudes
 
 - Franklin autorizó fix separado desde develop d0a342d antes de reportes.
