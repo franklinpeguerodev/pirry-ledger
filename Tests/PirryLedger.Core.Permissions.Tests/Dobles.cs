@@ -119,7 +119,7 @@ internal sealed class FakePermissionRequestRepository : IPermissionRequestReposi
         DateTime utcNow,
         PermissionRequestState initialState = PermissionRequestState.Pending)
     {
-        var request = PermissionRequest.Create(requesterId, requestedPermission, utcNow);
+        var request = PermissionRequest.Create(requesterId, requestedPermission, utcNow, Guid.NewGuid());
         _requests[request.Id] = request;
         return request;
     }

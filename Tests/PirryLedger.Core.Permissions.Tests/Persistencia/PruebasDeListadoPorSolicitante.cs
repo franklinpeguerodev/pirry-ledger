@@ -35,11 +35,11 @@ public sealed class PruebasDeListadoPorSolicitante
         var repositorio = new PermissionRequestRepository(contexto);
 
         await repositorio.SaveAsync(
-            PermissionRequest.Create(solicitanteA, "ViewSalesSummary", instante),
+            PermissionRequest.Create(solicitanteA, "ViewSalesSummary", instante, Guid.NewGuid()),
             CancellationToken.None);
 
         await repositorio.SaveAsync(
-            PermissionRequest.Create(solicitanteB, "ViewSalesSummary", instante.AddMinutes(1)),
+            PermissionRequest.Create(solicitanteB, "ViewSalesSummary", instante.AddMinutes(1), Guid.NewGuid()),
             CancellationToken.None);
 
         // Act

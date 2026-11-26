@@ -76,7 +76,7 @@ public sealed class CreatePermissionRequest
         var request = PermissionRequest.Create(
             caller.Id,
             requestedPermission,
-            _clock.UtcNow, caller.BranchId);
+            _clock.UtcNow, PermissionRequestBranch.Resolve(caller.Role == PirryLedger.Core.AccessControl.Domain.Enums.Role.Administrator, caller.BranchId));
 
         await _requests.SaveAsync(request, cancellationToken);
         if (_notifications is not null)

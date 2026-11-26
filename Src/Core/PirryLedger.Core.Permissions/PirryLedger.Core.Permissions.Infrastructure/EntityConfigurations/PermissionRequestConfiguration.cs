@@ -14,7 +14,8 @@ internal sealed class PermissionRequestConfiguration : IEntityTypeConfiguration<
 {
     public void Configure(EntityTypeBuilder<PermissionRequest> builder)
     {
-        builder.ToTable("per_permission_requests");
+        builder.ToTable("per_permission_requests", table => table.HasCheckConstraint(
+            "ck_permission_request_branch_nonempty", "branch_id <> '00000000-0000-0000-0000-000000000000'"));
 
         builder.HasKey(request => request.Id);
         builder.Property(request => request.BranchId).HasColumnName("branch_id");

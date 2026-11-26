@@ -34,7 +34,7 @@ public sealed class PermissionRequest
     public Guid Id { get; private set; }
 
     public Guid RequesterId { get; private set; }
-    public Guid? BranchId { get; private set; }
+    public Guid BranchId { get; private set; }
 
     public string RequestedPermission { get; private set; } = string.Empty;
 
@@ -60,7 +60,7 @@ public sealed class PermissionRequest
         Guid requesterId,
         string requestedPermission,
         DateTime utcNow,
-        Guid? branchId = null)
+        Guid branchId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedPermission);
 
@@ -69,6 +69,7 @@ public sealed class PermissionRequest
             requesterId,
             requestedPermission,
             utcNow);
+        if (branchId == Guid.Empty) throw new ArgumentException("La sucursal es obligatoria.", nameof(branchId));
         request.BranchId = branchId;
         return request;
     }
