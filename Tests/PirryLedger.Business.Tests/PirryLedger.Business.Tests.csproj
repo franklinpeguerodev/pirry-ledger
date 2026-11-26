@@ -26,6 +26,8 @@
          EF InMemory: sin base real y sin SMTP. Application para los casos de
          uso y Core.Contracts para los contratos que reciben. -->
     <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Domain\PirryLedger.Business.Domain.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.AccessControl\PirryLedger.Core.AccessControl.Infrastructure\PirryLedger.Core.AccessControl.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Infrastructure\PirryLedger.Core.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Application\PirryLedger.Business.Application.csproj" />
     <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Infrastructure\PirryLedger.Business.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Contracts\PirryLedger.Core.Contracts.csproj" />
@@ -35,4 +37,10 @@
     <ProjectReference Include="..\..\Src\Business\PirryLedger.Business\PirryLedger.Business.Api\PirryLedger.Business.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Src\Core\PirryLedger.Core.Notifications\PirryLedger.Core.Notifications.Api\PirryLedger.Core.Notifications.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Src/Core/PirryLedger.Core.Reports/PirryLedger.Core.Reports.Api/PirryLedger.Core.Reports.Api.csproj" />
+  </ItemGroup>
 </Project>

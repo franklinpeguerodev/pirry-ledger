@@ -79,13 +79,13 @@ public sealed class PruebasDeDeuda
     }
 
     [Fact]
-    public void UnAbonoDeDeudaNoTieneMetodo()
+    public void UnAbonoEnEfectivoConservaMetodoSinRecibidoNiCambio()
     {
         // Act
         var abono = InvoicePayment.Debt(100m, Ahora, Admin);
 
         // Assert
-        Assert.Equal(PaymentMethod.None, abono.Method);
+        Assert.Equal(PaymentMethod.Cash, abono.Method);
         Assert.Null(abono.ReceivedAmount);
         Assert.Null(abono.ChangeAmount);
     }
@@ -225,7 +225,7 @@ public sealed class PruebasDeDeuda
         factura.Collect(new[] { InvoicePayment.Transfer(500m, Ahora, Cajero) });
 
         // Act
-        factura.RejectTransfer("Juan");
+        factura.RejectTransfer("Juan", reason: "No llegó");
 
         // Assert
         Assert.Equal(InvoiceState.InDebt, factura.State);
@@ -240,7 +240,7 @@ public sealed class PruebasDeDeuda
         var factura = FacturaEmitida();
 
         // Act + Assert
-        Assert.Throws<InvoiceRuleViolationException>(() => factura.RejectTransfer("Juan"));
+        Assert.Throws<InvoiceRuleViolationException>(() => factura.RejectTransfer("Juan", reason: "No llegó"));
         Assert.Equal(InvoiceState.Issued, factura.State);
         Assert.Empty(factura.Payments);
         Assert.Null(factura.DebtorName);

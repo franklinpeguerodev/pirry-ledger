@@ -1,4 +1,5 @@
 using PirryLedger.Core.Contracts.Permissions;
+using PirryLedger.Core.Contracts.Notifications;
 using PirryLedger.Core.Permissions.Application.Services;
 using PirryLedger.Core.Permissions.Domain.Enums;
 
@@ -16,7 +17,32 @@ public sealed class PruebasDeSolicitudEnNombreDelUsuario
         out FakePermissionAuthority authority)
     {
         authority = new FakePermissionAuthority(PermissionCatalogKnown());
-        return new PermissionRequestGateway(requests, authority, new FakeClock(Ahora));
+        return new PermissionRequestGateway(requests, authority, new FakeClock(Ahora), directory: new Directorio());
+    }
+
+    private sealed class Directorio(Guid? branch = null, bool asignada = true) : INotificationRecipientDirectory
+    {
+        private readonly Guid? _branch = asignada ? branch ?? Guid.NewGuid() : null;
+        public Task<NotificationRecipient?> FindActiveAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult<NotificationRecipient?>(new(id, "prueba@example.invalid", false, _branch));
+        public Task<IReadOnlyList<NotificationRecipient>> ListActiveAdministratorsAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    [InlineData("00000000-0000-0000-0000-000000000001")]
+    public async Task EstandarSinSucursalFisicaNoGuardaSolicitud(string? value)
+    {
+        var requests = new FakePermissionRequestRepository();
+        var directory = new Directorio(value is null ? null : Guid.Parse(value), value is not null);
+        var gateway = new PermissionRequestGateway(requests, new FakePermissionAuthority(PermissionCatalogKnown()),
+            new FakeClock(Ahora), directory: directory);
+
+        await Assert.ThrowsAsync<PirryLedger.Core.Permissions.Application.Exceptions.PermissionRequestRejectedException>(
+            () => gateway.RequestAsync(Guid.NewGuid(), "ViewSalesSummary"));
+
+        Assert.Equal(0, requests.SavedCount);
     }
 
     private static string[] PermissionCatalogKnown() =>

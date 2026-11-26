@@ -39,6 +39,18 @@ public sealed class Invoice
 
     public Guid BranchId { get; private set; }
 
+    public Guid IssuedByUserId { get; private set; }
+
+    public string IssuedByUserName { get; private set; } = string.Empty;
+    public Guid? BusinessDayId { get; private set; }
+
+    public void AssignBusinessDay(Guid id)
+    {
+        if (id == Guid.Empty || BusinessDayId is not null)
+            throw new InvoiceRuleViolationException("La jornada de una factura solo se asigna una vez.");
+        BusinessDayId = id;
+    }
+
     public string BranchName { get; private set; } = string.Empty;
 
     public string BranchAddress { get; private set; } = string.Empty;
@@ -59,10 +71,23 @@ public sealed class Invoice
 
     public decimal Total => _items.Sum(item => item.LineTotal);
 
-    // Una transferencia rechazada no cuenta: la factura sigue debiendo ese dinero.
+    // Ventas conservan su reserva de transferencia pendiente. Un abono de deuda
+    // solo cuenta al confirmarse; rechazados nunca reducen el saldo.
     public decimal PaidAmount =>
-        _payments.Where(payment => payment.Status != PaymentStatus.Rejected)
+        _payments.Where(payment => payment.Status != PaymentStatus.Rejected
+                && (payment.Kind == PaymentKind.Sale || payment.Status == PaymentStatus.Confirmed))
             .Sum(payment => payment.Amount);
+
+    public decimal ConfirmedPaidAmount => _payments
+        .Where(payment => payment.Status == PaymentStatus.Confirmed).Sum(payment => payment.Amount);
+
+    public bool HasPendingTransfer => _payments.Any(payment => payment.Method == PaymentMethod.Transfer
+        && payment.Status == PaymentStatus.Registered);
+
+    public DateTime? DebtPaidAtUtc => State == InvoiceState.Paid && DebtorName is not null
+        ? _payments.Where(payment => payment.Status == PaymentStatus.Confirmed)
+            .Select(payment => (DateTime?)payment.RegisteredAtUtc).Max()
+        : null;
 
     public static Invoice Create() => new(Guid.NewGuid());
 
@@ -78,7 +103,9 @@ public sealed class Invoice
         DateTime issuedAtUtc,
         Guid branchId,
         string branchName,
-        string branchAddress)
+        string branchAddress,
+        Guid issuedByUserId = default,
+        string issuedByUserName = "")
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -95,6 +122,8 @@ public sealed class Invoice
         IsDelivery = isDelivery;
         IssuedAtUtc = issuedAtUtc;
         BranchId = branchId;
+        IssuedByUserId = issuedByUserId;
+        IssuedByUserName = issuedByUserName;
         BranchName = branchName;
         BranchAddress = branchAddress;
     }
@@ -108,6 +137,26 @@ public sealed class Invoice
     // Issued -> PendingVerification de la maquina (RD-04). El agregado solo
     // aplica las reglas de dinero que la maquina no puede ver.
     public void Collect(IReadOnlyCollection<InvoicePayment> payments)
+    {
+        if (State == InvoiceState.NotDelivered)
+        {
+            throw new InvoiceRuleViolationException("La factura no entregada requiere la operación de recuperación.");
+        }
+
+        ApplySalePayments(payments);
+    }
+
+    public void RecoverUndelivered(IReadOnlyCollection<InvoicePayment> payments)
+    {
+        if (State != InvoiceState.NotDelivered)
+        {
+            throw new InvoiceRuleViolationException("Solo se puede recuperar una factura no entregada.");
+        }
+
+        ApplySalePayments(payments);
+    }
+
+    private void ApplySalePayments(IReadOnlyCollection<InvoicePayment> payments)
     {
         ArgumentNullException.ThrowIfNull(payments);
 
@@ -132,6 +181,7 @@ public sealed class Invoice
             TotalAmount = Total,
             PaidAmount = paidAmount,
             HasTransfer = hasTransfer,
+            IsDelivery = IsDelivery,
         };
 
         State = InvoiceStateMachine.Transition(State, target, context);
@@ -234,14 +284,19 @@ public sealed class Invoice
         }
     }
 
-    // InDebt -> Paid si el abono cubre lo que falta. El abono lo registra un
-    // Administrador, por eso lleva la fecha y el usuario.
-    public void RegisterDebtPayment(decimal amount, DateTime registeredAtUtc, Guid registeredByUserId)
+    // InDebt -> Paid solo al completar lo confirmado. Una transferencia espera resolución.
+    public void RegisterDebtPayment(decimal amount, DateTime registeredAtUtc, Guid registeredByUserId,
+        PaymentMethod method = PaymentMethod.Cash)
     {
         if (State != InvoiceState.InDebt)
         {
             throw new InvoiceRuleViolationException(
                 "Solo se puede abonar una factura que está en deuda.");
+        }
+
+        if (HasPendingTransfer)
+        {
+            throw new InvoiceRuleViolationException("Abono pendiente de confirmación. No se permiten más abonos en esta factura.");
         }
 
         if (!Money.HasExactDecimals(amount) || amount <= 0m || amount > Money.MaximumAmount)
@@ -258,9 +313,9 @@ public sealed class Invoice
                 "El abono no puede ser mayor que lo que se debe.");
         }
 
-        var payment = InvoicePayment.Debt(amount, registeredAtUtc, registeredByUserId);
+        var payment = InvoicePayment.Debt(amount, registeredAtUtc, registeredByUserId, method);
 
-        var newPaidAmount = PaidAmount + amount;
+        var newPaidAmount = PaidAmount + (payment.Status == PaymentStatus.Confirmed ? amount : 0m);
 
         if (newPaidAmount >= Total)
         {
@@ -280,9 +335,54 @@ public sealed class Invoice
         _payments.Add(payment);
     }
 
+    public void ConfirmDebtTransfer(Guid paymentId, DateTime resolvedAtUtc, Guid resolvedByUserId)
+    {
+        var payment = PendingDebtTransfer(paymentId);
+        var nextPaid = ConfirmedPaidAmount + payment.Amount;
+        var nextState = State;
+
+        if (nextPaid >= Total && !_payments.Any(other => other.Id != payment.Id
+                && other.Method == PaymentMethod.Transfer && other.Status == PaymentStatus.Registered))
+        {
+            nextState = InvoiceStateMachine.Transition(State, InvoiceState.Paid, new InvoiceTransitionContext
+            {
+                TotalAmount = Total,
+                PaidAmount = nextPaid,
+                DebtorName = DebtorName,
+            });
+        }
+
+        payment.Confirm(resolvedAtUtc, resolvedByUserId);
+        State = nextState;
+    }
+
+    public void RejectDebtTransfer(Guid paymentId, DateTime resolvedAtUtc, Guid resolvedByUserId, string reason)
+    {
+        var payment = PendingDebtTransfer(paymentId);
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new InvoiceRuleViolationException("El motivo del rechazo es obligatorio.");
+        }
+
+        payment.Reject(resolvedAtUtc, resolvedByUserId, reason.Trim());
+    }
+
+    private InvoicePayment PendingDebtTransfer(Guid paymentId)
+    {
+        if (State != InvoiceState.InDebt || DebtorName is null)
+        {
+            throw new InvoiceRuleViolationException("Solo se puede resolver una transferencia de una factura en deuda.");
+        }
+
+        return _payments.SingleOrDefault(payment => payment.Id == paymentId
+                && payment.Method == PaymentMethod.Transfer && payment.Status == PaymentStatus.Registered)
+            ?? throw new InvoiceRuleViolationException("El pago indicado no es una transferencia pendiente de esta factura.");
+    }
+
     // PendingVerification -> Paid. Solo si los pagos cubren el total (condicion
     // de la fila). Confirma todas las transferencias.
-    public void ConfirmTransfer()
+    public void ConfirmTransfer(DateTime? resolvedAtUtc = null, Guid? resolvedByUserId = null)
     {
         if (State != InvoiceState.PendingVerification)
         {
@@ -311,14 +411,14 @@ public sealed class Invoice
         {
             if (payment.Method == PaymentMethod.Transfer)
             {
-                payment.Confirm();
+                payment.Confirm(resolvedAtUtc, resolvedByUserId);
             }
         }
     }
 
     // PendingVerification -> InDebt. Las transferencias quedan Rejected y no
     // cuentan; el nombre de la persona que queda debiendo es obligatorio.
-    public void RejectTransfer(string debtorName)
+    public void RejectTransfer(string debtorName, DateTime? resolvedAtUtc = null, Guid? resolvedByUserId = null, string? reason = null)
     {
         if (State != InvoiceState.PendingVerification)
         {
@@ -327,6 +427,8 @@ public sealed class Invoice
         }
 
         var name = NormalizeDebtorName(debtorName);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new InvoiceRuleViolationException("El motivo del rechazo es obligatorio.");
 
         // Los pagos que no son transferencia siguen contando; solo se rechazan
         // las transferencias.
@@ -350,7 +452,7 @@ public sealed class Invoice
         {
             if (payment.Method == PaymentMethod.Transfer)
             {
-                payment.Reject();
+                payment.Reject(resolvedAtUtc, resolvedByUserId, reason?.Trim());
             }
         }
     }

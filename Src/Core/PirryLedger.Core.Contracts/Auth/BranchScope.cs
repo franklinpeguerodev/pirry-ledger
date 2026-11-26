@@ -4,5 +4,6 @@ public sealed record BranchScope(Guid Id, string Name, string Address, bool IsGl
 
 public interface IBranchDirectory
 {
+    Task<IReadOnlyList<BranchScope>> ListAsync(CancellationToken cancellationToken = default);
     Task<BranchScope?> FindAsync(Guid branchId, CancellationToken cancellationToken = default);
 }

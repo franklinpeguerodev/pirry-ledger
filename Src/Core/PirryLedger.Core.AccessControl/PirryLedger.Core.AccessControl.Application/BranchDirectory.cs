@@ -11,6 +11,10 @@ public sealed class BranchDirectory : IBranchDirectory
         _branches = branches;
     }
 
+    public async Task<IReadOnlyList<BranchScope>> ListAsync(CancellationToken cancellationToken = default) =>
+        (await _branches.ListAsync(cancellationToken))
+            .Select(branch => new BranchScope(branch.Id, branch.Name, branch.Address, branch.IsAll)).ToArray();
+
     public async Task<BranchScope?> FindAsync(
         Guid branchId,
         CancellationToken cancellationToken = default)

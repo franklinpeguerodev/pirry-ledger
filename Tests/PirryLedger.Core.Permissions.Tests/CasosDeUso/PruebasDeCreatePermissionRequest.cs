@@ -36,6 +36,7 @@ public sealed class PruebasDeCreatePermissionRequest
         Assert.NotNull(creada);
         Assert.Equal(PermissionRequestState.Pending, creada!.State);
         Assert.Equal(escenario.Standard.Id, creada.RequesterId);
+        Assert.Equal(escenario.Standard.BranchId, creada.BranchId);
         Assert.Equal(PermissionName, creada.RequestedPermission);
         Assert.Equal(escenario.Clock.UtcNow, creada.CreatedAtUtc);
 
@@ -47,6 +48,20 @@ public sealed class PruebasDeCreatePermissionRequest
         Assert.Null(creada.RejectionReason);
 
         Assert.Equal(1, requests.SavedCount);
+    }
+
+    [Fact]
+    public async Task SolicitudDeAdministradorConservaTodasInclusoSiFueAscendido()
+    {
+        var escenario = new EscenarioDePermisos();
+        escenario.Standard.ChangeRole(PirryLedger.Core.AccessControl.Domain.Enums.Role.Administrator);
+        var token = await escenario.OpenStandardSessionAsync();
+        var requests = new FakePermissionRequestRepository();
+        var caso = new CreatePermissionRequest(requests, escenario.Authority, escenario.Authenticate, escenario.Clock);
+
+        var id = await caso.ExecuteAsync(token, PermissionName);
+
+        Assert.Equal(PirryLedger.Core.AccessControl.Domain.Entities.Branch.AllId, (await requests.FindByIdAsync(id))!.BranchId);
     }
 
     [Fact]

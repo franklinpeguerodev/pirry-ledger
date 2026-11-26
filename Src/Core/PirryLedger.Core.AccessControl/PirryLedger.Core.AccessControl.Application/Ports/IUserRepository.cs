@@ -16,6 +16,11 @@ public interface IUserRepository
 
     Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken = default);
 
+    // Los dobles sin seguimiento ya devuelven el estado actual. Persistencia
+    // implementa una lectura nueva para revalidar destinatarios entre envíos.
+    Task<User?> FindCurrentByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        FindByIdAsync(userId, cancellationToken);
+
     // RF-CA-21: listar usuarios con su role y su estado.
     //
     // Trae TODOS, sin paginar. Con 2 o 3 empleados por sucursal una pagina de
@@ -26,6 +31,8 @@ public interface IUserRepository
     // PostgreSQL no garantiza orden y el listado cambiaria entre peticiones sin
     // que nadie haya tocado nada.
     Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken = default);
+    // Destinatarios entre casos del CLI: no reutilizar usuarios seguidos previamente.
+    Task<IReadOnlyList<User>> ListCurrentAsync(CancellationToken cancellationToken = default) => ListAsync(cancellationToken);
 
     Task SaveAsync(User user, CancellationToken cancellationToken = default);
 

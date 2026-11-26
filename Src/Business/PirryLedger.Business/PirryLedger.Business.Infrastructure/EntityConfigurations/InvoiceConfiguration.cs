@@ -25,6 +25,11 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(invoice => invoice.IsDelivery).HasColumnName("is_delivery");
 
         builder.Property(invoice => invoice.BranchId).HasColumnName("branch_id").IsRequired();
+        builder.Property(invoice => invoice.IssuedByUserId).HasColumnName("issued_by_user_id").IsRequired();
+        builder.Property(invoice => invoice.IssuedByUserName).HasColumnName("issued_by_user_name").HasMaxLength(120).IsRequired();
+        builder.Property(invoice => invoice.BusinessDayId).HasColumnName("business_day_id");
+        builder.HasOne<BusinessDay>().WithMany().HasForeignKey(invoice => invoice.BusinessDayId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(invoice => new { invoice.BranchId, invoice.IssuedByUserId });
         builder.Property(invoice => invoice.BranchName).HasColumnName("branch_name").HasMaxLength(120).IsRequired();
         builder.Property(invoice => invoice.BranchAddress).HasColumnName("branch_address").HasMaxLength(100).IsRequired();
 
@@ -47,5 +52,8 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.Ignore(invoice => invoice.Total);
         builder.Ignore(invoice => invoice.PaidAmount);
+        builder.Ignore(invoice => invoice.ConfirmedPaidAmount);
+        builder.Ignore(invoice => invoice.HasPendingTransfer);
+        builder.Ignore(invoice => invoice.DebtPaidAtUtc);
     }
 }

@@ -36,6 +36,9 @@ internal sealed class UserRepository : IUserRepository
             .FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
     }
 
+    public Task<User?> FindCurrentByIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        _context.Users.AsNoTracking().FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
+
     // RF-CA-21. Se ordena por Email para que el listado sea estable: sin
     // OrderBy, PostgreSQL devuelve las filas en el orden que le resulte y el
     // listado cambiaria entre dos peticiones seguidas sin que nadie haya
@@ -46,6 +49,9 @@ internal sealed class UserRepository : IUserRepository
             .OrderBy(user => user.Email)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<User>> ListCurrentAsync(CancellationToken cancellationToken = default) =>
+        await _context.Users.AsNoTracking().OrderBy(user => user.Email).ToListAsync(cancellationToken);
 
     // RF-CA-20: cuenta solo los ACTIVOS, porque un Administrator desactivado no
     // puede volver a entrar a Reactivate a nadie. Si se contaran tambien los

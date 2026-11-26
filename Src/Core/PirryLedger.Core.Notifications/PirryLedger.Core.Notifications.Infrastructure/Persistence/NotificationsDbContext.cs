@@ -11,7 +11,7 @@ namespace PirryLedger.Core.Notifications.Infrastructure;
 //
 // El context se registra aqui y no en el Host, que solo llama a
 // AddNotifications (RD-01).
-public sealed class NotificationsDbContext : DbContext
+public sealed partial class NotificationsDbContext : DbContext
 {
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options)
         : base(options)
@@ -19,9 +19,15 @@ public sealed class NotificationsDbContext : DbContext
     }
 
     public DbSet<EmailQueueItem> EmailQueueItems => Set<EmailQueueItem>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<OverdueNotificationRecord> OverdueNotificationRecords => Set<OverdueNotificationRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new EmailQueueItemConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationPreferenceConfiguration());
+        modelBuilder.ApplyConfiguration(new OverdueNotificationRecordConfiguration());
     }
 }

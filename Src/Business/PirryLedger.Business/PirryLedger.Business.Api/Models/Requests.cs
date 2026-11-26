@@ -87,11 +87,15 @@ public sealed class EditItemsBody
 public sealed class RejectTransferBody
 {
     public string? DebtorName { get; init; }
+    public string? Reason { get; init; }
 }
 
 public sealed class DebtPaymentBody
 {
     public decimal Amount { get; init; }
+    public string? Method { get; init; }
 }
+
+public sealed record RejectDebtTransferBody(string? Reason);
 
 public sealed record ClassificationBody(string? Name);

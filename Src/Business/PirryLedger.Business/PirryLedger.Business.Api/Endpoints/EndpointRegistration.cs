@@ -25,6 +25,13 @@ public static class EndpointRegistration
 {
     public static IEndpointRouteBuilder MapBusiness(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapBusinessDays();
+        endpoints.MapDebts();
+        endpoints.MapPost("/api/billing/invoices/{id:guid}/recover", (Guid id, CollectPaymentBody body,
+            [Microsoft.AspNetCore.Mvc.FromServices] RecoverUndeliveredInvoice useCase,
+            CancellationToken cancellationToken) => RunAsync(async () =>
+                Results.Ok(InvoiceResponse.From(await useCase.ExecuteAsync(id, ToPayments(body.Payments), cancellationToken)))))
+            .WithAccess(Operation.RecoverUndeliveredInvoice);
         endpoints.MapGet("/api/billing/categories", (ManageClassification useCase, CancellationToken ct) =>
             RunAsync(async () => Results.Ok(await useCase.ListAsync(ct))))
             .WithAccess(Operation.ListProductClassification);
@@ -207,7 +214,9 @@ public static class EndpointRegistration
                     branch.Id,
                     branch.Name,
                     branch.Address,
-                    cancellationToken);
+                    cancellationToken,
+                    caller.Id,
+                    caller.Name);
 
                 return Results.Json(
                     InvoiceResponse.From(invoice),
@@ -347,20 +356,22 @@ public static class EndpointRegistration
             CancellationToken cancellationToken) =>
             RunAsync(async () =>
             {
+                if (string.IsNullOrWhiteSpace(body.Reason))
+                    throw new InvoiceRuleViolationException("El motivo del rechazo es obligatorio.");
                 var invoice = await useCase.ExecuteAsync(
                     id,
                     body.DebtorName ?? string.Empty,
-                    cancellationToken);
+                    cancellationToken, body.Reason);
 
                 return Results.Ok(InvoiceResponse.From(invoice));
             }))
         .WithAccess(Operation.RejectInvoiceTransfer);
 
-        // RF-NEG-02: el Administrator registra un abono de deuda.
+        // RF-NEG-02: Estándar de la sucursal o Administrador registra un abono.
         endpoints.MapPost("/api/billing/invoices/{id:guid}/payments", (
             Guid id,
             DebtPaymentBody body,
-            RegisterDebtPayment useCase,
+            [Microsoft.AspNetCore.Mvc.FromServices] RegisterDebtPayment useCase,
             Authenticate authenticate,
             HttpRequest httpRequest,
             CancellationToken cancellationToken) =>
@@ -374,9 +385,10 @@ public static class EndpointRegistration
                     id,
                     body.Amount,
                     caller.Id,
-                    cancellationToken);
+                    cancellationToken,
+                    DebtEndpoints.ParseMethod(body.Method));
 
-                return Results.Ok(InvoiceResponse.From(invoice));
+                return Results.Ok(DebtSummary.From(invoice));
             }))
         .WithAccess(Operation.RegisterDebtPayment);
 
@@ -396,7 +408,7 @@ public static class EndpointRegistration
                     : caller.BranchId;
                 var invoices = await useCase.ExecuteAsync(branchId, cancellationToken);
 
-                return Results.Ok(invoices.Select(InvoiceResponse.From).ToList());
+                return Results.Ok(invoices.Select(invoice => InvoiceResponse.From(invoice, caller.Role == Role.Administrator)).ToList());
             }))
         .WithAccess(Operation.ListInvoices);
 
@@ -416,7 +428,7 @@ public static class EndpointRegistration
                     : caller.BranchId;
                 var invoice = await useCase.ExecuteAsync(id, branchId, cancellationToken);
 
-                return Results.Ok(InvoiceResponse.From(invoice));
+                return Results.Ok(InvoiceResponse.From(invoice, caller.Role == Role.Administrator));
             }))
         .WithAccess(Operation.GetInvoice);
 
@@ -445,11 +457,24 @@ public static class EndpointRegistration
         {
             return await action();
         }
+        catch (BusinessDayRuleViolationException error)
+        {
+            return Results.Json(new { message = error.Message, code = error.Code },
+                statusCode: StatusCodes.Status409Conflict);
+        }
         catch (InvoiceNotFoundException error)
         {
             return Results.Json(
                 new ErrorResponse(error.Message),
                 statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (DebtAccessDeniedException error)
+        {
+            return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
+        }
+        catch (InvoiceRecoveryDeniedException error)
+        {
+            return Results.Json(new ErrorResponse(error.Message), statusCode: StatusCodes.Status403Forbidden);
         }
         catch (ProductNotFoundException error)
         {

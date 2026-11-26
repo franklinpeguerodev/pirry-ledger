@@ -1,7 +1,8 @@
 # Máquinas de estados
 
-El sistema tiene dos máquinas de estados independientes: la de la factura, en el
-módulo de negocio, y la de la solicitud de permiso, en la pieza de permisos. Cada
+El sistema controla las transiciones independientes de factura, solicitud de
+permiso y jornada de sucursal. Las dos primeras tienen sus tablas originales;
+la jornada se documenta al final y resuelve sus reglas en BusinessDay. Cada
 una resuelve todas sus transiciones en un único componente, y una transición que
 no aparece en su tabla está prohibida: el sistema la rechaza y el estado no
 cambia (RD-04).
@@ -26,7 +27,7 @@ transición `Draft -> Issued` ocurre en la misma operación que la emisión.
 ### Transiciones permitidas
 
 De los 49 pares posibles entre los siete estados, la tabla permite exactamente
-once:
+trece:
 
 | desde | hacia | quién la ejecuta | condición |
 |---|---|---|---|
@@ -38,11 +39,13 @@ once:
 | `Issued` | `NotDelivered` | Quien cobra | La factura es de delivery. |
 | `PendingVerification` | `Paid` | Administrador | Los pagos cubren el total. |
 | `PendingVerification` | `InDebt` | Administrador | Transferencia rechazada. Exige el nombre de la persona. |
-| `InDebt` | `Paid` | Administrador | Los abonos cubren el total de la deuda. |
+| `InDebt` | `Paid` | Estándar de sucursal en efectivo / Administrador confirma transferencia | Los pagos confirmados cubren el saldo; no queda transferencia pendiente. |
 | `Paid` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
 | `InDebt` | `Cancelled` | Administrador | Aprobar la solicitud de esa factura ejecuta la anulación. |
+| `NotDelivered` | `Paid` | Estándar emisor, por recuperación | Delivery, pagos cubren total y ninguno es transferencia. |
+| `NotDelivered` | `PendingVerification` | Estándar emisor, por recuperación | Delivery y algún pago es transferencia. |
 
-Siete de las once filas comprueban su condición en la propia máquina, una
+Nueve de las trece filas comprueban su condición en la propia máquina, una
 comprobación por fila y aislada en su método: si una se quita, la prueba de esa
 fila se pone roja. La fila `PendingVerification -> Paid` es la excepción: su
 condición la comprueba `Invoice.ConfirmTransfer` antes de pedir la transición,
@@ -63,7 +66,7 @@ conoce la pieza de permisos (RF-NEG-09).
 
 ### Transiciones prohibidas
 
-Los otros 38 pares se rechazan con `InvalidInvoiceTransitionException` y el
+Los otros 36 pares se rechazan con `InvalidInvoiceTransitionException` y el
 estado no cambia (RF-NEG-04). Agrupados por su origen:
 
 - Desde `Draft` (6): hacia sí mismo, `PendingVerification`, `Paid`, `InDebt`,
@@ -76,7 +79,9 @@ estado no cambia (RF-NEG-04). Agrupados por su origen:
   `InDebt` y `NotDelivered`. Una factura pagada solo puede anularse con permiso.
 - Desde `InDebt` (5): hacia `Draft`, `Issued`, `PendingVerification`, sí mismo y
   `NotDelivered`.
-- Desde `Cancelled` (7) y desde `NotDelivered` (7): todos. Son terminales.
+- Desde `Cancelled` (7): todos. Es terminal.
+- Desde `NotDelivered` (5): `Draft`, `Issued`, `InDebt`, `Cancelled` y sí mismo.
+  Solo admite las dos transiciones de recuperación.
 
 Están incluidas las siete transiciones que dejan el estado igual
 (`Draft -> Draft`, `Paid -> Paid`, …): la máquina no es idempotente y repetir una
@@ -93,9 +98,11 @@ antes del cambio conservan el flujo de consumo del ADR 011.
 
 ### Estados terminales
 
-`Cancelled` y `NotDelivered` son terminales (RF-NEG-05): no tienen ninguna
-transición saliente declarada. Si el cliente de una factura marcada como no
-entregada aparece después, se emite una factura nueva; la anterior no revive.
+`Cancelled` es terminal (RF-NEG-05): no tiene ninguna transición saliente.
+Desde Práctica 5, `NotDelivered` se recupera mediante operación exclusiva por
+su Estándar emisor, conservando factura, fecha y jornada originales (ADR 028).
+El cobro ordinario no permite esta recuperación. Transferencia espera la
+verificación administrativa existente; no se modifica el cierre guardado.
 
 ## Máquina de estados de la solicitud de permiso
 
@@ -150,3 +157,60 @@ ensamblado de negocio. `PirryLedger.Business.Api` sí referencia
 `PirryLedger.Core.AccessControl.Api`, y es deliberado: ahí vive `.WithAccess`, el
 punto único donde cada ruta declara su operación (RF-CA-05). Es un enlace de la
 capa Api, no del dominio ni de la aplicación.
+## Jornadas por sucursal — Práctica 5
+
+Jornada y factura son entidades distintas. No se agregan estados a Invoice
+por abrir, cerrar o reabrir una jornada. ADR 026 documenta persistencia y bloqueo.
+
+| Desde | Hacia | Quién | Condición |
+|---|---|---|---|
+| Sin jornada | Abierta | Quien emite | Primera factura válida; apertura y factura en misma transacción |
+| Abierta | Cerrada | Estándar de sucursal o Administrador | Sin facturas inconclusas de ningún emisor |
+| Cerrada | Abierta | Estándar de sucursal o Administrador | Acción explícita; última jornada, sin posterior y antes del límite |
+| Cerrada vencida | Nueva abierta | Quien emite | Primera factura posterior al límite crea jornada con fecha calendario actual |
+
+Una abierta vencida sigue abierta: bloquea únicamente nuevas emisiones hasta
+cerrarla. El límite es 16:00 de RD del día siguiente a la fecha inicial.
+Reabrir mantiene fecha y último resumen, identificado como reabierto; cerrar
+de nuevo reemplaza el resumen. No existe historial de revisiones en esta fase.
+Pendientes de transferencia, fiadas, no entregadas, anuladas y solicitudes
+pendientes de anulación permiten cerrar. Factura Issued sin conclusión bloquea
+e identifica factura/emisor sin conceder al compañero acceso para modificarla.
+
+## Abonos de deuda — Práctica 5
+
+Los abonos no agregan estados a Invoice. Efectivo se registra confirmado;
+transferencia se registra pendiente sin reducir saldo ni pasar a Paid.
+Una pendiente bloquea nuevos abonos en esa factura. Confirmar el pago final
+usa la transición existente InDebt -> Paid; rechazar deja InDebt y conserva
+saldo, con motivo obligatorio. Los metadatos del pago guardan resolución y actor.
+La fecha de pago completo es su registro, sin cambiar emisión ni jornada.
+El historial solo se expone al Administrador. Véase ADR 027.
+
+## Correo notificable — Práctica 5
+
+Desactivar correo cancela únicamente pendientes vinculados a avisos de ese
+Administrador (Pending -> Cancelled). Antes de enviar, una cuenta inactiva,
+un cambio de rol o preferencia deshabilitada cancela el pendiente antes de
+reclamarlo (Pending -> Cancelled), sin consumir intento. Activación/recuperación
+no se vinculan a esos avisos.
+Esta ampliación no cambia las transiciones de factura. ADR 031 completa la cola:
+
+| Desde | Hacia | Condición |
+|---|---|---|
+| Pending | Processing | Reclamo persistido individual, menos de cinco intentos |
+| Processing | Sent | SMTP confirma aceptación y se guarda resultado |
+| Processing | Pending | Fallo conocido con menos de cinco intentos |
+| Processing | Failed | Quinto fallo conocido |
+| Processing | Uncertain | Resultado desconocido o procesamiento interrumpido |
+
+Sent, Cancelled, Failed y Uncertain no admiten otro reclamo. Solo el enviador
+que obtiene el bloqueo de coordinación recupera Processing anteriores como
+Uncertain. Un fallo al guardar aceptación interrumpe el comando y conserva el
+Processing persistido; no se convierte falsamente en un fallo reenviable.
+
+ADR 032 incorpora otra condición de Pending -> Cancelled: el origen del atraso
+ya se resolvió cuando se comprueba antes del reclamo. No consume intento.
+Un error al comprobar no cambia estado ni equivale a resolución.
+El control OverdueNotificationRecord se inserta una vez por tipo/origen junto
+con aviso y correo; no tiene transiciones ni cambia factura, pago o jornada.

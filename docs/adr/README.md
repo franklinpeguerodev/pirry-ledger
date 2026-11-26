@@ -1,5 +1,28 @@
 # Architecture Decision Records
 
+- `034-business-report-read-contracts.md` (2026-11-26) — Business report filters, per-response snapshots and separate paged debt queries.
+
+- `033-query-time-report-aggregation.md` (2026-11-26) — Query-time aggregation owned by each module, with report composition through Core.Contracts.
+
+- `032-notification-owned-overdue-reminders.md` (2026-11-25) — Notification-owned once-only overdue controls, combined CLI and pre-send relevance checks.
+
+- `031-single-email-queue-processor.md` (2026-11-21) — Single sender, bounded retries and uncertain delivery coordinated by an exclusive PostgreSQL transaction.
+
+- `030-notification-event-recipient-keys.md` (2026-11-20) — Stable event/recipient keys without an independent events table.
+
+- `029-explicit-cross-module-transactions.md` (2026-11-20) — Explicit PostgreSQL transaction coordination through module-owned participants.
+
+- `028-explicit-undelivered-invoice-recovery.md` (2026-11-20) — Dedicated recovery operation and original-day sales adjustments.
+
+- `027-branch-debt-payments.md` (2026-11-20) — Branch-scoped debt access, row-locked payments and administrative history.
+
+- `026-branch-business-day-transactions.md` (2026-11-19) — Branch business days and closing snapshots coordinated by PostgreSQL transaction locks.
+
+- `025-invoice-issuer-scope.md` (2026-11-19) — Invoice issuer persisted and scoped with branch; administrator remains global.
+
+- `023-standard-in-app-notifications.md` (2026-11-19) — Standard notifications use only the internal channel; security mail remains.
+- `024-selective-administrator-email-notifications.md` (2026-11-19) — Selected administrator events use email with individual preferences.
+
 One-line index of the ADRs in this folder. The title and date below come from each ADR's heading; this index does not modify or summarize any ADR — open the file for the context, alternatives, and consequences.
 
 - `001-session-credential.md` (2026-09-30) — Session credential: opaque token with a session table.

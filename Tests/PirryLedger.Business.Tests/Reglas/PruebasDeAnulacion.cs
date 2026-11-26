@@ -100,7 +100,7 @@ public sealed class PruebasDeAnulacion
     [Fact]
     public void AnularUnaFacturaNoEntregadaSeRechaza()
     {
-        // Arrange: NotDelivered es terminal.
+        // Arrange: NotDelivered permite recuperación, pero no anulación.
         var factura = FacturaNoEntregada();
 
         // Act + Assert

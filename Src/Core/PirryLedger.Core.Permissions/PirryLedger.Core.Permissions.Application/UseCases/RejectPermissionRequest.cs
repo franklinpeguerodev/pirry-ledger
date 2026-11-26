@@ -1,3 +1,5 @@
+using PirryLedger.Core.Contracts.Notifications;
+using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.AccessControl.Application;
 using PirryLedger.Core.Contracts.Auth;
 using PirryLedger.Core.Contracts.Time;
@@ -14,6 +16,9 @@ namespace PirryLedger.Core.Permissions.Application.UseCases;
 // muere en Rejected.
 public sealed class RejectPermissionRequest
 {
+    private readonly INotificationPublisher? _notifications;
+    private readonly IApplicationTransaction? _transaction;
+
     private readonly IPermissionRequestRepository _requests;
     private readonly Authenticate _authenticate;
     private readonly IClock _clock;
@@ -21,14 +26,27 @@ public sealed class RejectPermissionRequest
     public RejectPermissionRequest(
         IPermissionRequestRepository requests,
         Authenticate authenticate,
-        IClock clock)
+        IClock clock,
+        INotificationPublisher? notifications = null, IApplicationTransaction? transaction = null)
     {
         _requests = requests;
         _authenticate = authenticate;
         _clock = clock;
+        _notifications = notifications;
+        _transaction = transaction;
     }
 
     public async Task ExecuteAsync(
+        string plainToken,
+        Guid requestId,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        if (_transaction is null) await ExecuteCoreAsync(plainToken, requestId, reason, cancellationToken);
+        else await _transaction.ExecuteAsync(async () => { await ExecuteCoreAsync(plainToken, requestId, reason, cancellationToken); return 0; }, cancellationToken);
+    }
+
+    private async Task ExecuteCoreAsync(
         string plainToken,
         Guid requestId,
         string reason,
@@ -67,5 +85,8 @@ public sealed class RejectPermissionRequest
         request.Reject(caller.Id, _clock.UtcNow, reason);
 
         await _requests.SaveAsync(request, cancellationToken);
+        if (_notifications is not null)
+            await _notifications.PublishAsync(new NotificationEvent(NotificationEventKind.PermissionRejected, request.Id,
+                $"Su solicitud de {request.RequestedPermission} fue rechazada. Motivo: {request.RejectionReason}.", request.RequesterId, request.BranchId), cancellationToken);
     }
 }

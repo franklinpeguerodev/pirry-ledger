@@ -115,7 +115,10 @@ public sealed record InvoicePaymentResponse(
     decimal? ReceivedAmount,
     decimal? ChangeAmount,
     DateTime RegisteredAtUtc,
-    Guid RegisteredByUserId)
+    Guid RegisteredByUserId,
+    DateTime? ResolvedAtUtc,
+    Guid? ResolvedByUserId,
+    string? RejectionReason)
 {
     public static InvoicePaymentResponse From(InvoicePayment payment) =>
         new(
@@ -127,11 +130,17 @@ public sealed record InvoicePaymentResponse(
             payment.ReceivedAmount,
             payment.ChangeAmount,
             payment.RegisteredAtUtc,
-            payment.RegisteredByUserId);
+            payment.RegisteredByUserId,
+            payment.ResolvedAtUtc,
+            payment.ResolvedByUserId,
+            payment.RejectionReason);
 }
 
 public sealed record InvoiceResponse(
     Guid Id,
+    Guid IssuedByUserId,
+    string IssuedByUserName,
+    Guid? BusinessDayId,
     string State,
     bool IsDelivery,
     Guid BranchId,
@@ -145,9 +154,14 @@ public sealed record InvoiceResponse(
     IReadOnlyList<InvoiceItemResponse> Items,
     IReadOnlyList<InvoicePaymentResponse> Payments)
 {
-    public static InvoiceResponse From(Invoice invoice) =>
+    public static InvoiceResponse From(Invoice invoice) => From(invoice, includeDebtHistory: false);
+
+    public static InvoiceResponse From(Invoice invoice, bool includeDebtHistory) =>
         new(
             invoice.Id,
+            invoice.IssuedByUserId,
+            invoice.IssuedByUserName,
+            invoice.BusinessDayId,
             invoice.State.ToString(),
             invoice.IsDelivery,
             invoice.BranchId,
@@ -155,11 +169,13 @@ public sealed record InvoiceResponse(
             invoice.BranchAddress,
             invoice.IssuedAtUtc,
             invoice.Total,
-            invoice.PaidAmount,
-            invoice.Total - invoice.PaidAmount,
+            invoice.DebtorName is null ? invoice.PaidAmount : invoice.ConfirmedPaidAmount,
+            invoice.Total - (invoice.DebtorName is null ? invoice.PaidAmount : invoice.ConfirmedPaidAmount),
             invoice.DebtorName,
             invoice.Items.Select(InvoiceItemResponse.From).ToList(),
-            invoice.Payments.Select(InvoicePaymentResponse.From).ToList());
+            invoice.Payments.Where(payment => includeDebtHistory || (invoice.DebtorName is null
+                    && payment.Kind != PirryLedger.Business.Domain.Enums.PaymentKind.Debt))
+                .Select(InvoicePaymentResponse.From).ToList());
 }
 
 public sealed record InvoiceEditResponse(

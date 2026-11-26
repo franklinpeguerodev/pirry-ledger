@@ -5,20 +5,20 @@ using PirryLedger.Core.Permissions.Domain.Enums;
 
 namespace PirryLedger.Core.Permissions.Infrastructure.EntityConfigurations;
 
-// Tabla per_permission_requests. AccessControl es duenia de ac_users; aqui
-// solo declaramos la FK por Guid y por nombre de tabla, sin propiedad de
-// navegacion. PirryLedger.Core.Permissions.Infrastructure no ve
-// PirryLedger.Core.AccessControl.Domain.Entities.User, asi que la FK no
-// arrastra una dependencia entre piezas.
+// Tabla per_permission_requests. AccessControl es dueño de usuarios y sucursales.
+// Se conservan identificadores y sucursal histórica, sin entidades ni relaciones
+// entre módulos.
 //
 // Columnas en snake_case (ADR 004): mismas reglas que AccessControl.
 internal sealed class PermissionRequestConfiguration : IEntityTypeConfiguration<PermissionRequest>
 {
     public void Configure(EntityTypeBuilder<PermissionRequest> builder)
     {
-        builder.ToTable("per_permission_requests");
+        builder.ToTable("per_permission_requests", table => table.HasCheckConstraint(
+            "ck_permission_request_branch_nonempty", "branch_id <> '00000000-0000-0000-0000-000000000000'"));
 
         builder.HasKey(request => request.Id);
+        builder.Property(request => request.BranchId).HasColumnName("branch_id");
 
         builder.Property(request => request.Id)
             .HasColumnName("id");
@@ -65,8 +65,7 @@ internal sealed class PermissionRequestConfiguration : IEntityTypeConfiguration<
         // es justo la dependencia entre piezas que se quiere evitar. La
         // integridad la aporta la aplicacion, que toma las dos identidades de
         // la sesion autenticada y nunca del cuerpo de la peticion.
-        // Declarar o no las claves foraneas es una decision que sigue abierta:
-        // docs/current-iteration.md, seccion "Deferred".
+        // La sucursal también se recibe por contrato y se conserva al crear la solicitud.
 
         // Indices para las dos consultas del caso de uso:
         //   ListByStateAsync(state) -> WHERE state = ...

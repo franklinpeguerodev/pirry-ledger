@@ -78,6 +78,10 @@ namespace PirryLedger.Core.Permissions.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("approver_id");
 
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
@@ -115,7 +119,10 @@ namespace PirryLedger.Core.Permissions.Infrastructure.Migrations
                     b.HasIndex("State")
                         .HasDatabaseName("ix_per_permission_requests_state");
 
-                    b.ToTable("per_permission_requests", (string)null);
+                    b.ToTable("per_permission_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_permission_request_branch_nonempty", "branch_id <> '00000000-0000-0000-0000-000000000000'");
+                        });
                 });
 #pragma warning restore 612, 618
         }

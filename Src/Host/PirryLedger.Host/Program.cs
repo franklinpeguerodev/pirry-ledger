@@ -1,3 +1,5 @@
+using PirryLedger.Core.Reports.Api;
+using PirryLedger.Core.Reports.Infrastructure;
 using PirryLedger.Core.Notifications.Api;
 using PirryLedger.Core.Notifications.Application;
 using PirryLedger.Core.AccessControl.Api;
@@ -22,6 +24,8 @@ using PirryLedger.Core.Notifications.Infrastructure;
 using PirryLedger.Host;
 
 const string SendMailCommand = "--send-mail";
+const string NotifyOverdueCommand = "--notify-overdue";
+const string ProcessNotificationsCommand = "--process-notifications";
 const string MigrateCommand = "--migrate";
 
 // Archivo .env de desarrollo local: si existe, se cargan sus variables ANTES de
@@ -68,6 +72,7 @@ builder.Services.AddNotifications(
     connection,
     EnvironmentConfiguration.ReadSmtp(builder.Configuration) ?? SmtpConfiguration.Empty);
 builder.Services.AddPermissions(connection);
+builder.Services.AddReports();
 
 // Almacenamiento de imagenes (ADR 015). Las siete variables son obligatorias:
 // si falta una, la aplicacion no arranca y dice cual. Se lee antes de
@@ -129,6 +134,41 @@ await EnsureGlobalBranchSeed(app);
 // de desarrollo sin ellas no produzca ruido en cada arranque.
 await SeedFirstAdministrator(app);
 
+if (args.Any(argument => string.Equals(argument, ProcessNotificationsCommand, StringComparison.OrdinalIgnoreCase)))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    try
+    {
+        var result = await scope.ServiceProvider.GetRequiredService<ProcessNotifications>().ExecuteAsync();
+        PrintOverdueResult(result.Overdue);
+        PrintEmailResult(result.Email);
+        if (result.Overdue.Failures > 0) Environment.ExitCode = 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("No se pudo completar el procesamiento de notificaciones. Los casos sin confirmar se revisarán en otra ejecución.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+if (args.Any(argument => string.Equals(argument, NotifyOverdueCommand, StringComparison.OrdinalIgnoreCase)))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    try
+    {
+        var result = await scope.ServiceProvider.GetRequiredService<ProcessOverdueNotifications>().ExecuteAsync();
+        PrintOverdueResult(result);
+        if (result.Failures > 0) Environment.ExitCode = 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("No se pudo completar la revisión de atrasos.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 // El emisor de Email es un comando, no un endpoint ni un proceso que arranque
 // solo (RF-NOT-09). Se lanza cuando alguien lo lanza, y correrlo dos veces no
 // duplica ningun envio (RF-NOT-12).
@@ -137,10 +177,39 @@ if (args.Any(argument => string.Equals(argument, SendMailCommand, StringComparis
     await using var scope = app.Services.CreateAsyncScope();
 
     var processor = scope.ServiceProvider.GetRequiredService<ProcessEmailQueue>();
-    var result = await processor.ExecuteAsync();
+    ProcessingResult result;
+    try { result = await processor.ExecuteAsync(); }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("No se pudo completar el procesamiento de correos. Consulte la cola; no se reenvían entregas inciertas automáticamente.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    PrintEmailResult(result);
+    return;
+}
+
+static void PrintOverdueResult(OverdueProcessingResult result)
+{
+    Console.WriteLine($"Casos de atraso registrados: {result.Recorded}");
+    Console.WriteLine($"Casos omitidos: {result.Skipped}");
+    Console.WriteLine($"Casos u orígenes con fallos: {result.Failures}");
+}
+
+static void PrintEmailResult(ProcessingResult result)
+{
+    if (result.AlreadyRunning)
+    {
+        Console.WriteLine("Ya hay un enviador de correos activo; esta ejecución no tomó mensajes.");
+        return;
+    }
 
     Console.WriteLine($"Correos tomados: {result.Pending}");
     Console.WriteLine($"Correos enviados: {result.Sent}");
+    Console.WriteLine($"Correos fallidos definitivos: {result.Failed}");
+    Console.WriteLine($"Correos con entrega incierta: {result.Uncertain}");
+    Console.WriteLine($"Correos cancelados: {result.Cancelled}");
 
     if (result.Failures.Count == 0)
     {
@@ -163,7 +232,7 @@ if (args.Any(argument => string.Equals(argument, SendMailCommand, StringComparis
     else if (result.Sent == 0)
     {
         Console.WriteLine(
-            "Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.");
+            "Consulte la cola: solo se reintentan pendientes con menos de cinco intentos; fallidos e inciertos no se reenvían.");
     }
     else
     {
@@ -206,6 +275,7 @@ app.UseMiddleware<PirryLedger.Core.AccessControl.Api.RequestRateLimitMiddleware>
 app.MapAccessControl();
 app.MapNotifications();
 app.MapPermissions();
+app.MapReports();
 app.MapBusiness();
 app.MapDocuments();
 

@@ -42,9 +42,21 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<DateTime?>("LastAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_at_utc");
+
                     b.Property<string>("LastError")
                         .HasColumnType("text")
                         .HasColumnName("last_error");
+
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_id");
+
+                    b.Property<Guid?>("NotificationRecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notification_recipient_user_id");
 
                     b.Property<string>("Recipient")
                         .IsRequired()
@@ -60,6 +72,10 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
+                    b.Property<DateTime?>("StatusChangedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("status_changed_at_utc");
+
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -68,10 +84,110 @@ namespace PirryLedger.Core.Notifications.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("NotificationId")
+                        .IsUnique();
+
                     b.HasIndex("Status", "CreatedAtUtc")
                         .HasDatabaseName("ix_not_email_queue_status_created_at");
 
                     b.ToTable("not_email_queue", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("EventKey")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("event_key");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at_utc");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_user_id");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("subject");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventKey", "RecipientUserId")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientUserId", "CreatedAtUtc");
+
+                    b.ToTable("not_notifications", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.NotificationPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<bool>("EmailEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("email_enabled");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("not_notification_preferences", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.OverdueNotificationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("event_key");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventKey")
+                        .IsUnique();
+
+                    b.ToTable("not_overdue_notification_records", (string)null);
+                });
+
+            modelBuilder.Entity("PirryLedger.Core.Notifications.Domain.Entities.EmailQueueItem", b =>
+                {
+                    b.HasOne("PirryLedger.Core.Notifications.Domain.Entities.Notification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

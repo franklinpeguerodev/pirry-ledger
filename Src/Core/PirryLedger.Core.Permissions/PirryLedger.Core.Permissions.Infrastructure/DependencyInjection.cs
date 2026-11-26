@@ -1,3 +1,6 @@
+using PirryLedger.Core.Contracts.Reports;
+using PirryLedger.Core.Contracts.Notifications;
+using PirryLedger.Core.Contracts.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Core.AccessControl.Application;
@@ -22,8 +25,13 @@ public static class DependencyInjection
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-        services.AddDbContext<PermissionsDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContext<PermissionsDbContext>((provider, options) =>
+        {
+            var shared = provider.GetService<IModuleDatabaseConnection>();
+            if (shared is null) options.UseNpgsql(connectionString);
+            else options.UseNpgsql(shared.Connection);
+        });
+        services.AddScoped<IModuleTransactionParticipant>(provider => provider.GetRequiredService<PermissionsDbContext>());
 
         // ADR 018: el paso de migracion de la pieza.
         services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.PermissionsMigration>();
@@ -34,7 +42,9 @@ public static class DependencyInjection
         // IPermissionAuthority es el contrato que vive en Core.Contracts.
         // Aqui registramos la implementacion que vive en Infrastructure. El
         // resto del sistema pide IPermissionAuthority por DI.
+        services.AddScoped<IPermissionRequestReportSource, PermissionRequestReportSource>();
         services.AddScoped<IPermissionAuthority, EfPermissionAuthority>();
+        services.AddScoped<IPendingInvoiceCancellations, PendingInvoiceCancellations>();
 
         // ADR 012: el negocio pide el permiso en nombre del usuario a traves
         // de este contrato de Core.Contracts. La implementacion vive en
@@ -49,7 +59,9 @@ public static class DependencyInjection
             provider.GetRequiredService<IPermissionRequestRepository>(),
             provider.GetRequiredService<IPermissionAuthority>(),
             provider.GetRequiredService<Authenticate>(),
-            provider.GetRequiredService<IClock>()));
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<INotificationPublisher>(),
+            provider.GetRequiredService<IApplicationTransaction>()));
 
         services.AddScoped<ListOwnPermissionRequests>(provider => new ListOwnPermissionRequests(
             provider.GetRequiredService<IPermissionRequestRepository>(),
@@ -67,12 +79,16 @@ public static class DependencyInjection
             // Permissions solo lo pide; no conoce PasswordResetIssuer.
             provider.GetRequiredService<IPasswordResetIssuer>(),
             provider.GetRequiredService<IClock>(),
-            provider.GetService<IApprovedInvoiceCancellation>()));
+            provider.GetService<IApprovedInvoiceCancellation>(),
+            provider.GetRequiredService<INotificationPublisher>(),
+            provider.GetRequiredService<IApplicationTransaction>()));
 
         services.AddScoped<RejectPermissionRequest>(provider => new RejectPermissionRequest(
             provider.GetRequiredService<IPermissionRequestRepository>(),
             provider.GetRequiredService<Authenticate>(),
-            provider.GetRequiredService<IClock>()));
+            provider.GetRequiredService<IClock>(),
+            provider.GetRequiredService<INotificationPublisher>(),
+            provider.GetRequiredService<IApplicationTransaction>()));
 
         return services;
     }

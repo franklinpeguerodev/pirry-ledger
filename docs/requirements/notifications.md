@@ -1,6 +1,32 @@
-# Notifications: minimal mail queue
+# Notifications and outgoing mail queue
 
-Source: Requerimientos del Core, pieza 4 (cola de correos), and Práctica 1, sección 1.5. Only the four requirements that Practice 1 uses are included. The rest of the piece (notifications themselves, retries, failed state, admin view of the queue) arrives in weeks 11 and 12 and is not stored here yet.
+## Practice 5 extension (approved business policy implemented; acceptance open)
+
+Source: Práctica 5, sections 1.2 and 1.3. The original minimal queue below
+remains a delivered baseline. The following text is the newer assignment;
+business deviations are recorded separately in ADR 023 and ADR 024.
+
+| ID | Requisito | Criterio de aceptación |
+|---|---|---|
+| RF-NOT-01 | Crear una solicitud de permiso notifica a los Administradores. | Todos los Administradores reciben la notificación; nadie más la recibe. |
+| RF-NOT-02 | Resolver una solicitud de permiso notifica al solicitante. | Indica si fue aprobada o rechazada y, en el segundo caso, el motivo. |
+| RF-NOT-03 | Al menos un evento propio de tu módulo de negocio dispara una notificación. | El evento está descrito en tu README y se puede provocar siguiendo sus pasos. |
+| RF-NOT-04 | Consultar las notificaciones propias, distinguiendo leídas de no leídas. | Un usuario no ve las notificaciones de otro. |
+| RF-NOT-05 | Marcar una notificación como leída. | Intentar marcar la notificación de otro usuario se rechaza. |
+| RF-NOT-06 | Toda notificación se entrega por dos canales: dentro del sistema y por correo. | El destinatario la ve en su bandeja interna y recibe además el correo correspondiente. |
+| RF-NOT-07 | El destinatario puede desactivar el canal de correo sin perder el interno. | Con el correo desactivado la notificación aparece dentro del sistema y no se encola ningún correo. |
+| RF-NOT-08 | Los correos se encolan; no se envían dentro de la operación que los origina. | La operación termina correctamente aunque el servidor de correo no responda. |
+| RF-NOT-09 | Un proceso independiente toma los correos pendientes y los envía. | Se ejecuta sin que el flujo que creó el correo vuelva a correr. |
+| RF-NOT-10 | Un correo que falla se reintenta un número limitado de veces y luego queda fallido. | No se reintenta indefinidamente ni desaparece sin dejar rastro. El máximo de intentos está declarado en tu README. |
+| RF-NOT-11 | Cada correo registra estado (pendiente, enviado o fallido), intentos, fechas y último error. | Un Administrador consulta la cola y sabe qué pasó con cualquier correo; un Estándar recibe rechazo. |
+| RF-NOT-12 | Un correo enviado no se vuelve a enviar. | Ejecutar el procesador dos veces seguidas no duplica ningún envío. |
+| RF-NOT-13 | Las credenciales del servidor de correo se leen de variables de entorno. | No aparecen en el repositorio ni en el historial (RD-10). |
+
+## Historical Practice 1 scope
+
+Source of this historical subsection: Requerimientos del Core, pieza 4,
+and Práctica 1, sección 1.5. These four requirements describe the delivered
+minimal queue; the remaining Practice 5 requirements are listed above.
 
 | ID | Requisito | Criterio de aceptación |
 |---|---|---|
@@ -18,4 +44,6 @@ Activation, password recovery and forced reset send emails. Since this practice,
 - SMTP credentials are read from environment variables (RF-NOT-13, RD-10). Any server works: a personal email account with an app password, or a test service.
 - The email is really received: at grading time the professor registers with their own email and opens the link.
 
-Retries, failed state, last error and admin consultation of the queue arrive in week 11.
+Retries, failed/uncertain states, safe last error and admin consultation are
+implemented in Practice 5 (ADR 031). Temporal reminders are implemented in ADR 032.
+The historical baseline above does not describe these later extensions.

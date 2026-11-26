@@ -70,6 +70,16 @@ public static class RoleRequirements
 
         // RF-CA-21: listar usuarios es de Administrator, y un Standard recibe
         // rechazo (el mismo 403 que en las otras cuatro).
+        [Operation.ViewSalesReport] = new(AccessLevel.Administrator),
+        [Operation.ViewCollectionReport] = new(AccessLevel.Administrator),
+        [Operation.ViewProductReport] = new(AccessLevel.Administrator),
+        [Operation.ViewExclusionReport] = new(AccessLevel.Administrator),
+        [Operation.ViewEmployeeReport] = new(AccessLevel.Administrator),
+        [Operation.ViewPendingDebtReport] = new(AccessLevel.Administrator),
+        [Operation.ViewSettledDebtReport] = new(AccessLevel.Administrator),
+        [Operation.ViewClosingReport] = new(AccessLevel.Administrator),
+        [Operation.ViewOpenSalesReport] = new(AccessLevel.Administrator),
+        [Operation.ViewPermissionRequestReport] = new(AccessLevel.Administrator),
         [Operation.ListUsers] = new(AccessLevel.Administrator),
 
         // RF-CA-08: cambiar el role lo hace un Administrator.
@@ -113,24 +123,36 @@ public static class RoleRequirements
         // operaciones de mostrador; un Administrator recibe 403 en ellas.
         [Operation.IssueInvoice] = new(AccessLevel.Standard),
         [Operation.CollectInvoicePayment] = new(AccessLevel.Standard),
+        [Operation.RecoverUndeliveredInvoice] = new(AccessLevel.Standard),
+        [Operation.ListOwnNotifications] = new(AccessLevel.AnySession),
+        [Operation.MarkNotificationRead] = new(AccessLevel.AnySession),
+        [Operation.MarkAllNotificationsRead] = new(AccessLevel.AnySession),
+        [Operation.GetNotificationEmailPreference] = new(AccessLevel.Administrator),
+        [Operation.UpdateNotificationEmailPreference] = new(AccessLevel.Administrator),
+        [Operation.InspectEmailQueue] = new(AccessLevel.Administrator),
         [Operation.LeaveInvoiceAsDebt] = new(AccessLevel.Standard),
         [Operation.EditInvoiceItems] = new(AccessLevel.Standard),
         [Operation.MarkInvoiceAsNotDelivered] = new(AccessLevel.Standard),
         [Operation.CancelInvoice] = new(AccessLevel.Standard),
 
-        // RF-NEG-02: confirmar o rechazar una transferencia, registrar un abono
-        // de deuda y leer el historial de edicion son del Administrator.
+        // RF-NEG-02: resolución de transferencias e historiales son administrativos.
         [Operation.ConfirmInvoiceTransfer] = new(AccessLevel.Administrator),
         [Operation.RejectInvoiceTransfer] = new(AccessLevel.Administrator),
-        [Operation.RegisterDebtPayment] = new(AccessLevel.Administrator),
+        [Operation.RegisterDebtPayment] = new(AccessLevel.AnySession),
+        [Operation.ListDebts] = new(AccessLevel.AnySession),
+        [Operation.GetDebt] = new(AccessLevel.AnySession),
+        [Operation.GetDebtPaymentHistory] = new(AccessLevel.Administrator),
+        [Operation.ConfirmDebtTransfer] = new(AccessLevel.Administrator),
+        [Operation.RejectDebtTransfer] = new(AccessLevel.Administrator),
         [Operation.ListInvoiceEdits] = new(AccessLevel.Administrator),
 
-        // Consultar facturas (RF-NEG-06): las dos rutas declaran AnySession porque
-        // el conjunto de roles es cerrado (Administrator y Standard) y los dos
-        // leen las mismas facturas. AnySession admite todo role existente, asi
-        // que la tabla sigue diciendo a quien admite cada ruta.
+        // RF-NEG-06: exige sesión; el repositorio aplica emisor/sucursal.
+        // La consulta operativa de deudas usa su propio alcance por sucursal.
         [Operation.ListInvoices] = new(AccessLevel.AnySession),
         [Operation.GetInvoice] = new(AccessLevel.AnySession),
+        [Operation.GetBusinessDay] = new(AccessLevel.AnySession),
+        [Operation.CloseBusinessDay] = new(AccessLevel.AnySession),
+        [Operation.ReopenBusinessDay] = new(AccessLevel.AnySession),
 
         [Operation.CreateProduct] = new(AccessLevel.Administrator),
         [Operation.UpdateProduct] = new(AccessLevel.Administrator),

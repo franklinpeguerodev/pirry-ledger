@@ -4,7 +4,7 @@ using PirryLedger.Business.Infrastructure.EntityConfigurations;
 
 namespace PirryLedger.Business.Infrastructure.Persistence;
 
-public sealed class BusinessDbContext : DbContext
+public sealed partial class BusinessDbContext : DbContext
 {
     public BusinessDbContext(DbContextOptions<BusinessDbContext> options)
         : base(options)
@@ -12,6 +12,7 @@ public sealed class BusinessDbContext : DbContext
     }
 
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<BusinessDay> BusinessDays => Set<BusinessDay>();
 
     public DbSet<Product> Products => Set<Product>();
 

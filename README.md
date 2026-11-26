@@ -1,5 +1,643 @@
 # Pirry Ledger
 
+## Revisión acumulada — Práctica 5
+
+Las funcionalidades están integradas en develop. El 26 de noviembre de 2026
+se verificó develop 7e53a79 (PR 115) en el Codespace autorizado:
+
+- Docker construyó y arrancó Host, PostgreSQL, migrador, SeaweedFS, Mailpit y mailer.
+- Suite Linux: 709 aprobadas, cero fallidas/omitidas; sin NU1900 en ese registro.
+- Activación, recuperación, sesiones, roles, permisos y Billing probados contra Host.
+- Documento descargado con el mismo SHA-256 después de recrear contenedores.
+- SMTP hacia Mailpit y cinco intentos con fallo controlado; sexta pasada sin reenvío.
+- Reportes Core/negocio, filtros, autorización, bandeja y preferencia comprobados.
+
+Evidencia y comandos en [verificacion-docker-practica-5.md](docs/verificacion-docker-practica-5.md).
+La [revisión anterior](docs/aceptacion-practica-5.md) conserva la matriz de requisitos
+y sus comprobaciones PostgreSQL. No se leyó .env ni se ejecutó Python.
+Para esta composición de prueba se usó la configuración de ejemplo versionada:
+
+```powershell
+docker compose --env-file .env.example up --build -d
+```
+
+El CLI emitió un aviso de GSSAPI ausente que no impidió la entrega a Mailpit.
+No se verificó correo externo ni Kerberos. Faltan revisión final y autorización
+de entrega; RF-NOT-06 mantiene la desviación ADR 023/024, sin excepción académica
+registrada. No se creó el tag practica-5.
+
+## Reportes del negocio — ADR 034
+
+RF-REP-02/03/04/05. El contrato completo de parámetros, campos, cálculos y archivos
+está en [business-report-contract.md](docs/business-report-contract.md).
+Todas las rutas GET /api/reports/business exigen Administrador.
+
+| Ruta | Contenido |
+|---|---|
+| /sales | Ventas por jornada, semana lunes–domingo o mes calendario |
+| /collections | Cobros de facturación por método, separados de abonos |
+| /products | Unidades e importes históricos por nombre exacto |
+| /exclusions | Anulaciones pendientes, efectivas y no entregados |
+| /employees | Facturación por usuario y nombre histórico |
+| /debts/pending | Deudas pendientes, por factura |
+| /debts/settled | Deudas saldadas, por factura |
+| /closings | Últimos cierres guardados y reaperturas informativas |
+| /open-sales | Venta de jornadas actualmente abiertas |
+
+from y to son obligatorios e inclusivos por fecha de jornada, excepto en
+/open-sales. branchIds es repetible; omitir o seleccionar Todas incluye las
+sucursales físicas. /sales exige grouping=Day, Week o Month. productNames
+es repetible y exacto, admitido en ventas, productos y empleados.
+Subconjunto de productos omite el bloque methods en JSON. Una factura con varios
+productos se cuenta una vez en los totales. Históricos usan jornadas cerradas.
+Abiertas tienen apartado independiente. Las etiquetas de sucursal usan directorio
+actual; productos, empleados y datos de factura conservan sus valores emitidos.
+
+Consultas comprobadas por HTTP:
+GET /api/reports/business/sales?from=2026-11-24&to=2026-11-25&grouping=Day
+GET /api/reports/business/closings?from=2026-11-24&to=2026-11-25&limit=1
+GET /api/reports/business/open-sales
+
+Deudas pendientes y saldadas son consultas independientes. Cierres y deudas
+usan offset desde cero y limit predeterminado 50, máximo 100. Una página vacía
+conserva los totales del filtro completo. La copia de una jornada reabierta se
+identifica como Jornada reabierta y se excluye de closedTotals.
+
+Cada respuesta se calcula en RepeatableRead de solo lectura. Las consultas de
+Billing y anulaciones se incorporan por los participantes de la conexión común.
+La siguiente página obtiene una lectura nueva. Se filtra y agrega en SQL y se
+proyectan filas de la página; no se mantiene una tabla ni caché de reportes.
+Los cálculos diarios alimentan agrupación semanal/mensual en backend.
+Si falta el proveedor Billing, el reporte del negocio devuelve 404 controlado
+y las funcionalidades del Core conservan su independencia.
+
+Los resultados entre módulos no declaran reglas JSON. Reports construye las
+páginas públicas sin los agregados internos BranchTotals y convierte las filas
+que necesitan presentación: omisión de methods y etiqueta de jornada reabierta.
+No se usa JsonIgnore para ocultar los totales internos. El contrato HTTP se mantiene.
+
+Verificaciones originales del bloque de reportes, antes de la revisión acumulada:
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+dotnet build Src/Host/PirryLedger.Host --no-restore -v q
+
+Suite completa: 709 aprobadas, cero fallidas/omitidas. Build sin errores ni
+advertencias. Pruebas cubren nueve rutas con 401/403, cifras y fechas, nombres,
+métodos omitidos, páginas, reapertura y recuperación sin reescribir cierre.
+Una mutación sumando el cierre reabierto fue detectada y se restauró la regla.
+
+PostgreSQL real verificó agregaciones y todas las consultas con datos temporales.
+Una segunda conexión confirmó cambios de factura y permiso mientras se leía:
+la respuesta conservó sus cifras, la siguiente vio los cambios y un intento de
+escritura dentro de la lectura fue rechazado. Datos temporales retirados.
+En esa revisión no hubo envío ni Docker. La comprobación posterior del Codespace
+está enlazada al inicio; queda revisión final.
+
+## Reporte administrativo de solicitudes — ADR 033
+
+RF-REP-01/03/04/05. GET /api/reports/permission-requests exige sesión de
+Administrador. from y to son fechas obligatorias yyyy-MM-dd e incluyen ambos días
+calendario de RD. Filtra la fecha de solicitud y muestra el estado actual.
+Una solicitud del 1 de noviembre aplicada después cuenta como Applied al volver
+a consultar ese período. Cada solicitud se cuenta una sola vez.
+
+Consulta comprobada por HTTP:
+GET /api/reports/permission-requests?from=2026-11-01&to=2026-11-02
+
+branchIds es opcional y permite repetir el parámetro para seleccionar varias
+sucursales. Omitirlo selecciona todas. El identificador global Todas también
+selecciona todas. Un UUID vacío o inexistente devuelve 400. Sin sesión devuelve
+401; Estándar recibe 403. Fechas ausentes, mal formadas o invertidas devuelven
+400. La última fecha admitida debe permitir calcular el inicio del día siguiente.
+
+Respuesta con from, to, branches y counts. Cada sucursal tiene branchId,
+branchName, isGlobal y counts. Cada counts incluye pending, approved, applied,
+rejected y total, también con cero. Las sucursales seleccionadas sin solicitudes
+se incluyen con cero. El grupo isGlobal corresponde a solicitudes administrativas
+guardadas en Todas, contadas una vez. El counts general suma los grupos.
+Los nombres de sucursal provienen del directorio actual de AccessControl.
+
+Permissions agrupa por sucursal y estado en PostgreSQL después de filtrar rango
+UTC y sucursales. Reports recibe agregados por Core.Contracts y compone el resultado.
+El límite final SQL es exclusivo al inicio del día posterior. Reports tiene
+Domain, Application, Infrastructure, Api y su propio proyecto de pruebas.
+La implementación reutiliza dependencias existentes. No agrega tablas.
+
+Verificación:
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+dotnet build Src/Host/PirryLedger.Host --no-restore -v q
+
+Pruebas cubren UTC/RD, extremos, ceros, estado único, sucursales, Todas,
+rechazos sin consultar datos y autorización HTTP. Una mutación que omitía el
+último día fue detectada y la regla se restauró. PostgreSQL real confirmó
+GroupBy, rangos distintos, sucursales y estado actual con datos revertidos.
+La enumeración de rutas incluye Reports y comprueba su declaración de acceso.
+Los reportes del negocio están integrados; el estado de aceptación acumulada
+se detalla al inicio y en docs/aceptacion-practica-5.md.
+
+## Sucursal obligatoria en solicitudes de permiso
+
+RF-GP-01, RD-06 y RD-09. Cada solicitud conserva la sucursal al crearse.
+Estándar requiere su sucursal física. Administrador registra Todas, incluido
+un usuario ascendido que conserve una asignación física. El alcance se obtiene
+del usuario autenticado en ambos caminos de creación. Ausencia de destinatario
+activo, sucursal ausente, vacía o global para Estándar rechazan antes de guardar.
+La fábrica exige Guid de sucursal y rechaza Guid.Empty.
+
+RequirePermissionRequestBranch cambia branch_id a NOT NULL y agrega restricción
+contra UUID vacío. La migración carece de valor predeterminado. Si existen datos
+sin sucursal, deben corregirse con una atribución revisada antes de aplicarla.
+El inventario del entorno configurado encontró cero solicitudes, cero nulas y cero
+vacías. La migración se aplicó y PostgreSQL confirmó obligatoriedad sin default.
+
+Las pruebas existentes ahora asignan sucursal física a sus Estándar y proporcionan
+el directorio de identidad al gateway. Se conservan sus verificaciones originales.
+Se agrega rechazo sin escritura para sucursal ausente/vacía/global y cobertura del
+Administrador ascendido. ADR 030 documenta la corrección aprobada.
+
+## Notificaciones de atraso y trabajador CLI — ADR 032
+
+RF-NOT-03/08/09/12: Notifications detecta atrasos mediante contratos del Core;
+Billing conserva las reglas y consulta exclusivamente sus datos. No hay envío
+SMTP dentro de la facturación ni notificaciones push en esta entrega.
+
+| Caso | Cuándo corresponde | Destinatarios y canales |
+|---|---|---|
+| Transferencia sin verificar | Estrictamente más de 96 horas desde el registro de ese pago, todavía Registered y factura no anulada | Administradores activos: interno y correo según preferencia |
+| Jornada sin cerrar | Abierta al llegar las 16:00 RD del día siguiente a su fecha de apertura | Administradores activos: interno y correo según preferencia |
+
+Incluye transferencias de ventas, pagos parciales al fiar y abonos de deudas.
+Cada pago conserva su propio plazo, aunque la factura sea antigua. Exactamente
+a las 96 horas no avisa. Una solicitud de anulación pendiente no excluye el
+recordatorio; la factura ya anulada sí. Cerrar o resolver pagos no depende del
+trabajador. El bloqueo de emisión a las 16:00 conserva su validación inmediata.
+
+OverdueNotificationRecord significa «control de aviso de atraso»: nueva tabla
+not_overdue_notification_records, con id, event_key único y recorded_at_utc.
+El modelo suma 22 tablas sin contar historial EF. No se agregan marcas a Billing,
+FK entre módulos, paquetes, variables, auditoría ni historial de cierres.
+La migración AddOverdueNotificationRecords se aplica con el mecanismo existente.
+
+La clave estable tipo/origen se consume una sola vez, incluso sin Administradores
+activos. Habilitar después una cuenta o correo no recupera ese evento. Persisten
+además las restricciones únicas por evento/destinatario y correo/aviso. Repetir,
+reiniciar o ejecutar simultáneamente no duplica avisos ni correos.
+
+Cada ejecución confirma hasta 50 casos nuevos, ordenados por vencimiento.
+Ya registrados, resueltos o fallidos no consumen el cupo. Las lecturas de
+candidatos no están limitadas a 50 filas; el límite corresponde a generación.
+Cada caso revalida el origen bajo su bloqueo de factura o sucursal y registra
+control, avisos y correos en una transacción común. Un fallo revierte ese caso,
+continúa con los demás y se informa en el resumen; podrá reintentarse después.
+La lista de Administradores se consulta sin reutilizar seguimiento anterior.
+
+Un solo trabajador CLI ejecuta revisión y luego cola SMTP. En Docker, mailer
+repite --process-notifications y espera 30 segundos después de finalizar,
+incluido el envío. No es un temporizador exacto cada 30 segundos: SMTP lento
+retrasa la siguiente revisión. Esta espera también afecta activación y recuperación;
+los avisos internos de operaciones normales siguen siendo inmediatos.
+
+Con configuración de entorno y migraciones aplicadas, ejecutar una pasada:
+
+```powershell
+dotnet run --project Src/Host/PirryLedger.Host -- --notify-overdue
+dotnet run --project Src/Host/PirryLedger.Host -- --process-notifications
+dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
+```
+
+--notify-overdue solo revisa y encola; --process-notifications revisa y después
+envía hasta 50 correos; --send-mail conserva el envío sin revisar nuevos atrasos.
+Los comandos terminan al completar una pasada; fuera de Docker, el operador debe
+programar su ejecución. Si falla un caso, el combinado intenta igualmente SMTP
+y termina con código 1; la cancelación de ejecución sí se propaga.
+
+Antes de reclamar cada correo de atraso se comprueba su vigencia actual,
+además de cuenta activa, rol y preferencia. Si se confirmó/rechazó el pago, se
+anuló la factura o se cerró la jornada, Pending pasa a Cancelled sin consumir
+intento. Aviso interno y control permanecen. Si falla comprobar la vigencia,
+el correo sigue Pending y esa ejecución SMTP se interrumpe con error controlado;
+no se interpreta el error como resolución. No se retira un correo ya aceptado.
+
+Para provocar los eventos: registrar una transferencia de venta o deuda y
+mantenerla pendiente más de cuatro días, o emitir la primera factura de una
+jornada y dejarla abierta hasta las 16:00 RD del día siguiente. Ejecutar revisión,
+consultar /api/notifications con cada Administrador y la cola administrativa.
+Repetir la revisión conserva los mismos avisos. Resolver el origen antes de enviar
+permite comprobar Cancelled sin intento. El límite temporal usa IClock UTC,
+sin endpoint para alterar fechas del negocio.
+
+Verificación de esta entrega:
+
+```powershell
+dotnet build Src/Host/PirryLedger.Host --no-restore -v q
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+```
+
+Build: 0 errores y una advertencia NU1900 por consulta de vulnerabilidades de
+NuGet sin red. Suite completa: 659 aprobadas, 0 fallidas/omitidas. La mutación
+temporal de «más de» a «desde 96 horas» produjo el fallo esperado en el límite;
+se restauró y la suite pasó. Incluye cap, fallos aislados, vigencia SMTP y rechazo
+sin cambios; los tests habituales no requieren base ni SMTP.
+Otra mutación retiró las defensas de unicidad: repetir produjo dos eventos donde
+se esperaba uno. Se restauraron ambas defensas y se repitió la suite de Notifications.
+
+Comprobación separada en PostgreSQL real, con DI de producción y datos propios:
+selección de venta/abono/parcial, exclusiones, bloqueos de factura y sucursal,
+dos ejecuciones simultáneas sin duplicados, rollback y reintento individual,
+y ausencia de entrega retroactiva. Se retiraron los datos temporales y no se
+enviaron correos externos. Los tres comandos CLI se ejecutaron: revisión sin
+casos existentes y fase SMTP bloqueada por otro enviador, sin tocar mensajes
+existentes. En esa revisión Docker no estaba disponible. La ejecución posterior
+en Codespace está enlazada al inicio; revisión final abierta.
+
+## Cola de correos: cinco intentos y consulta — ADR 031
+
+RF-NOT-09/10/11/12: el comando independiente procesa hasta 50 correos del lote,
+con un intento por correo en cada ejecución. No agrega espera ni backoff; un
+fallo conocido vuelve a Pending y el quinto termina en Failed. No hay reenvío
+manual ni reintento de Failed, Sent, Cancelled o Uncertain.
+
+| Estado persistido | Significado |
+|---|---|
+| Pending (0) | Espera otro intento, con menos de cinco realizados |
+| Processing (1) | Se reclamó individualmente y aún no se guardó resultado |
+| Sent (2) | SMTP confirmó aceptación; no garantiza lectura ni llegada al buzón |
+| Cancelled (3) | Notificable retirado por preferencia o elegibilidad |
+| Failed (4) | Se agotaron los cinco intentos conocidos |
+| Uncertain (5) | No se pudo confirmar la entrega; no se reenvía automáticamente |
+
+Solo trabaja un enviador. Una segunda ejecución termina con aviso de que ya hay
+otro activo, sin reclamar mensajes. El bloqueo usa una transacción de coordinación
+en conexión exclusiva, verificada antes de nuevos reclamos. No escribe datos de
+negocio ni bloquea facturación, sucursales o avisos internos. La transacción se
+mantiene durante el comando, incluido SMTP; no se agrega tabla ni configuración.
+El bloqueo de sesión propuesto inicialmente falló en el entorno por reutilización
+de sesiones; Franklin autorizó la adaptación y su prueba real está en la bitácora.
+
+Al obtener el bloqueo, Processing dejados por ejecuciones interrumpidas pasan a
+Uncertain. Cada resultado se guarda antes de continuar con el siguiente correo.
+Si SMTP acepta pero guardar falla, el comando se interrumpe: la próxima ejecución
+no vuelve a enviar ese Processing. Fallar al desconectar después de aceptación
+no invalida Sent. Conexión/autenticación fallida o rechazo explícito permiten el
+reintento limitado; perder la respuesta durante el envío produce Uncertain.
+Si se pierde la conexión de coordinación, se aborta antes de nuevos reclamos.
+
+La preferencia, cuenta activa y rol se revisan antes del intento. La cuenta se
+consulta sin reutilizar entidades seguidas de envíos anteriores. Cancelar un
+pendiente por inelegibilidad no consume intento. Activación/recuperación mantienen
+su independencia de la preferencia, con el mismo límite y estados de entrega.
+
+GET /api/notifications/email-queue requiere Administrador y sesión válida.
+Estándar recibe 403; sin sesión, 401. No modifica la cola. Filtros opcionales:
+status (nombre de estado), fromUtc/toUtc (fecha de creación UTC, inclusivas),
+offset (desde cero) y limit (1–100, predeterminado 50). Fechas invertidas,
+estado desconocido o paginación inválida producen 400. Respuesta con items y total.
+Cada fila contiene id, recipient, subject, status, attempts, createdAtUtc,
+sentAtUtc, lastAttemptAtUtc, statusChangedAtUtc y lastError seguro. No expone
+cuerpos, enlaces/códigos de acceso, trazas ni respuestas SMTP crudas. Errores
+históricos desconocidos se muestran como mensaje genérico.
+
+Migración AddEmailQueueOutcomes: dos fechas UTC opcionales; no inventa fechas
+históricas. Pendientes históricos con cinco o más intentos quedan Failed y no
+se reclaman. Se conservan ordinales anteriores. Durante actualización no deben
+coexistir enviadores antiguos que desconocen el bloqueo, límite y estado incierto.
+No se agregan paquetes o variables. Recordatorios CLI implementados en ADR 032;
+reportes implementados en ADR 033 y 034.
+
+Verificación ejecutada:
+
+```powershell
+dotnet build pirry-ledger.slnx --no-restore -v q
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+```
+
+Build: 0 errores, una advertencia NU1900 por consulta de vulnerabilidades sin
+acceso de red. Suite completa: 632 aprobadas, 0 fallidas/omitidas. Rojo inicial:
+se esperaba Failed tras el quinto fallo y se obtuvo Pending; regla corregida.
+Pruebas cubren límite, sexto intento rechazado, incertidumbre, exclusión, pérdida
+de coordinación, rechazo sin cambios, autorización HTTP, filtros y errores seguros.
+
+PostgreSQL: dos conexiones reales verificaron exclusión y liberación. Procesador
+y repositorio reales en esquema temporal verificaron resultados, recuperación y
+fallo al guardar aceptación, revirtiendo esquema y datos. SMTP de prueba local
+verificó aceptación seguida de desconexión, rechazo explícito y pérdida de respuesta.
+Sin entregas externas ni procesamiento de mensajes existentes. El comando real
+--send-mail se verificó con bloqueo ocupado: terminó sin tomar mensajes.
+Docker no se verificó en esa entrega; la comprobación posterior está enlazada al inicio.
+
+## Eventos y preferencias de notificación — ADR 030
+
+Solicitudes de permiso y operaciones de facturación publican avisos al guardar.
+Solo reciben cuentas activas: significa habilitadas, aunque no tengan sesión
+abierta. AccessControl entrega destinatarios por contrato; cada módulo conserva
+sus propias tablas (RD-03). No se consulta ni modifica información de otro módulo.
+
+| Evento | Destinatarios activos | Canales |
+|---|---|---|
+| Solicitud de permiso creada | Todos los Administradores | Interno y correo según preferencia |
+| Permiso aprobado o rechazado | Solicitante, con motivo al rechazar | Interno |
+| Transferencia registrada, venta o abono | Todos los Administradores | Interno |
+| Transferencia de venta confirmada o rechazada | Emisor de la factura | Interno |
+| Transferencia de abono confirmada o rechazada | Usuario que registró el abono | Interno, incluso si es Administrador |
+| Factura dejada fiada o abono en efectivo | Todos los Administradores | Interno |
+| Cada cierre de jornada | Todos los Administradores, indicando sucursal | Interno |
+
+Una recuperación por transferencia produce el aviso de transferencia registrada.
+Reabrir una jornada no produce aviso propio. Los recordatorios de más de cuatro
+días y jornada vencida se procesan mediante el CLI del ADR 032 descrito arriba.
+
+Cada Administrador consulta o cambia exclusivamente su preferencia:
+
+| Método y ruta | Resultado |
+|---|---|
+| GET /api/notifications/email-preference | 200 con emailEnabled, inicialmente true |
+| PUT /api/notifications/email-preference | Cuerpo obligatorio {"emailEnabled":false} o true; 204 |
+
+Sin sesión: 401. Estándar: 403. Cuerpo sin emailEnabled o con null: 400 sin cambios.
+No se acepta elegir otro destinatario. Desactivar cancela correos notificables
+pendientes; reactivar afecta eventos nuevos. No afecta activación o recuperación.
+Antes de SMTP se revalida cuenta activa, rol Administrador y preferencia; si ya
+no corresponde, el correo queda Cancelled. No se retira un correo ya entregado.
+
+La operación, aviso interno y correo en cola comparten una transacción PostgreSQL
+explícita (ADR 029); SMTP corre aparte. La clave estable tipo/origen y el índice
+único evento/destinatario evitan repetir avisos. Cada correo notificable referencia
+un aviso con índice único. No existe tabla general de eventos; ADR 032 agrega
+control específico de atrasos. Cada cierre válido
+recibe identidad propia; solo se conserva el identificador del último cierre,
+sin historial de revisiones. Las resoluciones de permisos leen el estado actual
+bajo bloqueo de fila para impedir aprobaciones/rechazos simultáneos.
+
+Migraciones AddNotificationDeliveryPolicy, AddPermissionRequestBranch y
+AddBusinessDayClosingEvent: clave de evento, enlace de correo, preferencias,
+sucursal conservada en solicitud y último identificador de cierre. No agregan
+FK entre módulos ni reconstruyen datos históricos. Se aplican con el mecanismo
+de migraciones existente; no hay variables ni paquetes nuevos.
+
+El rechazo de una transferencia de venta exige ahora motivo:
+`{"debtorName":"Luis Gomez","reason":"No se recibió la transferencia"}`.
+El aviso identifica factura/pago y motivo; la autorización sigue siendo administrativa.
+
+Verificación ejecutada:
+
+```powershell
+dotnet build pirry-ledger.slnx --no-restore -v q
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v minimal
+```
+
+Build: 0 errores, una advertencia NU1900 por consulta de vulnerabilidades de NuGet
+sin acceso de red. Suite: 612 aprobadas, 0 fallidas/omitidas. Incluye 19 casos de
+publicación/política, cuatro de revalidación antes de SMTP, siete de eventos de
+facturación, dos de selección activa, dos de solicitud/publicación atómicas y un
+caso HTTP de preferencias con autorización real. Se comprobó en rojo que cambiar
+la clave estable por una aleatoria duplica destinatarios (esperado 2, obtenido 4);
+se restauró el código y la suite pasó.
+
+Comprobación PostgreSQL separada con DI de producción y datos temporales:
+publicación por permisos, ventas, abonos y cierres; preferencia/cancelación;
+fallo de aviso revierte cobro/pagos; publicación concurrente sin duplicados;
+resolución recarga estado y bloquea una segunda transacción. Datos propios
+retirados o revertidos, sin ejecutar SMTP ni inspeccionar .env.
+
+RF-NOT-06 conserva la desviación de negocio documentada en ADR 023/024:
+el correo selectivo no equivale a cumplimiento universal ni excepción académica.
+Cinco intentos, consulta administrativa y tratamiento incierto están implementados
+como se describe arriba. ADR 032 completa los recordatorios temporales.
+
+## Bandeja propia de notificaciones — RF-NOT-04, RF-NOT-05
+
+Administrador y Estándar consultan exclusivamente sus avisos con sesión válida.
+El destinatario se obtiene de la sesión; no se acepta un usuario desde la petición.
+
+| Método y ruta | Comportamiento |
+|---|---|
+| GET /api/notifications | Avisos propios, más recientes primero; consultar no marca como visto |
+| POST /api/notifications/{id}/read | Marca un aviso propio; devuelve 204 |
+| POST /api/notifications/read-all | Marca los propios pendientes; devuelve 200 con marked |
+
+Cada aviso devuelve id, subject, body, createdAtUtc y readAtUtc. Fecha de lectura
+nula significa sin ver. Repetir el marcado conserva la primera fecha y no vuelve
+a contar el aviso en marcado general. Aviso ajeno o inexistente responde 404 sin
+modificar datos; sin sesión responde 401. No hay eliminación de avisos.
+
+Migración AddInternalNotifications: tabla not_notifications con destinatario,
+contenido y fechas UTC, e índice de consulta por usuario/fecha. No añade FK hacia
+tablas de otros módulos. La cola SMTP existente permanece independiente.
+
+```powershell
+dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeBandejaDeNotificaciones -v q
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeBandejaPorHttp -v q
+```
+
+Resultados: seis pruebas de bandeja y dos HTTP, con ambos roles y filtro real.
+PostgreSQL verificado aparte: consulta sin lectura automática, marcado individual
+y general por propietario, fecha inicial conservada desde contexto nuevo y aviso
+ajeno intacto. Solo se retiraron los avisos temporales propios de la comprobación.
+
+Los productores, destinatarios activos y preferencias se conectan mediante el
+centro descrito arriba. La consulta mantiene lectura explícita y propiedad.
+
+## Coordinación transaccional entre módulos — ADR 029
+
+IApplicationTransaction permite ejecutar escrituras de varios módulos en una
+sola transacción PostgreSQL. Cada módulo incorpora exclusivamente su propio
+contexto mediante IModuleTransactionParticipant; conserva sus entidades y tablas.
+La conexión compartida vive durante el ámbito de DI y no es propiedad de los
+contextos individuales. Las llamadas anidadas comparten la transacción exterior.
+Un fallo anidado obliga a revertir aunque el llamador capture la excepción.
+
+El centro conecta eventos de negocio y adapta jornadas, abonos y permisos para
+participar en esta transacción. SMTP conserva su proceso independiente. El
+coordinador no requiere variables nuevas; las migraciones del centro se listan arriba.
+
+Verificación sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Core.Notifications.Tests/PirryLedger.Core.Notifications.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeTransaccionEntreModulos -v q
+```
+
+Resultado: cuatro pruebas aprobadas de conexión/transacción compartidas,
+reversión y anidamiento. Verificación PostgreSQL separada con datos temporales:
+fallo revierte escrituras de Billing y Permisos y descarta seguimiento;
+la siguiente operación confirma ambos módulos. Datos propios retirados al terminar.
+
+## Recuperación de delivery y ajustes de ventas — ADR 028
+
+El Estándar emisor recupera una factura no entregada con
+`POST /api/billing/invoices/{id}/recover`. Cuerpo de ejemplo:
+
+```json
+{"payments":[{"method":"Cash","amount":500}]}
+```
+
+Usa los mismos campos de pago que el cobro ordinario: Cash o Transfer; delivery
+no admite receivedAmount ni cambio. Devuelve InvoiceResponse con 200. Efectivo
+que cubre el total pasa a Paid; transferencia a PendingVerification y requiere
+confirmación administrativa por la ruta existente de transferencias.
+
+Sin sesión responde 401; Administrador 403; compañero u otra sucursal 404.
+Solo se recupera NotDelivered: otra situación o repetir recuperación devuelve
+400 sin agregar pagos. `/collect` rechaza la recuperación; es una acción distinta.
+Se toman usuario y fecha del servidor, sin aceptar identidad del cuerpo.
+
+Conserva factura, líneas, precios, emisión y jornada originales. Puede recuperarse
+después del cierre sin abrir/reabrir caja. La jornada conserva su cierre guardado;
+la venta recuperada corresponde a la jornada original para cálculos posteriores.
+
+InvoiceSalesCalculation centraliza cifras de facturación usadas al cerrar.
+Solicitar anulación excluye venta y efectivo, aprobar mantiene exclusión como
+anulado y rechazar reincorpora a la jornada original. No entregado también queda
+excluido hasta recuperarse. Las cifras separan transferencias confirmadas y
+pendientes, fiado y exclusiones; abonos de deuda permanecen fuera del cierre.
+Los eventos se conectan en el centro; reportes integrados en ADR 033 y 034.
+
+Pruebas reproducibles sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter "FullyQualifiedName~Recuperacion|FullyQualifiedName~AjustesDeVentas" -v q
+dotnet test Tests/PirryLedger.Integration.Tests/PirryLedger.Integration.Tests.csproj --no-restore -v q
+```
+
+Incluyen ruta exclusiva, permisos reales, conservación de cierre, transferencia
+verificada y exclusión/reincorporación mediante solicitudes reales de Permisos.
+No requiere migración, paquete ni variable nuevos. Cancelled sigue terminal;
+NotDelivered ahora tiene las dos salidas explícitas de recuperación.
+
+## Deudas y abonos por sucursal — RF-NEG-06, RD-06
+
+Estándar consulta y abona cualquier deuda de su sucursal, incluida la de otro
+emisor y jornadas anteriores. No se agrupa por nombre. Conserva deudas saldadas.
+No requiere caja abierta, no abre jornada y no suma abonos al cierre de ventas.
+Administrador conserva alcance global. Facturas ordinarias siguen privadas por emisor.
+
+| Método y ruta | Uso |
+|---|---|
+| GET /api/billing/debts | Resúmenes; Administrador puede filtrar branchId, Estándar solo su sucursal |
+| GET /api/billing/debts/{id} | Saldo, pendiente de transferencia o deuda saldada; sin historial |
+| POST /api/billing/invoices/{id}/payments | Abona a factura seleccionada; cuerpo con amount y method obligatorio: Cash o Transfer |
+| GET /api/admin/debts/{id}/payments | Historial completo, incluidos rechazados y fecha de pago completo |
+| POST /api/admin/debts/{id}/payments/{paymentId}/confirm | Administrador confirma transferencia seleccionada |
+| POST /api/admin/debts/{id}/payments/{paymentId}/reject | Administrador rechaza; cuerpo con reason obligatorio |
+
+El registro devuelve DebtSummary, no la factura completa del contrato anterior.
+Un importe cero, negativo, con decimales inválidos o mayor al saldo se rechaza
+completo. Efectivo reduce saldo inmediatamente. Transferencia deja saldo intacto
+y hasPendingTransfer=true: se bloquea otro abono solo en esa factura hasta
+confirmación/rechazo. También aplica cuando registra un Administrador; puede
+confirmar el mismo. Si se rechaza, vuelve a permitir abonos y conserva motivo.
+Anulación pendiente impide nuevos abonos.
+
+Al completar saldo se pasa a Paid; en transferencia ocurre solo al confirmar.
+paidAtUtc del historial usa fecha de registro del pago final, no confirmación.
+El Estándar no recibe historial de pagos de deuda, fechas ni rechazados: ni en
+la vista operativa ni dentro de sus respuestas ordinarias de factura. La fecha
+de emisión sí identifica la factura; transferencia pendiente se indica sin historial.
+Historial y resolución administrativa rechazan al Estándar con 403. Otra
+sucursal no se consulta ni abona por ID. Todas las rutas requieren sesión.
+
+Migración AddVerifiedDebtPayments agrega motivo y fecha/usuario de resolución,
+e índice de abono por transferencia pendiente. No altera métodos de pagos históricos.
+
+Pruebas sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeAbonosPorTransferencia -v q
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeDeudasPorHttp -v q
+```
+
+Las pruebas HTTP usan consultas EF reales en memoria y sustituyen únicamente
+el bloqueo PostgreSQL; la concurrencia física se verifica aparte. Se cubren
+compañeros, sucursales, pagos pendientes, rechazo sin motivo, historial oculto,
+deuda saldada, pagos con caja cerrada y confirmación por el propio Administrador.
+Los avisos de abonos y los recordatorios temporales están conectados (ADR 030/032).
+
+## Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
+
+La primera factura abre jornada de su sucursal en la fecha calendario de RD.
+Las ventas de madrugada conservan esa fecha. Una abierta que llega a las 16:00
+del día siguiente bloquea emitir con `409` y `code: ClosingRequired`.
+Se pueden seguir resolviendo pendientes y cerrar. No se cierra automáticamente.
+
+| Método y ruta | Resultado |
+|---|---|
+| GET /api/billing/branches/{branchId}/business-days/current | Última jornada y cierre guardado, o null si no existe |
+| POST /api/billing/branches/{branchId}/business-days/{id}/close | Cierra y devuelve último resumen; 409 con facturas/emisores inconclusos |
+| POST /api/billing/branches/{branchId}/business-days/{id}/reopen | Reabre explícitamente antes del límite, sin jornada posterior |
+
+Todas exigen sesión. Estándar solo opera su sucursal; Administrador selecciona
+sucursal. Cierre revisa todos los emisores, sin ampliar acceso a facturas ajenas.
+El aviso de pendientes incluye invoiceId, issuerId e issuerName, sin ítems/pagos.
+Nombre del emisor se conserva desde sesión al emitir.
+
+Emitir cuando la última cerrada aún puede reabrirse devuelve `409` con
+`code: ReopenRequired`. El cliente debe consultar la jornada y solicitar
+reapertura; no ocurre automáticamente. Después del límite abre una nueva.
+
+El cierre guarda vendido, efectivo de ventas, transferencias confirmadas y
+pendientes, fiado de esas ventas y exclusiones por anulación pendiente/aprobada
+y no entrega. No suma abonos de deuda. Cambios posteriores no reescriben cierre.
+Reabrir conserva cierre y fecha, con isReopened; nuevo cierre reemplaza anterior.
+No se mantiene historial de cierres (auditoría futura).
+
+Migración `AddBranchBusinessDays`: tabla de jornadas, último resumen, relación
+interna de factura y nombre histórico del emisor. Exige tabla de facturas vacía;
+no reconstruye jornadas anteriores. Sin paquetes o variables nuevos.
+
+Pruebas sin PostgreSQL ni SMTP, con reloj falso y persistencia/dobles en memoria:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~Jornada -v q
+```
+
+Incluyen límite exacto, madrugada, reapertura, pendientes de compañero,
+rechazo de otra sucursal, exclusión de abonos y anulación pendiente, y cierre
+inmutable tras anular una venta. La prueba HTTP emite, intenta cierre ajeno,
+recibe pendientes, cobra, cierra y reabre usando las rutas/filtro reales.
+Notificaciones, recordatorios CLI y reportes se implementan en sus próximas features.
+
+## Propiedad de facturas por emisor — RF-NEG-06
+
+Cada factura nueva conserva `issuedByUserId` obtenido de la sesión. En las
+rutas ordinarias de facturas, un Estándar solo lista y opera las suyas de su
+sucursal. Consultar o intentar modificar una ajena devuelve `404`, aunque sea
+de un compañero de la misma sucursal. Administrador conserva alcance global.
+Un Estándar ya asignado no puede trasladarse a otra sucursal.
+
+La migración `AddInvoiceIssuer` exige que no haya facturas históricas sin
+emisor; rechaza migrar si existen. No asigna identidades ficticias. La base
+de trabajo se limpió antes, preservando usuarios y acceso.
+
+Verificación automatizada sin PostgreSQL ni SMTP:
+
+```powershell
+dotnet test Tests/PirryLedger.Business.Tests/PirryLedger.Business.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDePropiedad -v q
+dotnet test Tests/PirryLedger.Core.AccessControl.Tests/PirryLedger.Core.AccessControl.Tests.csproj --no-restore --filter FullyQualifiedName~PruebasDeSucursales -v q
+```
+
+La prueba HTTP emite con sesión de Ana y campos falsificados en el cuerpo;
+verifica el emisor real y la sucursal de sesión. Juan, de esa misma sucursal,
+no obtiene la factura ni puede concluirla; estado y pagos quedan intactos.
+La consulta administrativa de todos los emisores también tiene prueba.
+Las consultas específicas de deudas y abonos compartidos por sucursal ya están
+descritas al inicio; no conceden acceso a reportes ni historial al Estándar.
+
+## Iteración en preparación — Práctica 5
+
+La anulación automática se da por concluida por decisión de Franklin. La nueva
+iteración prepara notificaciones, cola con reintentos, jornadas por sucursal,
+abonos y reportes. El código descrito en las secciones actuales sigue siendo
+la referencia de lo implementado; estas ampliaciones todavía no están disponibles.
+
+- [Alcance](docs/current-iteration.md).
+- [Reglas aprobadas](docs/reglas-operativas-practica-5.md).
+- [Criterios previos al desarrollo](docs/criterios-notificaciones-reportes.md).
+- [Ramas, archivos y verificaciones](docs/plan-ejecucion-practica-5.md).
+
+El correo selectivo tiene desviaciones expresas de RF-NOT-06 (ADR 023 y 024).
+Se ejecutó la limpieza de datos operativos preservando usuarios, sucursales,
+sesiones y códigos. Se retiraron las imágenes referidas; quedan objetos externos
+sin registro pendientes de revisión. La evidencia y límites están en
+[limpieza de datos](docs/limpieza-datos-practica-5.md). No se aplicaron nuevas migraciones.
+
 ERP para un negocio de comida rápida. Práctica 4 — El proyecto en un contenedor, el Manejador de documentos y una API externa.
 
 En este punto el repositorio tiene la cola de email con su persistencia y un
@@ -92,7 +730,7 @@ Qué levanta la composición y por qué:
 | `seaweedfs` | La API externa: guarda los bytes de los documentos (ADR 017). Solo visible dentro. |
 | `migrate` | Aplica el esquema con `--migrate` y termina; la API espera a que salga bien (ADR 018). |
 | `app` | La API. Es el **único** servicio con puerto publicado (`8090`). |
-| `mailer` | Ejecuta `--send-mail` en bucle: el correo se envía en un proceso aparte (ADR 007 y 019). |
+| `mailer` | Ejecuta `--process-notifications` en bucle: revisa atrasos, envía correo y espera 30 s tras finalizar (ADR 032). |
 | `mailpit` | La bandeja de correo de la composición. Sin puerto publicado (ADR 019). |
 
 > **El bucle del enviador va en el `entrypoint`, no en el `command`.** La imagen
@@ -691,9 +1329,9 @@ docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
 De ahí salen el enlace de activación (apunta a `http://localhost:8090`, la
 dirección pública) y el código de recuperación que viaja en el cuerpo.
 
-El enviador corre el comando `--send-mail` cada 10 segundos. Por eso, después de
-crear un usuario o pedir una recuperación, hay que **esperar unos segundos** a
-que el correo aparezca en la bandeja.
+El trabajador corre `--process-notifications`: revisa atrasos, procesa correo y
+espera 30 segundos tras finalizar antes de repetir. Después de crear un usuario
+o pedir recuperación, hay que esperar la siguiente pasada y la aceptación SMTP.
 
 #### Ejemplo de la respuesta
 
@@ -798,31 +1436,19 @@ y el resto de las operaciones del proyecto siguen respondiendo.
 
 ### Cómo enviar el email pendiente
 
-El enviador es un proceso aparte (RF-NOT-09): no manda emails dentro de la
-operación que los encola. Se lanza con un comando, no arranca solo:
+El enviador es un proceso aparte (RF-NOT-09). Puede ejecutarse con la API en
+marcha o detenida; mantiene el protocolo y los límites del ADR 031 descritos arriba.
 
 ```powershell
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Funciona en cualquier terminal, con la API detenida o en marcha, da igual.
-
-Imprime siempre un resumen y una línea final que depende del resultado. Sin
-credenciales SMTP válidas, un email pendiente produce esto:
-
-```
-Correos tomados: 1
-Correos enviados: 0
-Correos fallidos: 1
-  - ana@ejemplo.com: No se pudo entregar el email a ana@ejemplo.com por smtp.gmail.com:587. 534 5.7.9 Please log in with your web browser and then try again. ...
-Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
-```
-
-Son cuatro ramas distintas y solo una se cumple a la vez. Los correos que fallan
-vuelven a `Pending` con `attempts` incrementado: no se pierden. Sin email
-pendiente la cuarta línea es `No habia correos pendientes de enviar.`; si hubo
-envíos, es `Los correos enviados no se volveran a enviar aunque se ejecute el
-comando otra vez.`
+El resumen distingue tomados, enviados, fallos definitivos, inciertos y cancelados.
+Los errores conocidos muestran texto controlado. Solo Pending con menos de cinco
+intentos admite otra ejecución; inciertos nunca vuelven automáticamente a Pending.
+Si ya existe un enviador activo, el comando informa y termina sin tomar mensajes.
+Este último caso se comprobó con el comando real y un bloqueo ocupado, sin enviar
+correos existentes. La aceptación/rechazo SMTP se probó por separado en loopback.
 
 ### Paso opcional: SMTP real con Gmail
 
@@ -931,7 +1557,7 @@ compilando.
 
 ```mermaid
 flowchart TD
-    Host["PirryLedger.Host<br/>composición, arranque, --send-mail y --migrate"]
+    Host["PirryLedger.Host<br/>composición, API y comandos CLI"]
     AC["PirryLedger.Core.AccessControl<br/>(Domain, Application, Infrastructure, Api)"]
     NOT["PirryLedger.Core.Notifications<br/>(Domain, Application, Infrastructure, Api)"]
     PERM["PirryLedger.Core.Permissions<br/>(Domain, Application, Infrastructure, Api)"]
@@ -978,7 +1604,7 @@ Cada módulo se capa igual: `Domain` (entidades y reglas), `Application` (casos
 de uso), `Infrastructure` (PostgreSQL, migraciones, SMTP) y `Api` (endpoints).
 `PirryLedger.Host` es composición y nada más: arranca la aplicación, registra
 los módulos, lee la configuración obligatoria, fija la dirección de escucha con
-`PORT` y sirve el comando `--send-mail`.
+`PORT` y despacha los comandos de correo, atrasos y migración.
 
 ### Estructura del repositorio
 
@@ -1007,7 +1633,7 @@ pirry-ledger/
 │   ├── Business/
 │   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application, Infrastructure, Api
 │   └── Host/
-│       └── PirryLedger.Host/                    Composición + comandos --send-mail y --migrate
+│       └── PirryLedger.Host/                    Composición + comandos CLI de correo, atrasos y migración
 └── Tests/
     ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit
@@ -1213,8 +1839,8 @@ defecto y corriendo la suite, no leyendo el código.
 
 | Defecto | Qué se planta | Pruebas que lo detectan | Qué comprueban |
 |---|---|---|---|
-| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 11 de los 49 pares. |
-| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteOnceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
+| 1 (RF-NEG-04) | `InvoiceStateMachine.cs:20`: añade `Issued -> Draft` a `AllowedTransitions`, la primera transición prohibida de la tabla. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Issued → Draft`) y `LaTablaPermiteExactamenteTreceDeLosCuarentaYNuevePares` | Que la transición se rechace sin cambiar el estado y que la tabla permita exactamente 13 de los 49 pares. |
+| 2 (RF-NEG-05) | `InvoiceStateMachine.cs:30`: añade `Cancelled -> Issued`, una salida de un estado terminal. | `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado` (caso `Cancelled → Issued`), `LaTablaPermiteExactamenteTreceDeLosCuarentaYNuevePares` y `AnuladaNoTieneSalidas` | Que `Cancelled` sea terminal y no tenga salidas. |
 | 3 (RF-NEG-03) | `InvoiceStateMachine.cs:62`: elimina la llamada a `EnsureHasAtLeastOneItem` en `Draft -> Issued`, así que se puede emitir una factura sin ítems. | `EmitirSinItemsSeRechazaYNoCambiaElEstado`, `EmitirSinItemsSeRechazaYNoCreaNada` y `EmitirSinItemsSeRechazaYNoGuardaNada` | Que emitir sin ítems se rechace, no cambie el estado y no guarde nada. |
 | 4 (RF-NEG-06) | `CancelInvoice.cs:44`: sustituye la llamada a `_permissions.ConsumeAsync(...)` por `var consumed = true;`, así que una factura `Paid` o `InDebt` se anula sin permiso. | Las cuatro de `PirryLedger.Integration.Tests`: `AnularUnaFacturaPagadaSeRechazaMientrasLaSolicitudNoEstaAprobada`, `AprobarLaSolicitudAnulaLaFacturaEnLaMismaOperacion`, `ElPermisoDeUnaFacturaNoHabilitaLaAnulacionDeOtra` y `UnSegundoIntentoDeAnularNoDuplicaLaSolicitudPendiente`; más `AnularUnaFacturaPagadaConsumeElPermisoYAnula`, `AnularSinPermisoCreaLaSolicitudYRechaza` y `AnularSinPermisoConUnaSolicitudPendienteNoLaDuplicaYRechaza` en `PirryLedger.Business.Tests`. | Que la anulación consulte Permissions, pida el permiso cuando no hay concesión y no guarde la factura. |
 
@@ -1831,26 +2457,10 @@ Después del envío, `status = 2` y `sent_at_utc` tiene valor.
 
 #### RF-NOT-12 — no se reenvía un email ya enviado
 
-Ejecuta el enviador dos veces seguidas con un email pendiente:
-
-```powershell
-dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
-dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
-```
-
-La primera ejecución envía; la segunda responde, con las cuatro líneas que el
-comando imprime siempre:
-
-```
-Correos tomados: 0
-Correos enviados: 0
-Correos fallidos: 0
-No habia correos pendientes de enviar.
-```
-
-Y el email sigue con `attempts = 1`: no se reclamó dos veces. Con dos emisores
-corriendo a la vez sobre tres emails pendientes, uno toma los tres y el otro
-toma cero.
+El procesador solo reclama Pending con menos de cinco intentos. Sent y Uncertain
+quedan fuera de toda nueva ejecución. Dos enviadores no toman trabajo al mismo
+tiempo: el segundo informa bloqueo ocupado. El resultado se verifica con pruebas
+y PostgreSQL como se documenta en la sección de cola del ADR 031.
 
 #### RF-NOT-13 — las credenciales vienen de variables de entorno
 
@@ -1864,25 +2474,18 @@ el entorno manda sobre el `.env` y el archivo se quedaría sin efecto.
 dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
 ```
 
-Con la contraseña sin definir, `SmtpConfiguration.EstaConfigurada` es `false` y
-el transporte se niega a enviar. El email sigue en la cola como pendiente y el
-proceso informa:
-
-```
-Correos tomados: 1
-Correos enviados: 0
-Correos fallidos: 1
-  - <recipient>: Faltan las variables de entorno del servidor de Email (RF-NOT-13). Revisa el README.
-Los correos siguen en la cola como pendientes y se volveran a intentar la proxima vez.
-```
-
-Ningún mensaje de error imprime el usuario ni la contraseña: se sustituyen por
-`[User SMTP]` y `[contrasena SMTP]` antes de mostrarse o guardarse.
+Con configuración incompleta, SmtpConfiguration.IsConfigured es false y el
+transporte registra un fallo conocido con mensaje controlado. No se imprimen
+usuario, contraseña, host, respuesta SMTP cruda ni traza. Al quinto fallo termina
+en Failed. La consulta administrativa nunca devuelve el cuerpo con enlaces de acceso.
+La prueba de configuración real incompleta sobre la cola operativa no se ejecutó
+en esta entrega, para no procesar correos existentes; el transporte local y los
+dobles prueban clasificación, persistencia y límite por separado.
 
 ### 3.6 Máquina de estados del negocio
 
-La máquina de la factura tiene siete estados, once transiciones permitidas y
-treinta y ocho prohibidas, y cada fila de esas tablas tiene su prueba. Se
+La máquina de la factura tiene siete estados, trece transiciones permitidas y
+treinta y seis prohibidas, y cada fila de esas tablas tiene su prueba. Se
 verifica sin base de datos y sin levantar la aplicación (RF-NEG-03, RF-NEG-04,
 RF-NEG-05, RF-NEG-09, RD-04, RD-12).
 
@@ -1898,12 +2501,12 @@ Verifica en ese orden:
    `Paid`, `InDebt`, `Cancelled` y `NotDelivered`.
 2. **Las transiciones permitidas están declaradas en un solo sitio**
    (RF-NEG-04, RD-04): `InvoiceStateMachine` tiene una única lista
-   `AllowedTransitions` con las once filas de la tabla de
+   `AllowedTransitions` con las trece filas de la tabla de
    `docs/maquina-de-estados.md`. Ningún otro punto del código cambia el estado.
-3. **Hay transiciones explícitamente prohibidas y dos estados terminales**
-   (RF-NEG-05): los otros treinta y ocho pares lanzan
-   `InvalidInvoiceTransitionException` sin cambiar el estado, y `Cancelled` y
-   `NotDelivered` no tienen ninguna salida.
+3. **Hay transiciones explícitamente prohibidas y un estado terminal**
+   (RF-NEG-05): los otros treinta y seis pares lanzan
+   `InvalidInvoiceTransitionException` sin cambiar el estado. `Cancelled` no
+   tiene salidas; `NotDelivered` admite las dos de recuperación del ADR 028.
 4. **Las condiciones de las filas se comprueban de verdad**: emitir sin ítems,
    cobrar sin cubrir el total, cobrar con transferencia, dejar una deuda sin
    nombre o marcar como no entregada una factura que no es de delivery se
@@ -1913,11 +2516,10 @@ Verifica en ese orden:
 dotnet test Tests\PirryLedger.Business.Tests\PirryLedger.Business.Tests.csproj
 ```
 
-Salida esperada: **134 pruebas superadas**, 0 con error: las 62 de la máquina de
-esta sección y las 72 de las reglas, la persistencia y los casos de uso de las
-secciones 3.10 y 3.12. Los nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
+Salida actual: **286 pruebas superadas**, 0 con error en Billing, incluidas
+máquina, reglas, persistencia y casos de uso. Los nombres dicen qué prueba cada una: `EmitirUnaFacturaConItemsEsValido`,
 `UnaTransicionProhibidaSeRechazaYNoCambiaElEstado(desde: Issued, hacia: Draft)`,
-`AnuladaNoTieneSalidas`, `NoEntregadaNoTieneSalidas`,
+`AnuladaNoTieneSalidas`, `NoEntregadaSoloAdmiteLasSalidasDeRecuperacion`,
 `EmitirSinItemsSeRechazaYNoCambiaElEstado`, entre otras.
 
 Para ver que la suite puede fallar, quita la línea
@@ -2196,7 +2798,7 @@ Código: `Src/Business/PirryLedger.Business/PirryLedger.Business.Domain/Entities
 | Cualquier transferencia manda la factura a verificación pendiente | `Collect` mira si algún pago es `Transfer` | `CobrarConTransferenciaPasaAVerificacionPendiente`, `CobrarConEfectivoYTransferenciaPasaAVerificacionPendiente` |
 | La deuda exige nombre, de 120 caracteres como máximo | `NormalizeDebtorName` recorta y valida | `DejarComoDeudaSinNombreSeRechaza`, `UnNombreDeDeudorDemasiadoLargoSeRechaza` |
 | Un abono solo se registra si la factura está en deuda y no pasa de lo que se debe | `RegisterDebtPayment` comprueba el estado y el saldo antes de agregar | `AbonarUnaFacturaQueNoEstaEnDeudaSeRechaza`, `AbonarUnaFacturaPagadaSeRechazaYNoRegistraElPago`, `UnAbonoMayorQueLoQueSeDebeSeRechaza` |
-| El abono no tiene método de pago ni recibido | `InvoicePayment.Debt` usa `PaymentMethod.None` | `UnAbonoDeDeudaNoTieneMetodo` |
+| Abono nuevo conserva Cash o Transfer, sin recibido ni cambio | `InvoicePayment.Debt` valida método; transferencia queda pendiente | `UnAbonoEnEfectivoConservaMetodoSinRecibidoNiCambio`, `TransferenciaRegistradaNoReduceSaldoYBloqueaMasAbonos` |
 | El abono que cubre el total deja la factura pagada | `RegisterDebtPayment` transiciona antes de agregar el pago | `ElAbonoQueCubreElTotalPasaAPagada` |
 | Confirmar una transferencia exige verificación pendiente y que cubra el total | `ConfirmTransfer` valida estado y saldo | `ConfirmarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza`, `ConfirmarUnaTransferenciaQueNoCubreElTotalSeRechaza` |
 | Rechazar una transferencia deja el pago rechazado, no cuenta y pasa a deuda | `RejectTransfer` solo corre desde verificación pendiente | `RechazarLaTransferenciaDejaElPagoRechazadoYPasaADeuda`, `RechazarUnaTransferenciaFueraDeVerificacionPendienteSeRechaza` |
@@ -2368,7 +2970,7 @@ secciones 3.4 y 3.8.
 | `POST` | `/api/billing/invoices/{id}/cancel` | `CancelInvoice` | `Standard` |
 | `POST` | `/api/billing/invoices/{id}/transfers/confirm` | `ConfirmInvoiceTransfer` | `Administrator` |
 | `POST` | `/api/billing/invoices/{id}/transfers/reject` | `RejectInvoiceTransfer` | `Administrator` |
-| `POST` | `/api/billing/invoices/{id}/payments` | `RegisterDebtPayment` | `Administrator` |
+| `POST` | `/api/billing/invoices/{id}/payments` | `RegisterDebtPayment` | `AnySession`, con alcance de sucursal |
 | `GET` | `/api/billing/invoices` | `ListInvoices` | `AnySession` |
 | `GET` | `/api/billing/invoices/{id}` | `GetInvoice` | `AnySession` |
 | `GET` | `/api/billing/invoices/{id}/edits` | `ListInvoiceEdits` | `Administrator` |
@@ -2488,16 +3090,13 @@ $r = Pedir Post '/api/billing/invoices' $estHeaders $combo
 $deuda = ($r.Cuerpo | ConvertFrom-Json).id
 Pedir Post "/api/billing/invoices/$deuda/debt" $estHeaders @{ debtorName = 'Ana Perez' } | Out-Null
 
-Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 100 } | Out-Null
-Pedir Post "/api/billing/invoices/$deuda/payments" $adminHeaders @{ amount = 400 } | Out-Null
-Pedir Post "/api/billing/invoices/$deuda/payments" $estHeaders  @{ amount = 10 }  | Out-Null
 ```
 
 - Dejar en deuda: `200`, `state` `InDebt`, `debtorName` `Ana Perez`, `balance` 500.00.
-- Abono de 100: `200`, sigue `InDebt` con `paidAmount` 100 y `balance` 400.
-- Abono de 400: `200`, pasa a `Paid` porque el abono cubre el total.
-- El mismo abono con el cajero: `403`, porque `RegisterDebtPayment` es del
-  Administrador.
+- Para abonar se usa ahora el contrato de Práctica 5 descrito al inicio: amount
+  y method obligatorio, respuesta DebtSummary. Estándar de la sucursal también
+  puede abonar. Las pruebas HTTP reproducibles sustituyen el ejemplo anterior
+  sin método y no atribuyen una ejecución manual nueva a esta sección.
 
 Una transferencia nace en verificación pendiente y solo el Administrador la
 resuelve:
@@ -2515,7 +3114,7 @@ Pedir Post "/api/billing/invoices/$transferencia/transfers/confirm" $adminHeader
 - Cobrar con transferencia: `200`, `state` `PendingVerification`.
 - Confirmar con el cajero: `403`.
 - Confirmar con el Administrador: `200`, `state` `Paid`.
-- Rechazar (`/transfers/reject` con `{"debtorName":"Luis Gomez"}`): `200`, `state`
+- Rechazar (`/transfers/reject` con `{"debtorName":"Luis Gomez","reason":"No llegó"}`): `200`, `state`
   `InDebt`, y la transferencia queda `Rejected`, así que no cuenta para el pagado.
 
 #### Delivery, edición e historial (RF-NEG-02)
@@ -2566,9 +3165,9 @@ Aprobar la solicitud (admin)           204
 Anular con permiso (cajero)            200  state=Cancelled
 Anular una factura ya anulada          400  message=La factura no puede pasar de Cancelled a Cancelled.
 Dejar en deuda (cajero)                200  state=InDebt | debtorName=Ana Perez | balance=500.00
-Abono parcial (admin)                  200  state=InDebt | paidAmount=100 | balance=400.00
-Abono que cubre el total (admin)       200  state=Paid | paidAmount=500.00 | balance=0.00
-Abono con rol de cajero                403  message=No tiene permisos para esta operacion.
+Histórico anterior a Práctica 5: abono parcial admin          200  state=InDebt | paidAmount=100 | balance=400.00
+Histórico anterior a Práctica 5: abono total admin            200  state=Paid | paidAmount=500.00 | balance=0.00
+Histórico anterior a Práctica 5: abono con cajero             403  (restricción reemplazada por alcance de sucursal)
 Marcar no entregada (cajero)           200  state=NotDelivered
 No entregada sin delivery              400  message=La factura no puede pasar de Paid a NotDelivered.
 Editar items (cajero)                  200  state=Issued | total=700
@@ -2985,8 +3584,8 @@ criterio y qué rol exige cada uno. Todos piden `Authorization: Bearer <token>`.
 | `POST` | `/api/billing/invoices/{id}/not-delivered` | Marca como no entregada una factura de delivery. Responde `200`. |
 | `POST` | `/api/billing/invoices/{id}/cancel` | Anula. Desde `Issued` responde `200`; desde `Paid` o `InDebt` exige la concesión `CancelInvoice:<id>` y, si no la hay, responde `403` o `409` con el mensaje del permiso. |
 | `POST` | `/api/billing/invoices/{id}/transfers/confirm` | Confirma una transferencia en verificación pendiente. Exige `Administrator`. Responde `200`. |
-| `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"..."}`. Exige `Administrator`. Responde `200`. |
-| `POST` | `/api/billing/invoices/{id}/payments` | Registra un abono de deuda. Cuerpo `{"amount":100}`. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/transfers/reject` | Rechaza la transferencia y deja la factura en deuda. Cuerpo `{"debtorName":"...","reason":"..."}`; motivo obligatorio. Exige `Administrator`. Responde `200`. |
+| `POST` | `/api/billing/invoices/{id}/payments` | Registra abono: amount y method (Cash o Transfer). Estándar de sucursal o Administrador; responde 200 con DebtSummary. |
 | `GET` | `/api/billing/invoices` | Lista las facturas con sus ítems y pagos. Cualquier sesión válida. Responde `200`. |
 | `GET` | `/api/billing/invoices/{id}` | Devuelve una factura. Cualquier sesión válida. Responde `200` o `404`. |
 | `GET` | `/api/billing/invoices/{id}/edits` | Historial de edición. Exige `Administrator`. Responde `200`. |
@@ -3120,6 +3719,9 @@ erDiagram
         numeric change_amount "nullable"
         datetime registered_at_utc
         uuid registered_by_user_id
+        datetime resolved_at_utc "nullable"
+        uuid resolved_by_user_id "nullable"
+        string rejection_reason "nullable"
     }
 
     bil_invoice_edits {
@@ -3266,8 +3868,9 @@ recuperación, cambio autenticado o restablecimiento forzado.
 
 `not_email_queue` tiene las columnas que exige el diseño: `id`,
 `recipient`, `subject`, `body`, `status`, `attempts`, `created_at_utc`,
-`sent_at_utc` y `last_error`. `last_error` existe desde el principio pero
-todavía no se escribe: llega en la semana 11.
+`sent_at_utc` y `last_error`, además de los vínculos notificables y las fechas
+`last_attempt_at_utc` y `status_changed_at_utc`. Práctica 5 escribe error seguro,
+limita intentos y expone metadatos solo al Administrador (ADR 031).
 
 ### Qué NO incluye
 
@@ -3277,9 +3880,8 @@ todavía no se escribe: llega en la semana 11.
 - **Renovación de la sesión.** El vencimiento es absoluto: usar el token no lo
   estira. Se decidió así a propósito y está en
   `docs/adr/001-session-credential.md`.
-- **Reintentos automáticos, estado fallido y escritura de `last_error`** en el
-  envío de email. Llega en la semana 11.
-- **Vista de administración de la cola.** Llega en la semana 11.
+- **Reenvío manual de fallidos o inciertos.** La cola de Práctica 5 permite
+  consultar esos estados, sin volver a enviar mensajes terminales.
 - **Registros de auditoría** de las operaciones administrativas (RF-CA-08, 13,
   20). Quedan para la semana 14; la protección de último Administrador active de
   RF-CA-20 es una regla de negocio de esta iteración, no un sustituto de la
@@ -3331,3 +3933,7 @@ Una edición con descripción vacía o subcategoría inexistente responde
 
 La suite que verifica estas rutas y el control de acceso se ejecuta con
 `dotnet test pirry-ledger.slnx --no-restore`.
+
+Verificación del fix: dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+aprobó 663 pruebas. La mutación que conservaba sucursal física al ascender a
+Administrador hizo fallar su prueba y se restauró antes de la suite completa.

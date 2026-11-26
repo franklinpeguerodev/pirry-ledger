@@ -1,3 +1,6 @@
+using PirryLedger.Core.Contracts.Reports;
+using PirryLedger.Core.Contracts.Persistence;
+using PirryLedger.Core.Contracts.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Business.Application;
@@ -19,13 +22,26 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(imageStorage);
 
-        services.AddDbContext<BusinessDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddDbContext<BusinessDbContext>((provider, options) =>
+        {
+            var shared = provider.GetService<IModuleDatabaseConnection>();
+            if (shared is null) options.UseNpgsql(connectionString);
+            else options.UseNpgsql(shared.Connection);
+        });
+        services.AddScoped<IModuleTransactionParticipant>(provider => provider.GetRequiredService<BusinessDbContext>());
 
         // ADR 018: el paso de migracion de la pieza.
         services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.BusinessMigration>();
 
+        services.AddScoped<IBusinessReportRepository, BusinessReportRepository>();
+        services.AddScoped<IBusinessReportSource, BillingReportSource>();
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+        services.AddScoped<IDebtRepository, DebtRepository>();
+        services.AddScoped<IOverdueBillingRepository, OverdueBillingRepository>();
+        services.AddScoped<IOverdueNotificationSource, BillingOverdueNotificationSource>();
+        services.AddScoped<ManageDebtPayments>();
+        services.AddScoped<IBusinessDayRepository, BusinessDayRepository>();
+        services.AddScoped<ManageBusinessDays>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IProductImageRepository, ProductImageRepository>();
 
@@ -55,6 +71,7 @@ public static class DependencyInjection
         services.AddScoped<ManageClassification>();
         services.AddScoped<IClassificationRepository, ClassificationRepository>();
         services.AddScoped<CollectInvoicePayment>();
+        services.AddScoped<RecoverUndeliveredInvoice>();
         services.AddScoped<LeaveInvoiceAsDebt>();
         services.AddScoped<EditInvoiceItems>();
         services.AddScoped<MarkInvoiceAsNotDelivered>();

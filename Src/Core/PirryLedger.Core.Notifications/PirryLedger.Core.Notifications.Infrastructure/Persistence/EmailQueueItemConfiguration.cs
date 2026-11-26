@@ -15,6 +15,10 @@ internal sealed class EmailQueueItemConfiguration : IEntityTypeConfiguration<Ema
         builder.ToTable("not_email_queue");
 
         builder.HasKey(email => email.Id);
+        builder.Property(email => email.NotificationId).HasColumnName("notification_id");
+        builder.Property(email => email.NotificationRecipientUserId).HasColumnName("notification_recipient_user_id");
+        builder.HasIndex(email => email.NotificationId).IsUnique();
+        builder.HasOne<Notification>().WithMany().HasForeignKey(email => email.NotificationId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(email => email.Id)
             .HasColumnName("id");
@@ -53,6 +57,8 @@ internal sealed class EmailQueueItemConfiguration : IEntityTypeConfiguration<Ema
 
         builder.Property(email => email.LastError)
             .HasColumnName("last_error");
+        builder.Property(email => email.LastAttemptAtUtc).HasColumnName("last_attempt_at_utc");
+        builder.Property(email => email.StatusChangedAtUtc).HasColumnName("status_changed_at_utc");
 
         // El emisor filtra por Status y ordena por fecha de creacion.
         builder.HasIndex(email => new { email.Status, email.CreatedAtUtc })
