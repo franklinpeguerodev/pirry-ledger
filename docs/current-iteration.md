@@ -1,14 +1,15 @@
 # Current iteration — Practice 5: Notifications and reports
 
-## Immediate correction before reports
+## Current feature — Core permission report
 
-PR 111 integrated in develop at d0a342d. Branch fix/require-permission-request-branch
-requires a non-null, non-empty stored branch on permission requests.
-Standard requests use their physical branch. Administrator requests use Todas.
-Both creation paths resolve scope from authenticated identity. This supersedes
-the proposed report group for requests without branch. The configured database
-contained zero permission requests before applying RequirePermissionRequestBranch.
-Reports remain the next feature after review of this correction.
+PR 112 integrated in develop at aaa4de7. Permission requests require a stored
+physical branch for Standard or Todas for Administrator.
+feature/core-permission-reports implements RF-REP-01/03/04/05 for Core requests
+under approved ADR 033: query-time SQL aggregation, current state, required RD
+calendar range, four zero-filled states and per-branch plus combined totals.
+Reports has its own layers and tests, uses Core.Contracts and owns no new tables.
+Branch directory supports listing through its existing module owner.
+Business reports and accumulated acceptance remain subsequent features.
 
 ## Scope
 
@@ -54,8 +55,8 @@ Five-attempt queue and administrative inspection integrated in develop
 failed in the configured environment; Franklin authorized an exclusive coordination
 transaction, verified with concurrent connections. Interrupted and uncertain
 deliveries are not retried; safe metadata inspection is administrative only.
-Overdue reminders implemented in feature/overdue-notification-reminders, pending
-PR review (ADR 032): Notifications owns one durable control table; Billing
+Overdue reminders integrated in develop through PR 111
+(ADR 032): Notifications owns one durable control table; Billing
 supplies candidates and locked revalidation through Core.Contracts. Transfers
 strictly older than 96 hours and open days at their 16:00 RD deadline generate
 at most 50 newly recorded cases per execution, once per source even with no

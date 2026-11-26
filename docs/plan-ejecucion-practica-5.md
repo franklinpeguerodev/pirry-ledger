@@ -193,3 +193,15 @@ Procedimiento independiente de migraciones automáticas; verificar preservación
 - PR: exactamente Qué cambia, Por qué, Cómo probarlo y Qué NO incluye.
 - Bitácora separada por PR, distinguiendo agente y comprobación de Franklin.
 - Tag practica-5 solo con autorización; RF-NOT-06 declarado desviado.
+
+## Bloque 9 concretado — reporte Core
+
+Rama feature/core-permission-reports desde develop aaa4de7. ADR 033 autorizado.
+Core.Contracts/Reports/IPermissionRequestReportSource.cs declara cantidades agrupadas.
+Permissions.Infrastructure/Persistence/PermissionRequestReportSource.cs filtra y agrupa
+sus propias tablas. IBranchDirectory y BranchDirectory exponen listado por contrato.
+Reports agrega sus cuatro proyectos: ReportPeriod, GetPermissionRequestReport y
+modelos, AddReports y MapReports. Host compone el módulo y la solución lo incluye.
+Operation y RoleRequirements declaran acceso administrativo. Pruebas propias de
+Reports y HTTP/enumeración real de rutas verifican comportamiento y autorización.
+Documentación acompaña el PR y bitácora tiene commit separado.
