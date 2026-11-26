@@ -1,15 +1,19 @@
 # Current iteration — Practice 5: Notifications and reports
 
-## Current feature — Core permission report
+## Current feature — Business reports
 
-PR 112 integrated in develop at aaa4de7. Permission requests require a stored
-physical branch for Standard or Todas for Administrator.
-feature/core-permission-reports implements RF-REP-01/03/04/05 for Core requests
-under approved ADR 033: query-time SQL aggregation, current state, required RD
-calendar range, four zero-filled states and per-branch plus combined totals.
-Reports has its own layers and tests, uses Core.Contracts and owns no new tables.
-Branch directory supports listing through its existing module owner.
-Business reports and accumulated acceptance remain subsequent features.
+Core report integrated through PR 113 at 37f0a76.
+feature/business-sales-reports implements the seven business report families and
+the separate open-day sales view under approved ADR 034 and decisions 1–8.
+See business-report-contract.md for exact filters, endpoints, fields and paging.
+Each response uses a read-only RepeatableRead snapshot. Pending and settled
+debts have separate queries. Reopened closing snapshots remain informational.
+Reports use only contracts and preserve module-owned queries. No new tables.
+The feature remains subject to PR review; accumulated acceptance follows.
+PR 114 was closed at Franklin's request to separate provider results from HTTP
+responses. Core report contracts have no JSON attributes or presentation labels;
+Reports explicitly maps public pages and conditional sales/employee fields.
+The correction preserves the approved HTTP contract and SQL aggregation.
 
 ## Scope
 

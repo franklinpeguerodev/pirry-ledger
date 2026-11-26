@@ -1,3 +1,4 @@
+using PirryLedger.Core.Contracts.Reports;
 using PirryLedger.Core.Contracts.Persistence;
 using PirryLedger.Core.Contracts.Notifications;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,8 @@ public static class DependencyInjection
         // ADR 018: el paso de migracion de la pieza.
         services.AddScoped<PirryLedger.Core.Contracts.Persistence.IModuleMigration, Persistence.BusinessMigration>();
 
+        services.AddScoped<IBusinessReportRepository, BusinessReportRepository>();
+        services.AddScoped<IBusinessReportSource, BillingReportSource>();
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IDebtRepository, DebtRepository>();
         services.AddScoped<IOverdueBillingRepository, OverdueBillingRepository>();

@@ -172,3 +172,12 @@ Toda solicitud guarda sucursal obligatoria desde su creación. Estándar usa su
 sucursal física y Administrador Todas, determinada por rol. No se acepta null,
 UUID vacío ni Todas para un Estándar. No se requiere grupo de solicitudes sin
 sucursal en el reporte. Una solicitud administrativa cuenta una vez en Todas.
+
+## Contrato concreto de reportes aprobado
+
+Decisiones 1–8 en business-report-contract.md y ADR 034. Productos por nombre
+histórico exacto. Cada respuesta tiene lectura consistente; otra página es nueva
+consulta. Vacíos con ceros y listas vacías. Deudas pendientes/saldadas separadas.
+Empleado por ID + nombre histórico. Deudas/cierres: 50 filas, máximo 100 y
+totales del filtro completo. Reabiertas muestran copia anterior sin sumar a
+totales de cerradas. Rutas y campos quedan explícitos en el contrato.

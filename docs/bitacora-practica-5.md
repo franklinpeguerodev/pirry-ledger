@@ -1,5 +1,64 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Separación de resultados internos y respuestas de reportes
+
+- Franklin cuestionó JsonIgnore en los contratos entre módulos y pidió cerrar
+  PR 114 y dividir responsabilidades. Se cerró el PR antes de corregirlo.
+- Core.Contracts deja de declarar reglas JSON y la etiqueta de cierre.
+  Reports construye páginas públicas sin BranchTotals y mapea filas de ventas,
+  empleados y cierres. Methods opcional y Status pertenecen a la respuesta.
+  Se conserva el contrato HTTP, cálculos, SQL y paginación aprobados.
+- Las dos pruebas nuevas fallaron con la implementación anterior: atributos de
+  serialización en contratos y reutilización de páginas internas. Después pasan.
+- dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q:
+  709 aprobadas, cero fallidas/omitidas; Reports 23 y los demás módulos sin cambios.
+- dotnet test Tests/PirryLedger.Business.Tests --configuration Release --no-restore --filter FullyQualifiedName~PruebasDeReportesDelNegocioPorHttp -v q:
+  10 aprobadas. Verifican omisión de Methods en filas, totales públicos de deuda,
+  ausencia de BranchTotals y etiqueta de jornada reabierta.
+- dotnet build Src/Host/PirryLedger.Host --no-restore -v q:
+  cero errores y advertencias. No se cambió persistencia ni se repitió la prueba
+  PostgreSQL del bloque anterior. Docker y aceptación acumulada siguen pendientes.
+- El agente ejecutó estas verificaciones; Franklin revisará el resultado en el PR.
+  Corrección y documentación en un commit; bitácora en otro. Sin merge ni tag.
+
+## 2026-11-26 — Reportes del negocio y lectura consistente
+
+- Franklin aprobó PR 113. Se verificó integración 37f0a76 y se creó
+  feature/business-sales-reports desde develop.
+- Aprobó decisiones 1–8. Aclaró que pendientes y saldadas tienen consultas
+  separadas. Reabiertas conservan copia sin sumar a cerradas. Cada página
+  obtiene lectura consistente propia. Paginación 50, máximo 100.
+- ADR 034 autorizado. Contrato y manifiesto en business-report-contract.md.
+  Billing agrega sus datos; Reports compone mediante Core.Contracts.
+- Se comparten estados incluidos con el cálculo operativo. Productos usan
+  nombre exacto y empleado ID + nombre histórico. Facturas distintas no se
+  calculan sumando conteos por artículo. Subconjunto de productos omite métodos.
+- Se implementó RepeatableRead de solo lectura con participantes de contextos
+  en conexión común. Se libera antes de responder. El proveedor Billing puede
+  faltar sin impedir composición Core; sus reportes devuelven 404 controlado.
+- Pruebas de Billing/Reports verifican cifras, abonos, nombres, grupos, vacíos,
+  fecha de pago, páginas, reapertura y recuperación en jornada original.
+- Nueve rutas verificadas con 401 y 403; Administrador consultó todas con filtros
+  y paginación. Se amplió enumeración de rutas sin debilitar verificaciones previas.
+- dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q:
+  707 aprobadas, cero fallidas/omitidas. Billing 335, Reports 21, AccessControl 172,
+  Permissions 58, Notifications 74, Documents 40 e Integration 7.
+- Mutación sumando el cierre reabierto hizo fallar la prueba 7A. Se restauró el
+  archivo original y se verificó nuevamente el bloque afectado.
+- PostgreSQL real confirmó agregaciones, filtros y páginas. Un escritor confirmó
+  anulación y resolución de permiso durante lectura: la respuesta conservó 560,
+  siguiente consulta mostró 470. Se comprobó repeatable read:on y rechazo de
+  escritura 25006. Solicitud y facturas/jornadas temporales retiradas.
+- El verificador externo necesitó regenerar dependencias al incorporar Reports;
+  el primer intento no cargó su ensamblado. Se corrigió fuera del repositorio.
+  Configuración cargada como Host sin inspeccionar .env. Sin correos externos.
+- dotnet build Src/Host/PirryLedger.Host --no-restore -v q: cero errores y
+  advertencias. Docker no disponible; contenedores permanecen sin verificar.
+- Documentación acompaña implementación. Bitácora en commit separado.
+  Unidades de proveedor SQL e integración conservan pruebas aunque superen
+  orientación de 200 líneas, conforme autorización previa.
+- Verificaciones del agente. Franklin revisa PR. Aceptación acumulada pendiente.
+
 ## 2026-11-26 — Reporte Core con agregación al consultar
 
 - Franklin confirmó PR 112 integrado. Se verificó develop aaa4de7 y se actualizó

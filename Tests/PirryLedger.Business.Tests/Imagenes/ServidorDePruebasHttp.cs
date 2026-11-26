@@ -102,6 +102,8 @@ internal sealed class ServidorDePruebasHttp : IAsyncDisposable
         builder.Services.AddScoped<IBranchDirectory, DirectorioDeSucursalesEnMemoria>();
 
         builder.Services.AddScoped<PirryLedger.Core.Reports.Application.GetPermissionRequestReport>();
+        builder.Services.AddScoped(_ => (PirryLedger.Core.Reports.Application.GetBusinessReports)
+            RuntimeHelpers.GetUninitializedObject(typeof(PirryLedger.Core.Reports.Application.GetBusinessReports)));
         configure?.Invoke(builder.Services);
 
         _app = builder.Build();

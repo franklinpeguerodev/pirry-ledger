@@ -205,3 +205,12 @@ modelos, AddReports y MapReports. Host compone el módulo y la solución lo incl
 Operation y RoleRequirements declaran acceso administrativo. Pruebas propias de
 Reports y HTTP/enumeración real de rutas verifican comportamiento y autorización.
 Documentación acompaña el PR y bitácora tiene commit separado.
+
+## Bloque 10 concretado — reportes del negocio
+
+feature/business-sales-reports nace de develop 37f0a76. Decisiones 1–8 aprobadas,
+ADR 034 y manifiesto completo en business-report-contract.md. Contratos/sesión
+de lectura, proveedor Billing con proyección SQL y pruebas, composición/API y
+pruebas de Reports, documentación y bitácora se separan por responsabilidad.
+El proveedor de consultas y la integración API pueden superar 200 líneas como
+unidades coherentes con sus pruebas, conforme a autorización previa.

@@ -70,6 +70,15 @@ public static class RoleRequirements
 
         // RF-CA-21: listar usuarios es de Administrator, y un Standard recibe
         // rechazo (el mismo 403 que en las otras cuatro).
+        [Operation.ViewSalesReport] = new(AccessLevel.Administrator),
+        [Operation.ViewCollectionReport] = new(AccessLevel.Administrator),
+        [Operation.ViewProductReport] = new(AccessLevel.Administrator),
+        [Operation.ViewExclusionReport] = new(AccessLevel.Administrator),
+        [Operation.ViewEmployeeReport] = new(AccessLevel.Administrator),
+        [Operation.ViewPendingDebtReport] = new(AccessLevel.Administrator),
+        [Operation.ViewSettledDebtReport] = new(AccessLevel.Administrator),
+        [Operation.ViewClosingReport] = new(AccessLevel.Administrator),
+        [Operation.ViewOpenSalesReport] = new(AccessLevel.Administrator),
         [Operation.ViewPermissionRequestReport] = new(AccessLevel.Administrator),
         [Operation.ListUsers] = new(AccessLevel.Administrator),
 
