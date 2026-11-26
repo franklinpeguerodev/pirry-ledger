@@ -136,8 +136,8 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # El enviador de correo (ADR 007 y ADR 019): el mismo comando de siempre, en
-  # bucle, como proceso aparte. La aplicacion nunca envia correo por su cuenta.
+  # Trabajador CLI (ADR 032): revisa atrasos, procesa correos y espera 30 s
+  # después de terminar. La API conserva encolado y avisos internos inmediatos.
   #
   # El bucle va en el ENTRYPOINT: la imagen trae
   # ENTRYPOINT ["dotnet", "PirryLedger.Host.dll"], asi que un `command` con
@@ -147,7 +147,7 @@ services:
     build: .
     image: pirry-ledger-app
     entrypoint: ["/bin/sh", "-c"]
-    command: ["while true; do dotnet PirryLedger.Host.dll --send-mail; sleep 10; done"]
+    command: ["while true; do dotnet PirryLedger.Host.dll --process-notifications; sleep 30; done"]
     environment: *app-environment
     depends_on:
       db:
