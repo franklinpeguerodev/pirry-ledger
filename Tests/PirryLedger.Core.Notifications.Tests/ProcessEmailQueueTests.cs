@@ -75,7 +75,7 @@ public sealed class ProcessEmailQueueTests
     private static ProcessEmailQueue CreateProcessor(
         InMemoryRepository repository,
         InMemoryTransporter transporter) =>
-        new(repository, transporter, new FixedClock(UtcNow), new BloqueoDeCola());
+        new(repository, transporter, new FixedClock(UtcNow), new BloqueoDeCola(), new ElegibilidadDePrueba());
 
     private static EmailQueueItem CreateEmail() =>
         EmailQueueItem.Create(

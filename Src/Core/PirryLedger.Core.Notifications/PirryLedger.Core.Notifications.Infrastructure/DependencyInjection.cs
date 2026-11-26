@@ -42,6 +42,10 @@ public static class DependencyInjection
         services.AddScoped<InspectEmailQueue>();
         services.AddScoped<IEmailQueue, EmailQueue>();
         services.AddScoped<ProcessEmailQueue>();
+        services.AddScoped<IOverdueNotificationStore, OverdueNotificationStore>();
+        services.AddScoped<INotificationEmailEligibility, OverdueNotificationEmailEligibility>();
+        services.AddScoped<ProcessOverdueNotifications>();
+        services.AddScoped<ProcessNotifications>();
         services.AddScoped<INotificationInboxRepository, NotificationInboxRepository>();
         services.AddScoped<ManageNotificationInbox>();
         services.AddScoped<INotificationDeliveryStore, NotificationDeliveryStore>();

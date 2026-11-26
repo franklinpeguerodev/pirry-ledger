@@ -1,6 +1,6 @@
 # ADR 030 - Notification event and recipient keys
 
-- **Estado:** aceptada e implementada; recordatorios CLI en entrega posterior
+- **Estado:** aceptada e implementada; ampliada para atrasos por ADR 032
 - **Fecha:** 2026-11-20
 - **Requisitos:** RF-NOT-01, RF-NOT-02, RF-NOT-03, RF-NOT-08, RF-NOT-12, RD-03, RD-09
 - **Decide:** Franklin. **Redacta:** el agente, con autorización expresa.
@@ -43,8 +43,9 @@ Se amplían persistencia de avisos y cola, y contratos públicos entre módulos.
 Los avisos existentes conservan identidad y lectura. Cada cierre mantiene solo
 su identificador más reciente; no se implementa historial de cierres ni auditoría.
 Un evento sin destinatarios activos no crea avisos ni genera entrega retroactiva
-por habilitar después una cuenta o el correo. Los recordatorios CLI mantienen
-su entrega posterior según el bloque independiente del plan.
+por habilitar después una cuenta o el correo. ADR 032 agrega control específico
+de atrasos, también sin destinatarios; no modifica las restricciones por entrega
+ni introduce un registro general de eventos.
 
 Preferencia y encolado se serializan por destinatario dentro de la transacción
 con bloqueo de su fila de preferencia, inicializada con el valor predeterminado

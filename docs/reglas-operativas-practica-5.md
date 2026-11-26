@@ -132,6 +132,14 @@ El enunciado original se conserva separado de estas decisiones del negocio.
 - Rechazo de transferencias: motivo obligatorio incluido en notificación.
 - Tiempo de cuatro días individual desde registro de cada transferencia, no lote global.
 - Avisos por CLI: detectados en siguiente ejecución después del vencimiento.
+- Un trabajador ejecuta revisión y luego SMTP; espera 30 segundos al terminar.
+- Notifications conserva control propio por tipo/origen, también sin destinatarios;
+  no hay entrega retroactiva. No son marcas en Billing ni auditoría general.
+- Máximo 50 casos nuevos confirmados por pasada. Registrados, resueltos y fallidos
+  no consumen cupo; cada fallo revierte su caso y permite intentar los demás.
+- Factura ya anulada no genera atraso; solicitud de anulación pendiente no lo excluye.
+- Caso resuelto antes del envío cancela correo pendiente sin intento; control y
+  aviso interno permanecen. Error de comprobación deja Pending e interrumpe SMTP.
 - Administrador: correo habilitado inicialmente y preferencia individual.
 - Desactivar cancela correos notificables pendientes; reactivar solo genera por eventos nuevos.
 - Estándar: solo notificaciones internas; activación y recuperación conservan flujos actuales.

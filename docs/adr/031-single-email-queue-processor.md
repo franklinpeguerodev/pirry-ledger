@@ -75,3 +75,8 @@ El bloqueo coordina los enviadores nuevos; no deben coexistir ejecutables de la
 versión anterior que desconocen este protocolo durante el despliegue.
 La API sigue encolando y guardando avisos internos mientras se envían correos.
 No se añaden paquetes, temporizadores, reenvío manual ni módulo de auditoría.
+
+ADR 032 amplía revalidación con el estado actual del caso de atraso antes del
+reclamo. Resuelto cancela Pending sin intento; error conserva Pending y aborta
+esa fase. El trabajador CLI combinado espera 30 segundos entre ejecuciones;
+conserva el bloqueo, cinco intentos y resultado incierto sin reenvío de este ADR.

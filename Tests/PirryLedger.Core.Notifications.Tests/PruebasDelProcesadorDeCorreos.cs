@@ -17,7 +17,7 @@ public sealed class PruebasDelProcesadorDeCorreos
         var repository = new ColaDePrueba(email);
         var transport = new Transporte { Failure = new EmailDeliveryException(EmailQueueErrors.Connection) };
         var gate = new BloqueoDeCola();
-        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), gate);
+        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), gate, new ElegibilidadDePrueba());
 
         for (var attempt = 1; attempt <= 5; attempt++)
         {
@@ -44,7 +44,7 @@ public sealed class PruebasDelProcesadorDeCorreos
         var email = Correo();
         var repository = new ColaDePrueba(email);
         var transport = new Transporte();
-        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), new BloqueoDeCola { Busy = true });
+        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), new BloqueoDeCola { Busy = true }, new ElegibilidadDePrueba());
 
         var result = await processor.ExecuteAsync();
 
@@ -63,7 +63,7 @@ public sealed class PruebasDelProcesadorDeCorreos
         email.Claim(Ahora.AddMinutes(-1));
         var repository = new ColaDePrueba(email);
         var transport = new Transporte();
-        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), new BloqueoDeCola());
+        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), new BloqueoDeCola(), new ElegibilidadDePrueba());
 
         var first = await processor.ExecuteAsync();
         var second = await processor.ExecuteAsync();
@@ -87,7 +87,7 @@ public sealed class PruebasDelProcesadorDeCorreos
         var transport = new Transporte { Failure = classified
             ? new EmailDeliveryException("Error privado que no se expone", true)
             : new InvalidOperationException("Error privado que no se expone") };
-        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), new BloqueoDeCola());
+        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), new BloqueoDeCola(), new ElegibilidadDePrueba());
 
         var result = await processor.ExecuteAsync();
         await processor.ExecuteAsync();
@@ -108,7 +108,7 @@ public sealed class PruebasDelProcesadorDeCorreos
         var repository = new ColaDePrueba(first, second) { FailSave = true };
         var transport = new Transporte();
         var gate = new BloqueoDeCola();
-        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), gate);
+        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), gate, new ElegibilidadDePrueba());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ExecuteAsync());
 
@@ -124,7 +124,7 @@ public sealed class PruebasDelProcesadorDeCorreos
     {
         var email = Correo();
         var transport = new Transporte { Failure = new EmailDeliveryException("Error privado que no se expone") };
-        var processor = new ProcessEmailQueue(new ColaDePrueba(email), transport, new Reloj(), new BloqueoDeCola());
+        var processor = new ProcessEmailQueue(new ColaDePrueba(email), transport, new Reloj(), new BloqueoDeCola(), new ElegibilidadDePrueba());
 
         var result = await processor.ExecuteAsync();
 
@@ -141,7 +141,7 @@ public sealed class PruebasDelProcesadorDeCorreos
         var repository = new ColaDePrueba(email);
         var transport = new Transporte();
         var gate = new BloqueoDeCola { MaximumVerifications = 1 };
-        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), gate);
+        var processor = new ProcessEmailQueue(repository, transport, new Reloj(), gate, new ElegibilidadDePrueba());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ExecuteAsync());
 

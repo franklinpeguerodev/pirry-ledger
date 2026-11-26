@@ -34,6 +34,7 @@ public sealed class PruebasDeColaPorHttp
         var directory = provider.GetRequiredService<PirryLedger.Core.Contracts.Notifications.INotificationRecipientDirectory>();
         await repository.FindByIdAsync(admin.Id);
         var before = await directory.FindActiveAsync(admin.Id);
+        Assert.Single(await directory.ListActiveAdministratorsAsync());
         await using (var other = new AccessControlDbContext(options))
         {
             var current = await other.Users.SingleAsync(user => user.Id == admin.Id);
@@ -42,10 +43,12 @@ public sealed class PruebasDeColaPorHttp
         }
 
         var after = await directory.FindActiveAsync(admin.Id);
+        var currentAdministrators = await directory.ListActiveAdministratorsAsync();
 
         Assert.NotNull(before);
         Assert.True(before.IsAdministrator);
         Assert.Null(after);
+        Assert.Empty(currentAdministrators);
         Assert.True(first.Entry(admin).Entity.Active);
     }
 

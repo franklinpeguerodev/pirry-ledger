@@ -31,6 +31,8 @@ public interface IUserRepository
     // PostgreSQL no garantiza orden y el listado cambiaria entre peticiones sin
     // que nadie haya tocado nada.
     Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken = default);
+    // Destinatarios entre casos del CLI: no reutilizar usuarios seguidos previamente.
+    Task<IReadOnlyList<User>> ListCurrentAsync(CancellationToken cancellationToken = default) => ListAsync(cancellationToken);
 
     Task SaveAsync(User user, CancellationToken cancellationToken = default);
 

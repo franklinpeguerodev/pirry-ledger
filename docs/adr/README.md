@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `032-notification-owned-overdue-reminders.md` (2026-11-25) — Notification-owned once-only overdue controls, combined CLI and pre-send relevance checks.
+
 - `031-single-email-queue-processor.md` (2026-11-21) — Single sender, bounded retries and uncertain delivery coordinated by an exclusive PostgreSQL transaction.
 
 - `030-notification-event-recipient-keys.md` (2026-11-20) — Stable event/recipient keys without an independent events table.
