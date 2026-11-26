@@ -1,4 +1,5 @@
 using PirryLedger.Core.Contracts.Persistence;
+using PirryLedger.Core.Contracts.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PirryLedger.Business.Application;
@@ -33,6 +34,8 @@ public static class DependencyInjection
 
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IDebtRepository, DebtRepository>();
+        services.AddScoped<IOverdueBillingRepository, OverdueBillingRepository>();
+        services.AddScoped<IOverdueNotificationSource, BillingOverdueNotificationSource>();
         services.AddScoped<ManageDebtPayments>();
         services.AddScoped<IBusinessDayRepository, BusinessDayRepository>();
         services.AddScoped<ManageBusinessDays>();
