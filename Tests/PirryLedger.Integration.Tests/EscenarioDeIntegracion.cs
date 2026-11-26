@@ -63,6 +63,7 @@ internal sealed class EscenarioDeIntegracion
             active: true,
             role: Role.Standard);
 
+        Cajero.AssignBranch(Guid.NewGuid());
         Sessions = new InMemorySessionRepository();
 
         // Login real: el token del Administrator que aprueba sale del mismo
@@ -129,7 +130,7 @@ internal sealed class EscenarioDeIntegracion
         var gateway = new PermissionRequestGateway(
             new PermissionRequestRepository(permisos),
             new EfPermissionAuthority(new PermissionGrantRepository(permisos), Clock),
-            Clock);
+            Clock, directory: new PirryLedger.Core.AccessControl.Infrastructure.NotificationRecipientDirectory(Users));
         await gateway.RequestAsync(Cajero.Id, PermissionNames.CancelInvoice(facturaId));
     }
 
@@ -233,7 +234,7 @@ internal sealed class EscenarioDeIntegracion
         var autoridad = new EfPermissionAuthority(concesiones, Clock);
 
         var solicitudes = new PermissionRequestRepository(permisos);
-        var puerta = new PermissionRequestGateway(solicitudes, autoridad, Clock);
+        var puerta = new PermissionRequestGateway(solicitudes, autoridad, Clock, directory: new PirryLedger.Core.AccessControl.Infrastructure.NotificationRecipientDirectory(Users));
 
         return new CancelInvoice(new InvoiceRepository(negocio), autoridad, puerta);
     }

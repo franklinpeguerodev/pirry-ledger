@@ -36,6 +36,7 @@ internal sealed class EscenarioDePermisos
         Admin = Users.Create("Admin", AdminEmailValue, hasher.Hash(ValidPassword), start, active: true, role: Role.Administrator);
         Standard = Users.Create("Empleado", StandardEmailValue, hasher.Hash(ValidPassword), start, active: true, role: Role.Standard);
 
+        Standard.AssignBranch(Guid.NewGuid());
         Sessions = new InMemorySessionRepository();
 
         // Authenticate real: las pruebas llaman a los casos de uso, que a

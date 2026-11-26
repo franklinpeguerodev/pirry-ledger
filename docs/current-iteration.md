@@ -1,5 +1,15 @@
 # Current iteration — Practice 5: Notifications and reports
 
+## Immediate correction before reports
+
+PR 111 integrated in develop at d0a342d. Branch fix/require-permission-request-branch
+requires a non-null, non-empty stored branch on permission requests.
+Standard requests use their physical branch. Administrator requests use Todas.
+Both creation paths resolve scope from authenticated identity. This supersedes
+the proposed report group for requests without branch. The configured database
+contained zero permission requests before applying RequirePermissionRequestBranch.
+Reports remain the next feature after review of this correction.
+
 ## Scope
 
 Base and PR target: `develop`. Preparation: `docs/practice-5-planning`.

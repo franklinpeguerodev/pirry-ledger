@@ -13,7 +13,6 @@ public sealed class PruebasDeSolicitudYNotificacionAtomicas
     public async Task SolicitudYPublicacionSeEjecutanDentroDelMismoCoordinador()
     {
         var scenario = new EscenarioDePermisos();
-        scenario.Standard.AssignBranch(Guid.NewGuid());
         var token = await scenario.OpenStandardSessionAsync();
         var requests = new Solicitudes();
         var transaction = new Transaccion(requests);

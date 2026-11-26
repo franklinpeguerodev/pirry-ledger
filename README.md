@@ -1,5 +1,25 @@
 # Pirry Ledger
 
+## Sucursal obligatoria en solicitudes de permiso
+
+RF-GP-01, RD-06 y RD-09. Cada solicitud conserva la sucursal al crearse.
+Estándar requiere su sucursal física. Administrador registra Todas, incluido
+un usuario ascendido que conserve una asignación física. El alcance se obtiene
+del usuario autenticado en ambos caminos de creación. Ausencia de destinatario
+activo, sucursal ausente, vacía o global para Estándar rechazan antes de guardar.
+La fábrica exige Guid de sucursal y rechaza Guid.Empty.
+
+RequirePermissionRequestBranch cambia branch_id a NOT NULL y agrega restricción
+contra UUID vacío. La migración carece de valor predeterminado. Si existen datos
+sin sucursal, deben corregirse con una atribución revisada antes de aplicarla.
+El inventario del entorno configurado encontró cero solicitudes, cero nulas y cero
+vacías. La migración se aplicó y PostgreSQL confirmó obligatoriedad sin default.
+
+Las pruebas existentes ahora asignan sucursal física a sus Estándar y proporcionan
+el directorio de identidad al gateway. Se conservan sus verificaciones originales.
+Se agrega rechazo sin escritura para sucursal ausente/vacía/global y cobertura del
+Administrador ascendido. ADR 030 documenta la corrección aprobada.
+
 ## Notificaciones de atraso y trabajador CLI — ADR 032
 
 RF-NOT-03/08/09/12: Notifications detecta atrasos mediante contratos del Core;
@@ -3778,3 +3798,7 @@ Una edición con descripción vacía o subcategoría inexistente responde
 
 La suite que verifica estas rutas y el control de acceso se ejecuta con
 `dotnet test pirry-ledger.slnx --no-restore`.
+
+Verificación del fix: dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+aprobó 663 pruebas. La mutación que conservaba sucursal física al ascender a
+Administrador hizo fallar su prueba y se restauró antes de la suite completa.

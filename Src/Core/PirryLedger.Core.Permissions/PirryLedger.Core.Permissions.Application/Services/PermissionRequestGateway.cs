@@ -74,13 +74,13 @@ public sealed class PermissionRequestGateway : IPermissionRequestGateway
         }
 
         var requester = _directory is null ? null : await _directory.FindActiveAsync(requesterId, cancellationToken);
-        if (_directory is not null && requester is null)
+        if (requester is null)
             throw new ArgumentException("El solicitante no está activo.", nameof(requesterId));
 
         var request = PermissionRequest.Create(
             requesterId,
             permissionName,
-            _clock.UtcNow, requester?.BranchId);
+            _clock.UtcNow, PermissionRequestBranch.Resolve(requester.IsAdministrator, requester.BranchId));
 
         await _requests.SaveAsync(request, cancellationToken);
         if (_notifications is not null)

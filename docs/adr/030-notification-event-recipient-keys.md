@@ -52,3 +52,13 @@ con bloqueo de su fila de preferencia, inicializada con el valor predeterminado
 si aún no existe: desactivar no deja un correo pendiente insertado por
 una operación que leyó una preferencia anterior. Las entregas múltiples toman
 esos bloqueos en orden de identificador para conservar un orden común.
+
+## Corrección aprobada el 2026-11-26
+
+Franklin exigió sucursal obligatoria para toda solicitud y autorizó un fix propio.
+Estándar conserva su sucursal física y Administrador registra Todas. Ambos caminos
+validan identidad y sucursal antes de persistir y publicar. La fábrica exige Guid
+no vacío. PostgreSQL exige NOT NULL y rechaza UUID vacío, sin valor predeterminado.
+Esto sustituye la columna opcional anterior. La alternativa de conservar null y
+agruparlo en reportes fue descartada por Franklin. No se reconstruye una sucursal
+histórica usando la asignación actual. Inventario previo: cero solicitudes.

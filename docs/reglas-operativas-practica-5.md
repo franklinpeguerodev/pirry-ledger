@@ -165,3 +165,10 @@ El enunciado original se conserva separado de estas decisiones del negocio.
 - Antes de ejecutar, revisar destino y tratamiento de sesiones, tokens y códigos de acceso.
 - No borrar volúmenes completos ni objetos de otros proyectos.
 - Sin paquetes nuevos sin autorización; sin infraestructura ajena a lo acordado.
+
+## Sucursal de solicitudes — corrección aprobada
+
+Toda solicitud guarda sucursal obligatoria desde su creación. Estándar usa su
+sucursal física y Administrador Todas, determinada por rol. No se acepta null,
+UUID vacío ni Todas para un Estándar. No se requiere grupo de solicitudes sin
+sucursal en el reporte. Una solicitud administrativa cuenta una vez en Todas.
