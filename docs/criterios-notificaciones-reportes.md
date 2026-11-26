@@ -130,4 +130,7 @@ se verifican aparte mediante instrucciones ejecutadas del README.
 La ejecución del 2026-11-26 sobre develop 2aa76d6 se registra en
 [aceptacion-practica-5.md](aceptacion-practica-5.md). Distingue pruebas aprobadas,
 comprobaciones externas y criterios todavía sin ejecutar; no cambia los criterios
-originales ni declara cumplida la persistencia tras reiniciar Docker.
+originales. La comprobación posterior sobre develop 7e53a79 está en
+[verificacion-docker-practica-5.md](verificacion-docker-practica-5.md): incluye
+arranque, seis recorridos desplegados y persistencia tras recrear contenedores.
+No elimina la desviación RF-NOT-06 ni sustituye la revisión final.

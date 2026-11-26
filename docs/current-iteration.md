@@ -15,9 +15,13 @@ See aceptacion-practica-5.md for the requirement matrix, commands and limits.
 709 tests passed on the integrated version. Host builds with zero errors and
 seven NU1900 warnings; network-enabled restore still could not query NuGet.
 Core/business report SQL, isolated queue persistence and local SMTP were checked.
-Docker is unavailable, confirmed by Franklin: container startup and document
-persistence after restart are NOT verified. Deployed access flows and external
-receipt/use of access links remain pending. RF-NOT-06 remains a known deviation.
+Subsequent Codespace verification on develop 7e53a79 (PR 115) completed Docker
+startup, six deployed regression flows and document persistence after container
+recreation. Linux suite: 709 passed, no NU1900 in its log. Mailpit received access
+messages and their links/codes worked. Five SMTP failures stopped further attempts.
+See verificacion-docker-practica-5.md for commands, evidence and limits.
+The CLI emitted a nonblocking missing-GSSAPI warning; external mail and Kerberos
+were not verified. Franklin's final review and the RF-NOT-06 deviation remain open.
 No production behavior change or delivery tag is part of this evidence branch.
 
 ## Scope
