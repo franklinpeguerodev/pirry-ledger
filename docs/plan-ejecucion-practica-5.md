@@ -214,3 +214,16 @@ de lectura, proveedor Billing con proyección SQL y pruebas, composición/API y
 pruebas de Reports, documentación y bitácora se separan por responsabilidad.
 El proveedor de consultas y la integración API pueden superar 200 líneas como
 unidades coherentes con sus pruebas, conforme a autorización previa.
+
+## Bloque 11 — Aceptación acumulada
+
+Rama chore/practice-5-acceptance desde develop 2aa76d6 (PR 114 integrado).
+Sin nuevas funcionalidades. docs/aceptacion-practica-5.md registra matriz por
+requisito, 709 pruebas de regresión, compilación, SQL real y SMTP local.
+README, current-iteration, índices y estado del ADR 034 reflejan integración y
+límites actuales. Bitácora en commit separado.
+
+Docker no disponible: arranque, persistencia del documento tras reinicio y
+recorridos completos de despliegue permanecen sin verificar. No se sustituyen
+por pruebas en memoria o inspección de archivos. Recepción externa de enlaces
+pendiente. RF-NOT-06 continúa desviado; no se autoriza merge ni tag desde este bloque.

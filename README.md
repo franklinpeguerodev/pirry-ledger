@@ -1,5 +1,27 @@
 # Pirry Ledger
 
+## Revisión acumulada — Práctica 5
+
+El PR 114 está integrado en develop 2aa76d6. Las funcionalidades de la iteración
+están implementadas; la aceptación integral permanece abierta. La matriz de
+requisitos, resultados y límites está en
+[aceptacion-practica-5.md](docs/aceptacion-practica-5.md).
+
+Comprobación del 26 de noviembre de 2026:
+
+- `dotnet test pirry-ledger.slnx --configuration Release`: 709 aprobadas,
+  cero fallidas/omitidas; advertencias NU1900 al consultar NuGet.
+- `dotnet build Src/Host/PirryLedger.Host --no-restore -v q`: cero errores,
+  siete advertencias NU1900. Restore con red no resolvió la consulta de vulnerabilidades.
+- PostgreSQL real: reportes y cola con datos temporales retirados o revertidos.
+  SMTP local: aceptación, rechazo e incertidumbre; sin entregas externas.
+- `docker compose up --build`: no ejecutable en este equipo porque Docker no
+  está disponible. No se afirma arranque ni persistencia tras reiniciar contenedores.
+
+Faltan los recorridos contra despliegue, recepción/uso de enlaces de acceso,
+persistencia del documento tras reiniciar y revisión final. Se mantiene la
+desviación RF-NOT-06 (ADR 023/024). No se ha creado el tag practica-5.
+
 ## Reportes del negocio — ADR 034
 
 RF-REP-02/03/04/05. El contrato completo de parámetros, campos, cálculos y archivos
@@ -50,7 +72,7 @@ páginas públicas sin los agregados internos BranchTotals y convierte las filas
 que necesitan presentación: omisión de methods y etiqueta de jornada reabierta.
 No se usa JsonIgnore para ocultar los totales internos. El contrato HTTP se mantiene.
 
-Verificaciones ejecutadas:
+Verificaciones originales del bloque de reportes, antes de la revisión acumulada:
 dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
 dotnet build Src/Host/PirryLedger.Host --no-restore -v q
 
@@ -105,7 +127,8 @@ rechazos sin consultar datos y autorización HTTP. Una mutación que omitía el
 último día fue detectada y la regla se restauró. PostgreSQL real confirmó
 GroupBy, rangos distintos, sucursales y estado actual con datos revertidos.
 La enumeración de rutas incluye Reports y comprueba su declaración de acceso.
-Los reportes del negocio y revisión acumulada siguen pendientes.
+Los reportes del negocio están integrados; el estado de aceptación acumulada
+se detalla al inicio y en docs/aceptacion-practica-5.md.
 
 ## Sucursal obligatoria en solicitudes de permiso
 
@@ -220,7 +243,7 @@ y ausencia de entrega retroactiva. Se retiraron los datos temporales y no se
 enviaron correos externos. Los tres comandos CLI se ejecutaron: revisión sin
 casos existentes y fase SMTP bloqueada por otro enviador, sin tocar mensajes
 existentes. La ejecución de Docker permanece sin verificar:
-docker no está disponible en PATH. Reportes y revisión final siguen pendientes.
+docker no está disponible en PATH. Reportes integrados; revisión final abierta.
 
 ## Cola de correos: cinco intentos y consulta — ADR 031
 
@@ -273,7 +296,8 @@ Migración AddEmailQueueOutcomes: dos fechas UTC opcionales; no inventa fechas
 históricas. Pendientes históricos con cinco o más intentos quedan Failed y no
 se reclaman. Se conservan ordinales anteriores. Durante actualización no deben
 coexistir enviadores antiguos que desconocen el bloqueo, límite y estado incierto.
-No se agregan paquetes o variables. Recordatorios CLI implementados en ADR 032; reportes pendientes.
+No se agregan paquetes o variables. Recordatorios CLI implementados en ADR 032;
+reportes implementados en ADR 033 y 034.
 
 Verificación ejecutada:
 
@@ -460,7 +484,7 @@ Solicitar anulación excluye venta y efectivo, aprobar mantiene exclusión como
 anulado y rechazar reincorpora a la jornada original. No entregado también queda
 excluido hasta recuperarse. Las cifras separan transferencias confirmadas y
 pendientes, fiado y exclusiones; abonos de deuda permanecen fuera del cierre.
-Los eventos se conectan en el centro; reportes permanecen en su feature posterior.
+Los eventos se conectan en el centro; reportes integrados en ADR 033 y 034.
 
 Pruebas reproducibles sin PostgreSQL ni SMTP:
 

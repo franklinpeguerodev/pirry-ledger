@@ -1,6 +1,6 @@
 # Current iteration — Practice 5: Notifications and reports
 
-## Current feature — Business reports
+## Current feature — Accumulated acceptance
 
 Core report integrated through PR 113 at 37f0a76.
 feature/business-sales-reports implements the seven business report families and
@@ -9,11 +9,16 @@ See business-report-contract.md for exact filters, endpoints, fields and paging.
 Each response uses a read-only RepeatableRead snapshot. Pending and settled
 debts have separate queries. Reopened closing snapshots remain informational.
 Reports use only contracts and preserve module-owned queries. No new tables.
-The feature remains subject to PR review; accumulated acceptance follows.
-PR 114 was closed at Franklin's request to separate provider results from HTTP
-responses. Core report contracts have no JSON attributes or presentation labels;
-Reports explicitly maps public pages and conditional sales/employee fields.
-The correction preserves the approved HTTP contract and SQL aggregation.
+PR 114, including the provider/HTTP responsibility correction, is integrated
+in develop 2aa76d6. Branch chore/practice-5-acceptance records final evidence.
+See aceptacion-practica-5.md for the requirement matrix, commands and limits.
+709 tests passed on the integrated version. Host builds with zero errors and
+seven NU1900 warnings; network-enabled restore still could not query NuGet.
+Core/business report SQL, isolated queue persistence and local SMTP were checked.
+Docker is unavailable, confirmed by Franklin: container startup and document
+persistence after restart are NOT verified. Deployed access flows and external
+receipt/use of access links remain pending. RF-NOT-06 remains a known deviation.
+No production behavior change or delivery tag is part of this evidence branch.
 
 ## Scope
 
@@ -44,8 +49,8 @@ contract. Dedicated undelivered recovery and shared sales calculations are
 integrated in develop (ADR 028, PR 106).
 Only the Standard issuer recovers, retaining the original invoice/day and
 leaving saved closings unchanged. Pending cancellation exclusions and resolution
-are covered across Billing and Permissions. Reports remain in subsequent
-features; notification delivery status follows below. No closing revision history is implemented.
+are covered across Billing and Permissions. Reports are integrated through PR 113
+and 114; notification delivery status follows below. No closing revision history is implemented.
 Notification-center prerequisite integrated in develop (ADR 029, PR 107).
 Own inbox integrated in develop (PR 108):
 list without automatic reading, mark one/all with server-side ownership.
