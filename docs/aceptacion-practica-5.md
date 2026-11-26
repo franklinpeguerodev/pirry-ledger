@@ -1,11 +1,18 @@
 # Aceptación acumulada — Práctica 5
 
+**Actualización posterior:** [verificación Docker](verificacion-docker-practica-5.md)
+sobre develop 7e53a79, el mismo 2026-11-26: arranque, seis recorridos desplegados,
+enlaces/códigos recibidos en Mailpit, persistencia del documento tras recrear
+contenedores y 709 pruebas Linux aprobadas. Los pendientes Docker descritos abajo
+son el resultado histórico de la revisión local 2aa76d6, ya comprobados después.
+Correo externo no probado; RF-NOT-06 y revisión final siguen abiertos.
+
 Fecha: 2026-11-26, República Dominicana. Versión comprobada: develop 2aa76d6,
 merge del PR 114, incluida la separación de contratos internos y respuestas.
 Rama de evidencia: chore/practice-5-acceptance. Esta revisión no modifica código
 de producción, datos de negocio existentes ni decisiones funcionales.
 
-## Resultado y límites
+## Resultado y límites de la revisión local anterior
 
 La suite completa tiene 709 pruebas aprobadas, cero fallidas y cero omitidas.
 El Host compila con cero errores y siete advertencias NU1900: no se pudo consultar
@@ -129,7 +136,7 @@ anteriores de estas ejecuciones nuevas.
 - Búsqueda de reloj: las llamadas ejecutables a DateTime.UtcNow de producción
   están en SystemClock; las demás coincidencias encontradas son comentarios.
 
-## Condiciones para cerrar
+## Condiciones registradas al terminar la revisión local
 
 1. Ejecutar la composición y los seis recorridos de despliegue del README en un
    equipo con Docker, incluida persistencia del documento tras reiniciar.
@@ -140,3 +147,5 @@ anteriores de estas ejecuciones nuevas.
 4. Corregir cualquier fallo hallado y autorizar expresamente el tag practica-5.
 
 La fusión del PR de evidencia no convierte los pendientes en pruebas aprobadas.
+La ejecución posterior enlazada al inicio aporta la evidencia de despliegue;
+no modifica el resultado histórico de estos comandos locales.

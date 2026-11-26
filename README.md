@@ -2,25 +2,29 @@
 
 ## Revisión acumulada — Práctica 5
 
-El PR 114 está integrado en develop 2aa76d6. Las funcionalidades de la iteración
-están implementadas; la aceptación integral permanece abierta. La matriz de
-requisitos, resultados y límites está en
-[aceptacion-practica-5.md](docs/aceptacion-practica-5.md).
+Las funcionalidades están integradas en develop. El 26 de noviembre de 2026
+se verificó develop 7e53a79 (PR 115) en el Codespace autorizado:
 
-Comprobación del 26 de noviembre de 2026:
+- Docker construyó y arrancó Host, PostgreSQL, migrador, SeaweedFS, Mailpit y mailer.
+- Suite Linux: 709 aprobadas, cero fallidas/omitidas; sin NU1900 en ese registro.
+- Activación, recuperación, sesiones, roles, permisos y Billing probados contra Host.
+- Documento descargado con el mismo SHA-256 después de recrear contenedores.
+- SMTP hacia Mailpit y cinco intentos con fallo controlado; sexta pasada sin reenvío.
+- Reportes Core/negocio, filtros, autorización, bandeja y preferencia comprobados.
 
-- `dotnet test pirry-ledger.slnx --configuration Release`: 709 aprobadas,
-  cero fallidas/omitidas; advertencias NU1900 al consultar NuGet.
-- `dotnet build Src/Host/PirryLedger.Host --no-restore -v q`: cero errores,
-  siete advertencias NU1900. Restore con red no resolvió la consulta de vulnerabilidades.
-- PostgreSQL real: reportes y cola con datos temporales retirados o revertidos.
-  SMTP local: aceptación, rechazo e incertidumbre; sin entregas externas.
-- `docker compose up --build`: no ejecutable en este equipo porque Docker no
-  está disponible. No se afirma arranque ni persistencia tras reiniciar contenedores.
+Evidencia y comandos en [verificacion-docker-practica-5.md](docs/verificacion-docker-practica-5.md).
+La [revisión anterior](docs/aceptacion-practica-5.md) conserva la matriz de requisitos
+y sus comprobaciones PostgreSQL. No se leyó .env ni se ejecutó Python.
+Para esta composición de prueba se usó la configuración de ejemplo versionada:
 
-Faltan los recorridos contra despliegue, recepción/uso de enlaces de acceso,
-persistencia del documento tras reiniciar y revisión final. Se mantiene la
-desviación RF-NOT-06 (ADR 023/024). No se ha creado el tag practica-5.
+```powershell
+docker compose --env-file .env.example up --build -d
+```
+
+El CLI emitió un aviso de GSSAPI ausente que no impidió la entrega a Mailpit.
+No se verificó correo externo ni Kerberos. Faltan revisión final y autorización
+de entrega; RF-NOT-06 mantiene la desviación ADR 023/024, sin excepción académica
+registrada. No se creó el tag practica-5.
 
 ## Reportes del negocio — ADR 034
 
@@ -85,8 +89,8 @@ PostgreSQL real verificó agregaciones y todas las consultas con datos temporale
 Una segunda conexión confirmó cambios de factura y permiso mientras se leía:
 la respuesta conservó sus cifras, la siguiente vio los cambios y un intento de
 escritura dentro de la lectura fue rechazado. Datos temporales retirados.
-No hubo envío de correos. Docker sigue sin verificar por ausencia del comando.
-La aceptación acumulada de la práctica sigue pendiente.
+En esa revisión no hubo envío ni Docker. La comprobación posterior del Codespace
+está enlazada al inicio; queda revisión final.
 
 ## Reporte administrativo de solicitudes — ADR 033
 
@@ -242,8 +246,8 @@ dos ejecuciones simultáneas sin duplicados, rollback y reintento individual,
 y ausencia de entrega retroactiva. Se retiraron los datos temporales y no se
 enviaron correos externos. Los tres comandos CLI se ejecutaron: revisión sin
 casos existentes y fase SMTP bloqueada por otro enviador, sin tocar mensajes
-existentes. La ejecución de Docker permanece sin verificar:
-docker no está disponible en PATH. Reportes integrados; revisión final abierta.
+existentes. En esa revisión Docker no estaba disponible. La ejecución posterior
+en Codespace está enlazada al inicio; revisión final abierta.
 
 ## Cola de correos: cinco intentos y consulta — ADR 031
 
@@ -318,7 +322,7 @@ fallo al guardar aceptación, revirtiendo esquema y datos. SMTP de prueba local
 verificó aceptación seguida de desconexión, rechazo explícito y pérdida de respuesta.
 Sin entregas externas ni procesamiento de mensajes existentes. El comando real
 --send-mail se verificó con bloqueo ocupado: terminó sin tomar mensajes.
-No se verificó Docker en esta entrega: no está disponible en PATH.
+Docker no se verificó en esa entrega; la comprobación posterior está enlazada al inicio.
 
 ## Eventos y preferencias de notificación — ADR 030
 

@@ -1,8 +1,8 @@
 # Reports
 
 Source: Práctica 5, section 1.4. Core and business reports integrated through PR 114.
-Integrated tests and SQL checks passed; deployment acceptance remains open.
-See ../aceptacion-practica-5.md for evidence and limits.
+Integrated tests, SQL and deployed Docker checks passed; final review remains open.
+See ../aceptacion-practica-5.md and ../verificacion-docker-practica-5.md for limits.
 The assignment text below is kept in the professor's original Spanish.
 
 | ID | Requisito | Criterio de aceptación |

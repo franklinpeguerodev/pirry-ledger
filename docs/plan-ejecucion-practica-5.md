@@ -223,7 +223,10 @@ requisito, 709 pruebas de regresión, compilación, SQL real y SMTP local.
 README, current-iteration, índices y estado del ADR 034 reflejan integración y
 límites actuales. Bitácora en commit separado.
 
-Docker no disponible: arranque, persistencia del documento tras reinicio y
-recorridos completos de despliegue permanecen sin verificar. No se sustituyen
-por pruebas en memoria o inspección de archivos. Recepción externa de enlaces
-pendiente. RF-NOT-06 continúa desviado; no se autoriza merge ni tag desde este bloque.
+En la revisión local Docker no estaba disponible. Continuación desde develop
+7e53a79 (PR 115), rama chore/docker-acceptance: composición real en Codespace,
+seis recorridos desplegados, enlaces/códigos recibidos en Mailpit, documento
+persistente tras recrear contenedores y suite Linux de 709 aprobadas.
+Evidencia: docs/verificacion-docker-practica-5.md. Solo documentación;
+bitácora en commit separado. Sin correo externo ni Kerberos verificados.
+RF-NOT-06 continúa desviado; faltan revisión final y autorización del tag.
