@@ -11,6 +11,33 @@ public sealed class PruebasDeReportesDelNegocio
     private static readonly DateOnly Hasta = new(2026, 11, 25);
 
     [Fact]
+    public void ContratosEntreModulosNoDeclaranReglasDeSerializacion()
+    {
+        var contracts = typeof(IBusinessReportSource).Assembly.GetTypes()
+            .Where(type => type.Namespace == typeof(IBusinessReportSource).Namespace);
+
+        var attributes = contracts.SelectMany(type => type.GetProperties())
+            .SelectMany(property => property.GetCustomAttributesData());
+
+        Assert.DoesNotContain(attributes, attribute => attribute.AttributeType.Namespace == "System.Text.Json.Serialization");
+        Assert.Null(typeof(ClosingReportRow).GetProperty("Status"));
+    }
+
+    [Fact]
+    public async Task PaginasPublicasNoReutilizanResultadosInternosNiOcultanTotales()
+    {
+        var scenario = new Escenario();
+
+        var debts = await scenario.Reports.DebtsAsync(Desde, Hasta, [], false, new());
+        var closings = await scenario.Reports.ClosingsAsync(Desde, Hasta, [], new());
+
+        Assert.IsNotType<DebtReportPage>(debts.Page);
+        Assert.IsNotType<ClosingReportPage>(closings.Page);
+        Assert.Null(debts.Page.GetType().GetProperty("BranchTotals"));
+        Assert.Null(closings.Page.GetType().GetProperty("BranchTotals"));
+    }
+
+    [Fact]
     public async Task RespuestaVaciaConservaSucursalesYCeros()
     {
         var scenario = new Escenario();

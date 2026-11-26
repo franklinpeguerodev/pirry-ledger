@@ -10,6 +10,10 @@ Each response uses a read-only RepeatableRead snapshot. Pending and settled
 debts have separate queries. Reopened closing snapshots remain informational.
 Reports use only contracts and preserve module-owned queries. No new tables.
 The feature remains subject to PR review; accumulated acceptance follows.
+PR 114 was closed at Franklin's request to separate provider results from HTTP
+responses. Core report contracts have no JSON attributes or presentation labels;
+Reports explicitly maps public pages and conditional sales/employee fields.
+The correction preserves the approved HTTP contract and SQL aggregation.
 
 ## Scope
 

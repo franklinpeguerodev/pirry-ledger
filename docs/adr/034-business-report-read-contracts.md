@@ -18,6 +18,15 @@ PostgreSQL RepeatableRead de solo lectura en la conexión común con participant
 dueños de sus contextos. Se libera antes de serializar la respuesta.
 La siguiente página obtiene una lectura nueva. No se conserva un reporte temporal.
 
+Franklin pidió separar resultados entre módulos y respuestas HTTP al revisar el
+PR 114. Core.Contracts transporta datos sin atributos JSON ni etiquetas de
+presentación. Reports construye páginas públicas sin BranchTotals y filas de
+ventas/empleados con la omisión condicional de Methods. La etiqueta de jornada
+reabierta pertenece a la respuesta. Se descarta reutilizar el resultado interno
+ocultando sus propiedades con JsonIgnore: mezcla transporte entre módulos y
+presentación. El mapeo explícito añade tipos, pero conserva el JSON aprobado y
+permite evolucionar el resultado interno sin exponer campos accidentalmente.
+
 Productos se seleccionan por nombre histórico exacto y se agrupan por ese nombre.
 Empleados se agrupan por usuario y nombre histórico. Una factura cuenta una vez
 en totales aunque incluya varios artículos. Subconjunto de productos omite métodos.

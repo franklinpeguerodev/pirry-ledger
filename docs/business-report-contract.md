@@ -89,7 +89,8 @@ Otra página inicia otra lectura y puede reflejar cambios posteriores.
 ## Archivos y responsabilidades
 
 - Core.Contracts/Reports/IBusinessReportSource.cs: filtros, agrupación, páginas,
-  filas y agregados de las consultas. IReportReadSession.cs: contrato de lectura.
+  filas y agregados de las consultas entre módulos, sin atributos de serialización
+  ni etiquetas de presentación. IReportReadSession.cs: contrato de lectura.
 - Business.Application/Ports/IBusinessReportRepository.cs: consultas de Billing.
   UseCases/BillingReportSource.cs: contacto Core y agrupación semanal/mensual.
 - Business.Infrastructure/Persistence/BusinessReportRepository.cs: filtros y
@@ -98,7 +99,10 @@ Otra página inicia otra lectura y puede reflejar cambios posteriores.
 - Business.Domain/Rules/InvoiceSalesCalculation.cs: estados de venta compartidos
   por el cálculo operativo y los reportes.
 - Reports.Application/BusinessReportModels.cs y GetBusinessReports.cs: contratos
-  visibles, validación, composición por sucursal, porcentajes y totales.
+  visibles, validación, composición por sucursal, porcentajes y totales. Mapean
+  resultados internos a páginas sin BranchTotals y filas de ventas/empleados con
+  Methods opcional. La etiqueta de cierre se construye aquí. No se ocultan
+  agregados internos con JsonIgnore; el JSON público conserva sus campos.
 - Reports.Infrastructure/ReportReadSession.cs y DependencyInjection.cs:
   transacción de lectura y enlace de casos de uso.
 - Reports.Api/BusinessReportEndpointRegistration.cs y EndpointRegistration.cs:

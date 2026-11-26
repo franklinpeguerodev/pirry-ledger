@@ -45,11 +45,16 @@ Los cálculos diarios alimentan agrupación semanal/mensual en backend.
 Si falta el proveedor Billing, el reporte del negocio devuelve 404 controlado
 y las funcionalidades del Core conservan su independencia.
 
+Los resultados entre módulos no declaran reglas JSON. Reports construye las
+páginas públicas sin los agregados internos BranchTotals y convierte las filas
+que necesitan presentación: omisión de methods y etiqueta de jornada reabierta.
+No se usa JsonIgnore para ocultar los totales internos. El contrato HTTP se mantiene.
+
 Verificaciones ejecutadas:
 dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
 dotnet build Src/Host/PirryLedger.Host --no-restore -v q
 
-Suite completa: 707 aprobadas, cero fallidas/omitidas. Build sin errores ni
+Suite completa: 709 aprobadas, cero fallidas/omitidas. Build sin errores ni
 advertencias. Pruebas cubren nueve rutas con 401/403, cifras y fechas, nombres,
 métodos omitidos, páginas, reapertura y recuperación sin reescribir cierre.
 Una mutación sumando el cierre reabierto fue detectada y se restauró la regla.

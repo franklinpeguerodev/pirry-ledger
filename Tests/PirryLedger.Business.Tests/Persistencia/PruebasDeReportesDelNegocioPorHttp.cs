@@ -66,6 +66,10 @@ public sealed class PruebasDeReportesDelNegocioPorHttp
         var selected = await Get("sales", "&grouping=Day&productNames=A&productNames=B");
         Assert.Equal(310m, selected.GetProperty("totals").GetProperty("sold").GetDecimal());
         Assert.False(selected.GetProperty("totals").TryGetProperty("methods", out _));
+        var selectedRows = selected.GetProperty("branches").EnumerateArray()
+            .SelectMany(branch => branch.GetProperty("rows").EnumerateArray()).ToArray();
+        Assert.NotEmpty(selectedRows);
+        Assert.All(selectedRows, row => Assert.False(row.TryGetProperty("methods", out _)));
         var methods = await Get("collections");
         Assert.Equal(300m, methods.GetProperty("totals").GetProperty("cash").GetDecimal());
         Assert.Equal(160m, methods.GetProperty("totals").GetProperty("debt").GetDecimal());
@@ -75,8 +79,16 @@ public sealed class PruebasDeReportesDelNegocioPorHttp
         Assert.Equal(12.5m, exclusions.GetProperty("totals").GetProperty("pendingCancellationPercentage").GetDecimal());
         var employees = await Get("employees");
         Assert.Equal(3, employees.GetProperty("employees").GetArrayLength());
+        var selectedEmployees = await Get("employees", "&productNames=A");
+        var employeeRows = selectedEmployees.GetProperty("branches").EnumerateArray()
+            .SelectMany(branch => branch.GetProperty("rows").EnumerateArray()).ToArray();
+        Assert.NotEmpty(employeeRows);
+        Assert.All(employeeRows, row => Assert.False(row.TryGetProperty("methods", out _)));
         var pending = await Get("debts/pending");
         Assert.Equal(100m, pending.GetProperty("page").GetProperty("outstanding").GetDecimal());
+        Assert.False(pending.GetProperty("page").TryGetProperty("branchTotals", out _));
+        Assert.Equal(100m, pending.GetProperty("branches").EnumerateArray()
+            .Sum(branch => branch.GetProperty("totals").GetProperty("outstanding").GetDecimal()));
         var emptyPage = await Get("debts/pending", "&offset=1&limit=1");
         Assert.Equal(0, emptyPage.GetProperty("page").GetProperty("items").GetArrayLength());
         Assert.Equal(1, emptyPage.GetProperty("page").GetProperty("totalCount").GetInt32());
@@ -86,6 +98,9 @@ public sealed class PruebasDeReportesDelNegocioPorHttp
         var closings = await Get("closings", "&limit=1");
         Assert.Equal(3, closings.GetProperty("page").GetProperty("totalCount").GetInt32());
         Assert.Equal(560m, closings.GetProperty("page").GetProperty("closedTotals").GetProperty("sold").GetDecimal());
+        Assert.False(closings.GetProperty("page").TryGetProperty("branchTotals", out _));
+        var reopened = await Get("closings", "&offset=2&limit=1");
+        Assert.Equal("Jornada reabierta", reopened.GetProperty("page").GetProperty("items")[0].GetProperty("status").GetString());
         var open = await Get("open-sales");
         Assert.Equal(150m, open.GetProperty("sold").GetDecimal());
         var before = read.Calls;

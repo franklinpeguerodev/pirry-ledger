@@ -1,5 +1,3 @@
-using System.Text.Json.Serialization;
-
 namespace PirryLedger.Core.Contracts.Reports;
 
 public enum SalesReportGrouping { Day, Week, Month }
@@ -9,7 +7,7 @@ public sealed record ReportPage(int Offset = 0, int Limit = 50);
 public sealed record CountAmount(int Count, decimal Amount);
 public sealed record SaleMethods(decimal Cash, decimal ConfirmedTransfers, decimal PendingTransfers, decimal Debt);
 public sealed record SalesReportRow(Guid BranchId, DateOnly Period, int InvoiceCount, decimal Sold,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SaleMethods? Methods);
+    SaleMethods? Methods);
 public sealed record MethodReportRow(Guid BranchId, SaleMethods Methods);
 public sealed record ProductReportRow(Guid BranchId, string Name, long Units, decimal Amount, int InvoiceCount);
 public sealed record BranchInvoiceCount(Guid BranchId, int InvoiceCount);
@@ -18,7 +16,7 @@ public sealed record ExclusionReportRow(Guid BranchId, int IssuedCount, CountAmo
     CountAmount Cancelled, CountAmount NotDelivered);
 public sealed record EmployeeReportRow(Guid BranchId, Guid UserId, string HistoricalName, int IssuedCount,
     int SoldCount, decimal Sold,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SaleMethods? Methods,
+    SaleMethods? Methods,
     CountAmount PendingCancellation, CountAmount Cancelled, CountAmount NotDelivered);
 public sealed record DebtReportRow(Guid InvoiceId, Guid BranchId, string BranchName, DateOnly BusinessDate,
     DateTime IssuedAtUtc, string DebtorName, decimal InvoiceTotal, decimal Outstanding,
@@ -26,18 +24,15 @@ public sealed record DebtReportRow(Guid InvoiceId, Guid BranchId, string BranchN
 public sealed record DebtBranchTotals(Guid BranchId, int Count, decimal TotalInvoiced, decimal Outstanding);
 public sealed record DebtReportPage(IReadOnlyList<DebtReportRow> Items, int TotalCount, decimal TotalInvoiced,
     decimal Outstanding, int Offset, int Limit,
-    [property: JsonIgnore] IReadOnlyList<DebtBranchTotals> BranchTotals);
+    IReadOnlyList<DebtBranchTotals> BranchTotals);
 public sealed record ClosingAmounts(decimal Sold, decimal Cash, decimal ConfirmedTransfers, decimal PendingTransfers,
     decimal Debt, decimal PendingCancellation, decimal Cancelled, decimal NotDelivered);
 public sealed record ClosingReportRow(Guid BusinessDayId, Guid BranchId, DateOnly BusinessDate,
-    DateTime ClosedAtUtc, Guid ClosedByUserId, bool IsReopened, ClosingAmounts Closing)
-{
-    public string Status => IsReopened ? "Jornada reabierta" : "Jornada cerrada";
-}
+    DateTime ClosedAtUtc, Guid ClosedByUserId, bool IsReopened, ClosingAmounts Closing);
 public sealed record ClosingBranchTotals(Guid BranchId, int Count, int ClosedCount, int ReopenedCount, ClosingAmounts ClosedTotals);
 public sealed record ClosingReportPage(IReadOnlyList<ClosingReportRow> Items, int TotalCount,
     int ClosedCount, int ReopenedCount, ClosingAmounts ClosedTotals, int Offset, int Limit,
-    [property: JsonIgnore] IReadOnlyList<ClosingBranchTotals> BranchTotals);
+    IReadOnlyList<ClosingBranchTotals> BranchTotals);
 public sealed record OpenSalesReportRow(Guid BusinessDayId, Guid BranchId, DateOnly BusinessDate, decimal Sold);
 
 public interface IBusinessReportSource

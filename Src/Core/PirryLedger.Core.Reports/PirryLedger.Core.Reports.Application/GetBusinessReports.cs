@@ -17,8 +17,9 @@ public sealed class GetBusinessReports(IBranchDirectory directory, IBranchScopeA
         {
             var rows = await Source.SalesAsync(filter, grouping, ct);
             var methods = products.Count == 0;
-            var branchRows = selected.Select(branch => new ReportBranch<SalesReportRow, SalesTotals>(branch.Id, branch.Name,
-                rows.Where(row => row.BranchId == branch.Id).ToArray(), SumSales(rows.Where(row => row.BranchId == branch.Id), methods))).ToArray();
+            var branchRows = selected.Select(branch => new ReportBranch<SalesReportEntry, SalesTotals>(branch.Id, branch.Name,
+                rows.Where(row => row.BranchId == branch.Id).Select(row => new SalesReportEntry(row.BranchId, row.Period,
+                    row.InvoiceCount, row.Sold, row.Methods)).ToArray(), SumSales(rows.Where(row => row.BranchId == branch.Id), methods))).ToArray();
             var periods = rows.GroupBy(row => row.Period).OrderBy(group => group.Key)
                 .Select(group => new PeriodSalesTotals(group.Key, SumSales(group, methods))).ToArray();
             return new SalesReport(from, to, grouping, branchRows, periods, SumSales(rows, methods));
@@ -72,9 +73,11 @@ public sealed class GetBusinessReports(IBranchDirectory directory, IBranchScopeA
         {
             var rows = await Source.EmployeesAsync(filter, ct);
             var methods = products.Count == 0;
-            var groups = selected.Select(branch => new ReportBranch<EmployeeReportRow, EmployeeTotals>(branch.Id, branch.Name,
+            var groups = selected.Select(branch => new ReportBranch<EmployeeReportEntry, EmployeeTotals>(branch.Id, branch.Name,
                 rows.Where(row => row.BranchId == branch.Id).OrderBy(row => row.HistoricalName, StringComparer.Ordinal)
-                    .ThenBy(row => row.UserId).ToArray(),
+                    .ThenBy(row => row.UserId).Select(row => new EmployeeReportEntry(row.BranchId, row.UserId,
+                        row.HistoricalName, row.IssuedCount, row.SoldCount, row.Sold, row.Methods,
+                        row.PendingCancellation, row.Cancelled, row.NotDelivered)).ToArray(),
                 SumEmployees(rows.Where(row => row.BranchId == branch.Id), methods))).ToArray();
             var combined = rows.GroupBy(row => (row.UserId, row.HistoricalName))
                 .OrderBy(group => group.Key.HistoricalName, StringComparer.Ordinal).ThenBy(group => group.Key.UserId)
@@ -94,7 +97,8 @@ public sealed class GetBusinessReports(IBranchDirectory directory, IBranchScopeA
                 new(data.BranchTotals.Where(row => row.BranchId == branch.Id).Sum(row => row.Count),
                     data.BranchTotals.Where(row => row.BranchId == branch.Id).Sum(row => row.TotalInvoiced),
                     data.BranchTotals.Where(row => row.BranchId == branch.Id).Sum(row => row.Outstanding)))).ToArray();
-            return new DebtReport(from, to, totals, data);
+            return new DebtReport(from, to, totals, new(data.Items, data.TotalCount, data.TotalInvoiced,
+                data.Outstanding, data.Offset, data.Limit));
         }, ct);
     }
 
@@ -113,7 +117,10 @@ public sealed class GetBusinessReports(IBranchDirectory directory, IBranchScopeA
                     new(saved?.Count ?? 0, saved?.ClosedCount ?? 0, saved?.ReopenedCount ?? 0,
                         saved?.ClosedTotals ?? new(0, 0, 0, 0, 0, 0, 0, 0)));
             }).ToArray();
-            return new ClosingReport(from, to, totals, data);
+            var items = data.Items.Select(row => new ClosingReportEntry(row.BusinessDayId, row.BranchId,
+                row.BusinessDate, row.ClosedAtUtc, row.ClosedByUserId, row.IsReopened, row.Closing)).ToArray();
+            return new ClosingReport(from, to, totals, new(items, data.TotalCount, data.ClosedCount,
+                data.ReopenedCount, data.ClosedTotals, data.Offset, data.Limit));
         }, ct);
     }
 
