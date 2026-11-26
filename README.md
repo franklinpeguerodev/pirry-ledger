@@ -1,5 +1,100 @@
 # Pirry Ledger
 
+## Notificaciones de atraso y trabajador CLI — ADR 032
+
+RF-NOT-03/08/09/12: Notifications detecta atrasos mediante contratos del Core;
+Billing conserva las reglas y consulta exclusivamente sus datos. No hay envío
+SMTP dentro de la facturación ni notificaciones push en esta entrega.
+
+| Caso | Cuándo corresponde | Destinatarios y canales |
+|---|---|---|
+| Transferencia sin verificar | Estrictamente más de 96 horas desde el registro de ese pago, todavía Registered y factura no anulada | Administradores activos: interno y correo según preferencia |
+| Jornada sin cerrar | Abierta al llegar las 16:00 RD del día siguiente a su fecha de apertura | Administradores activos: interno y correo según preferencia |
+
+Incluye transferencias de ventas, pagos parciales al fiar y abonos de deudas.
+Cada pago conserva su propio plazo, aunque la factura sea antigua. Exactamente
+a las 96 horas no avisa. Una solicitud de anulación pendiente no excluye el
+recordatorio; la factura ya anulada sí. Cerrar o resolver pagos no depende del
+trabajador. El bloqueo de emisión a las 16:00 conserva su validación inmediata.
+
+OverdueNotificationRecord significa «control de aviso de atraso»: nueva tabla
+not_overdue_notification_records, con id, event_key único y recorded_at_utc.
+El modelo suma 22 tablas sin contar historial EF. No se agregan marcas a Billing,
+FK entre módulos, paquetes, variables, auditoría ni historial de cierres.
+La migración AddOverdueNotificationRecords se aplica con el mecanismo existente.
+
+La clave estable tipo/origen se consume una sola vez, incluso sin Administradores
+activos. Habilitar después una cuenta o correo no recupera ese evento. Persisten
+además las restricciones únicas por evento/destinatario y correo/aviso. Repetir,
+reiniciar o ejecutar simultáneamente no duplica avisos ni correos.
+
+Cada ejecución confirma hasta 50 casos nuevos, ordenados por vencimiento.
+Ya registrados, resueltos o fallidos no consumen el cupo. Las lecturas de
+candidatos no están limitadas a 50 filas; el límite corresponde a generación.
+Cada caso revalida el origen bajo su bloqueo de factura o sucursal y registra
+control, avisos y correos en una transacción común. Un fallo revierte ese caso,
+continúa con los demás y se informa en el resumen; podrá reintentarse después.
+La lista de Administradores se consulta sin reutilizar seguimiento anterior.
+
+Un solo trabajador CLI ejecuta revisión y luego cola SMTP. En Docker, mailer
+repite --process-notifications y espera 30 segundos después de finalizar,
+incluido el envío. No es un temporizador exacto cada 30 segundos: SMTP lento
+retrasa la siguiente revisión. Esta espera también afecta activación y recuperación;
+los avisos internos de operaciones normales siguen siendo inmediatos.
+
+Con configuración de entorno y migraciones aplicadas, ejecutar una pasada:
+
+```powershell
+dotnet run --project Src/Host/PirryLedger.Host -- --notify-overdue
+dotnet run --project Src/Host/PirryLedger.Host -- --process-notifications
+dotnet run --project Src/Host/PirryLedger.Host -- --send-mail
+```
+
+--notify-overdue solo revisa y encola; --process-notifications revisa y después
+envía hasta 50 correos; --send-mail conserva el envío sin revisar nuevos atrasos.
+Los comandos terminan al completar una pasada; fuera de Docker, el operador debe
+programar su ejecución. Si falla un caso, el combinado intenta igualmente SMTP
+y termina con código 1; la cancelación de ejecución sí se propaga.
+
+Antes de reclamar cada correo de atraso se comprueba su vigencia actual,
+además de cuenta activa, rol y preferencia. Si se confirmó/rechazó el pago, se
+anuló la factura o se cerró la jornada, Pending pasa a Cancelled sin consumir
+intento. Aviso interno y control permanecen. Si falla comprobar la vigencia,
+el correo sigue Pending y esa ejecución SMTP se interrumpe con error controlado;
+no se interpreta el error como resolución. No se retira un correo ya aceptado.
+
+Para provocar los eventos: registrar una transferencia de venta o deuda y
+mantenerla pendiente más de cuatro días, o emitir la primera factura de una
+jornada y dejarla abierta hasta las 16:00 RD del día siguiente. Ejecutar revisión,
+consultar /api/notifications con cada Administrador y la cola administrativa.
+Repetir la revisión conserva los mismos avisos. Resolver el origen antes de enviar
+permite comprobar Cancelled sin intento. El límite temporal usa IClock UTC,
+sin endpoint para alterar fechas del negocio.
+
+Verificación de esta entrega:
+
+```powershell
+dotnet build Src/Host/PirryLedger.Host --no-restore -v q
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+```
+
+Build: 0 errores y una advertencia NU1900 por consulta de vulnerabilidades de
+NuGet sin red. Suite completa: 659 aprobadas, 0 fallidas/omitidas. La mutación
+temporal de «más de» a «desde 96 horas» produjo el fallo esperado en el límite;
+se restauró y la suite pasó. Incluye cap, fallos aislados, vigencia SMTP y rechazo
+sin cambios; los tests habituales no requieren base ni SMTP.
+Otra mutación retiró las defensas de unicidad: repetir produjo dos eventos donde
+se esperaba uno. Se restauraron ambas defensas y se repitió la suite de Notifications.
+
+Comprobación separada en PostgreSQL real, con DI de producción y datos propios:
+selección de venta/abono/parcial, exclusiones, bloqueos de factura y sucursal,
+dos ejecuciones simultáneas sin duplicados, rollback y reintento individual,
+y ausencia de entrega retroactiva. Se retiraron los datos temporales y no se
+enviaron correos externos. Los tres comandos CLI se ejecutaron: revisión sin
+casos existentes y fase SMTP bloqueada por otro enviador, sin tocar mensajes
+existentes. La ejecución de Docker permanece sin verificar:
+docker no está disponible en PATH. Reportes y revisión final siguen pendientes.
+
 ## Cola de correos: cinco intentos y consulta — ADR 031
 
 RF-NOT-09/10/11/12: el comando independiente procesa hasta 50 correos del lote,
@@ -51,7 +146,7 @@ Migración AddEmailQueueOutcomes: dos fechas UTC opcionales; no inventa fechas
 históricas. Pendientes históricos con cinco o más intentos quedan Failed y no
 se reclaman. Se conservan ordinales anteriores. Durante actualización no deben
 coexistir enviadores antiguos que desconocen el bloqueo, límite y estado incierto.
-No se agregan paquetes o variables. Recordatorios CLI y reportes siguen pendientes.
+No se agregan paquetes o variables. Recordatorios CLI implementados en ADR 032; reportes pendientes.
 
 Verificación ejecutada:
 
@@ -92,8 +187,8 @@ sus propias tablas (RD-03). No se consulta ni modifica información de otro mód
 | Cada cierre de jornada | Todos los Administradores, indicando sucursal | Interno |
 
 Una recuperación por transferencia produce el aviso de transferencia registrada.
-Reabrir una jornada no produce aviso propio. Recordatorios de más de cuatro días
-y jornada vencida se conectarán mediante CLI en su entrega posterior.
+Reabrir una jornada no produce aviso propio. Los recordatorios de más de cuatro
+días y jornada vencida se procesan mediante el CLI del ADR 032 descrito arriba.
 
 Cada Administrador consulta o cambia exclusivamente su preferencia:
 
@@ -111,7 +206,8 @@ no corresponde, el correo queda Cancelled. No se retira un correo ya entregado.
 La operación, aviso interno y correo en cola comparten una transacción PostgreSQL
 explícita (ADR 029); SMTP corre aparte. La clave estable tipo/origen y el índice
 único evento/destinatario evitan repetir avisos. Cada correo notificable referencia
-un aviso con índice único. No existe tabla adicional de eventos. Cada cierre válido
+un aviso con índice único. No existe tabla general de eventos; ADR 032 agrega
+control específico de atrasos. Cada cierre válido
 recibe identidad propia; solo se conserva el identificador del último cierre,
 sin historial de revisiones. Las resoluciones de permisos leen el estado actual
 bajo bloqueo de fila para impedir aprobaciones/rechazos simultáneos.
@@ -150,7 +246,7 @@ retirados o revertidos, sin ejecutar SMTP ni inspeccionar .env.
 RF-NOT-06 conserva la desviación de negocio documentada en ADR 023/024:
 el correo selectivo no equivale a cumplimiento universal ni excepción académica.
 Cinco intentos, consulta administrativa y tratamiento incierto están implementados
-como se describe arriba. Los recordatorios temporales siguen pendientes.
+como se describe arriba. ADR 032 completa los recordatorios temporales.
 
 ## Bandeja propia de notificaciones — RF-NOT-04, RF-NOT-05
 
@@ -297,7 +393,7 @@ Las pruebas HTTP usan consultas EF reales en memoria y sustituyen únicamente
 el bloqueo PostgreSQL; la concurrencia física se verifica aparte. Se cubren
 compañeros, sucursales, pagos pendientes, rechazo sin motivo, historial oculto,
 deuda saldada, pagos con caja cerrada y confirmación por el propio Administrador.
-Los avisos de abonos están conectados; recordatorios temporales siguen pendientes.
+Los avisos de abonos y los recordatorios temporales están conectados (ADR 030/032).
 
 ## Jornadas por sucursal — RD-04, RD-06, RD-09, RD-11
 
@@ -479,7 +575,7 @@ Qué levanta la composición y por qué:
 | `seaweedfs` | La API externa: guarda los bytes de los documentos (ADR 017). Solo visible dentro. |
 | `migrate` | Aplica el esquema con `--migrate` y termina; la API espera a que salga bien (ADR 018). |
 | `app` | La API. Es el **único** servicio con puerto publicado (`8090`). |
-| `mailer` | Ejecuta `--send-mail` en bucle: el correo se envía en un proceso aparte (ADR 007 y 019). |
+| `mailer` | Ejecuta `--process-notifications` en bucle: revisa atrasos, envía correo y espera 30 s tras finalizar (ADR 032). |
 | `mailpit` | La bandeja de correo de la composición. Sin puerto publicado (ADR 019). |
 
 > **El bucle del enviador va en el `entrypoint`, no en el `command`.** La imagen
@@ -1078,9 +1174,9 @@ docker compose exec mailpit wget -qO- http://localhost:8025/api/v1/messages
 De ahí salen el enlace de activación (apunta a `http://localhost:8090`, la
 dirección pública) y el código de recuperación que viaja en el cuerpo.
 
-El enviador corre el comando `--send-mail` cada 10 segundos. Por eso, después de
-crear un usuario o pedir una recuperación, hay que **esperar unos segundos** a
-que el correo aparezca en la bandeja.
+El trabajador corre `--process-notifications`: revisa atrasos, procesa correo y
+espera 30 segundos tras finalizar antes de repetir. Después de crear un usuario
+o pedir recuperación, hay que esperar la siguiente pasada y la aceptación SMTP.
 
 #### Ejemplo de la respuesta
 
@@ -1306,7 +1402,7 @@ compilando.
 
 ```mermaid
 flowchart TD
-    Host["PirryLedger.Host<br/>composición, arranque, --send-mail y --migrate"]
+    Host["PirryLedger.Host<br/>composición, API y comandos CLI"]
     AC["PirryLedger.Core.AccessControl<br/>(Domain, Application, Infrastructure, Api)"]
     NOT["PirryLedger.Core.Notifications<br/>(Domain, Application, Infrastructure, Api)"]
     PERM["PirryLedger.Core.Permissions<br/>(Domain, Application, Infrastructure, Api)"]
@@ -1353,7 +1449,7 @@ Cada módulo se capa igual: `Domain` (entidades y reglas), `Application` (casos
 de uso), `Infrastructure` (PostgreSQL, migraciones, SMTP) y `Api` (endpoints).
 `PirryLedger.Host` es composición y nada más: arranca la aplicación, registra
 los módulos, lee la configuración obligatoria, fija la dirección de escucha con
-`PORT` y sirve el comando `--send-mail`.
+`PORT` y despacha los comandos de correo, atrasos y migración.
 
 ### Estructura del repositorio
 
@@ -1382,7 +1478,7 @@ pirry-ledger/
 │   ├── Business/
 │   │   └── PirryLedger.Business/                Domain (Invoice, máquina de estados), Application, Infrastructure, Api
 │   └── Host/
-│       └── PirryLedger.Host/                    Composición + comandos --send-mail y --migrate
+│       └── PirryLedger.Host/                    Composición + comandos CLI de correo, atrasos y migración
 └── Tests/
     ├── PirryLedger.Business.Tests/              Proyecto de pruebas xUnit
     ├── PirryLedger.Core.AccessControl.Tests/    Proyecto de pruebas xUnit

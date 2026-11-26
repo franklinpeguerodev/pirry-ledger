@@ -63,8 +63,21 @@ se verifican aparte mediante instrucciones ejecutadas del README.
 - Antes y exactamente al cumplir cuatro días no hay aviso de atraso;
   primera ejecución CLI después genera uno por transferencia aún pendiente.
 - Repetir CLI o reiniciar no repite recordatorio.
+- Dos ejecuciones simultáneas dejan un control por caso, un aviso por destinatario
+  y un correo por aviso, incluso tras reintentar un fallo (RF-NOT-12, RD-09).
+- Fallo al publicar revierte marca, aviso y correo de ese caso; los demás avanzan.
+  Un origen que falla no impide la fase de correo (RF-NOT-08, RF-NOT-09).
+- Cada pasada confirma como máximo 50 casos nuevos; antiguos/resueltos/fallidos
+  no consumen cupo y la siguiente continúa los restantes (RF-NOT-03).
+- Sin Administradores activos se registra el caso sin entregas; habilitarlos
+  después no recupera ese aviso (RF-NOT-03, RD-09).
 - Una transferencia resuelta antes de ejecutar no genera recordatorio vencido.
+- Venta, pago parcial y abono se cuentan desde su propio registro; factura anulada
+  se excluye, solicitud pendiente no la excluye (RF-NOT-03, RD-11).
 - Jornada vencida genera un aviso administrativo por jornada; cada cierre sí notifica.
+- Si el caso se resuelve después de encolar y antes de enviar, el correo queda
+  Cancelled con cero intentos; persisten aviso y control. Si falla comprobarlo,
+  queda Pending sin SMTP ni intento (RF-NOT-09, RF-NOT-12).
 - Preferencia de notificaciones no cancela activación ni recuperación.
 - Error o rechazo no deja una notificación de éxito ni operación aplicada parcialmente.
 

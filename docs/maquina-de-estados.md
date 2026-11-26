@@ -208,3 +208,9 @@ Sent, Cancelled, Failed y Uncertain no admiten otro reclamo. Solo el enviador
 que obtiene el bloqueo de coordinación recupera Processing anteriores como
 Uncertain. Un fallo al guardar aceptación interrumpe el comando y conserva el
 Processing persistido; no se convierte falsamente en un fallo reenviable.
+
+ADR 032 incorpora otra condición de Pending -> Cancelled: el origen del atraso
+ya se resolvió cuando se comprueba antes del reclamo. No consume intento.
+Un error al comprobar no cambia estado ni equivale a resolución.
+El control OverdueNotificationRecord se inserta una vez por tipo/origen junto
+con aviso y correo; no tiene transiciones ni cambia factura, pago o jornada.

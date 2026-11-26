@@ -7,10 +7,11 @@ Ajustes de ventas y recuperación explícita integrados mediante PR 106.
 El bloque 6 se entrega por responsabilidades: base transaccional integrada
 `feature/cross-module-transactions` (ADR 029) y `feature/notification-inbox`
 integradas; eventos y preferencias integrados mediante PR 109 (ADR 030).
-Cola ampliada implementada en `feature/email-queue-retries`, pendiente de PR:
+Cola ampliada integrada mediante PR 110 (`feature/email-queue-retries`):
 cinco intentos, consulta y tratamiento incierto (ADR 031). Tras fallo de exclusión
 por sesión, Franklin autorizó bloqueo transaccional exclusivo, verificado.
-Recordatorios CLI pendientes.
+Recordatorios implementados en `feature/overdue-notification-reminders`, pendientes
+de revisión del PR: ADR 032 aprobado, tabla propia de Notifications y CLI combinado.
 Los bloques posteriores conservan el orden y alcance de este plan.
 
 ## Git y dependencias
@@ -112,6 +113,39 @@ Base: Src/Core/PirryLedger.Core.Notifications/.
 - Casos de vencimiento individual con marca durable para no repetir recordatorio.
 - Host/Program.cs: solo despacho CLI/composición; lógica dentro de módulos.
 - docker-compose.yml: adaptar ejecución CLI solo tras revisar contrato concreto.
+
+### Contrato concreto del bloque 8 — ADR 032
+
+- Core.Contracts/Notifications/IOverdueNotificationSource.cs: candidato con tipo,
+  origen y vencimiento; consulta, revalidación transaccional y vigencia para SMTP.
+- Billing Domain/Rules/OverdueBillingRules.cs: más de 96 horas y límite de jornada.
+  Application/Ports/IOverdueBillingRepository.cs y UseCases/BillingOverdueNotificationSource.cs:
+  selección y aviso, incluidos abonos; excluye facturas ya anuladas.
+- Billing Infrastructure/Persistence/OverdueBillingRepository.cs: consultas solo
+  propias; bloqueo de factura/pago y sucursal durante publicación, lecturas actuales.
+- Notifications Domain/Entities/OverdueNotificationRecord.cs: identidad, clave
+  única por tipo/origen y fecha UTC. No se agregan marcas a entidades de Billing.
+- Notifications Application/Ports/IOverdueNotificationStore.cs e INotificationEmailEligibility.cs:
+  control durable y comprobación de correo por contrato.
+- ProcessOverdueNotifications.cs: máximo 50 casos nuevos confirmados por pasada;
+  transacción por caso, omisión de registrados, reversión y continuidad tras fallo.
+- OverdueNotificationEmailEligibility.cs y ProcessEmailQueue.cs: comprobar vigencia
+  antes del reclamo; resuelto cancela sin intento, error conserva Pending y aborta SMTP.
+- ProcessNotifications.cs: revisar atrasos y después procesar cola en una invocación.
+- Notifications Infrastructure/Persistence/OverdueNotificationStore.cs y
+  OverdueNotificationRecordConfiguration.cs: inserción con conflicto omitido,
+  DbSet y migración AddOverdueNotificationRecords con su diseñador/snapshot.
+- AccessControl/IUserRepository.cs, UserRepository.cs y NotificationRecipientDirectory.cs:
+  consultar destinatarios activos sin reutilizar seguimiento de casos anteriores.
+- DependencyInjection.cs de Billing/Notifications: enlazar contratos y casos;
+  Host/Program.cs: despachar --notify-overdue y --process-notifications, conservando
+  --send-mail. docker-compose.yml: mismo proceso CLI, espera de 30 s tras terminar.
+- PruebasDeVencimientos.cs, PruebasDeOrigenDeAtrasos.cs, PruebasDeAvisosDeAtraso.cs
+  y PruebasDeRevalidacionDeCorreo.cs: tiempos, estados, cap, rollback, correo y errores.
+  Pruebas existentes adaptan constructor y verifican lectura actual de destinatarios.
+- README, contexto, reglas, criterios, ADR/índice y bitácora se actualizan en el PR.
+  La bitácora va en commit propio. Migración/diseñador son una unidad generada;
+  se conserva esa unidad aunque exceda la orientación de 200 líneas.
 
 ### Reportes
 

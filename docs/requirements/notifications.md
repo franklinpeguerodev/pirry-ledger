@@ -45,5 +45,5 @@ Activation, password recovery and forced reset send emails. Since this practice,
 - The email is really received: at grading time the professor registers with their own email and opens the link.
 
 Retries, failed/uncertain states, safe last error and admin consultation are
-implemented in Practice 5 (ADR 031). Temporal reminders remain pending.
+implemented in Practice 5 (ADR 031). Temporal reminders are implemented in ADR 032.
 The historical baseline above does not describe these later extensions.
