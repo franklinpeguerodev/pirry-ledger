@@ -1,5 +1,26 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Separación de resultados internos y respuestas de reportes
+
+- Franklin cuestionó JsonIgnore en los contratos entre módulos y pidió cerrar
+  PR 114 y dividir responsabilidades. Se cerró el PR antes de corregirlo.
+- Core.Contracts deja de declarar reglas JSON y la etiqueta de cierre.
+  Reports construye páginas públicas sin BranchTotals y mapea filas de ventas,
+  empleados y cierres. Methods opcional y Status pertenecen a la respuesta.
+  Se conserva el contrato HTTP, cálculos, SQL y paginación aprobados.
+- Las dos pruebas nuevas fallaron con la implementación anterior: atributos de
+  serialización en contratos y reutilización de páginas internas. Después pasan.
+- dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q:
+  709 aprobadas, cero fallidas/omitidas; Reports 23 y los demás módulos sin cambios.
+- dotnet test Tests/PirryLedger.Business.Tests --configuration Release --no-restore --filter FullyQualifiedName~PruebasDeReportesDelNegocioPorHttp -v q:
+  10 aprobadas. Verifican omisión de Methods en filas, totales públicos de deuda,
+  ausencia de BranchTotals y etiqueta de jornada reabierta.
+- dotnet build Src/Host/PirryLedger.Host --no-restore -v q:
+  cero errores y advertencias. No se cambió persistencia ni se repitió la prueba
+  PostgreSQL del bloque anterior. Docker y aceptación acumulada siguen pendientes.
+- El agente ejecutó estas verificaciones; Franklin revisará el resultado en el PR.
+  Corrección y documentación en un commit; bitácora en otro. Sin merge ni tag.
+
 ## 2026-11-26 — Reportes del negocio y lectura consistente
 
 - Franklin aprobó PR 113. Se verificó integración 37f0a76 y se creó
