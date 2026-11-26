@@ -92,3 +92,12 @@ se verifican aparte mediante instrucciones ejecutadas del README.
 - Contexto y estos criterios tienen commit anterior al motor nuevo de notificaciones.
 - README contiene comandos ejecutados, máximo de intentos, fallos reproducibles y filtros.
 - Etiqueta y entrega requieren revisión de Franklin; RF-NOT-06 permanece desviado.
+
+## Solicitudes con sucursal obligatoria — RF-GP-01, RD-06, RD-09
+
+- Dado Estándar con sucursal física, ambos caminos conservan esa sucursal.
+- Dado Estándar con sucursal ausente, vacía o Todas, crear rechaza sin guardar.
+- Dado Administrador ascendido desde una sucursal, crear registra Todas.
+- La fábrica rechaza sucursal vacía y la base rechaza null o UUID vacío.
+- La migración exige corrección revisada si existen filas sin sucursal y no
+  atribuye automáticamente una sucursal histórica.
