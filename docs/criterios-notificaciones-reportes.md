@@ -111,3 +111,16 @@ se verifican aparte mediante instrucciones ejecutadas del README.
 - from y to obligatorios, calendario RD inclusivo. Parámetros inválidos rechazan
   antes de consultar origen; Estándar tampoco consulta cantidades.
 - No hay grupo de solicitudes sin sucursal tras la corrección PR 112.
+
+## Contrato del negocio — RF-REP-02/03/04/05
+
+- Las nueve consultas de business-report-contract.md rechazan 401/403 antes de datos.
+- Consulta con nombre exacto A incluye líneas A; a es otro nombre. No se usa catálogo actual.
+- Subconjunto de productos omite Methods en JSON, también con datos vacíos.
+- Conteo global de facturas no suma conteos por producto.
+- Pendientes/saldadas son consultas independientes y conservan fecha de jornada.
+- Una página vacía conserva cantidades e importes del filtro completo.
+- Una reabierta muestra estado y copia anterior, sin sumar a ClosedTotals.
+- Cambio concurrente de factura/permiso no mezcla cifras de una respuesta.
+  La siguiente consulta refleja los cambios. La sesión rechaza escrituras.
+- Cambios posteriores actualizan venta original y mantienen el cierre guardado.

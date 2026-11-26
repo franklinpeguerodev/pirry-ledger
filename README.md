@@ -1,5 +1,66 @@
 # Pirry Ledger
 
+## Reportes del negocio — ADR 034
+
+RF-REP-02/03/04/05. El contrato completo de parámetros, campos, cálculos y archivos
+está en [business-report-contract.md](docs/business-report-contract.md).
+Todas las rutas GET /api/reports/business exigen Administrador.
+
+| Ruta | Contenido |
+|---|---|
+| /sales | Ventas por jornada, semana lunes–domingo o mes calendario |
+| /collections | Cobros de facturación por método, separados de abonos |
+| /products | Unidades e importes históricos por nombre exacto |
+| /exclusions | Anulaciones pendientes, efectivas y no entregados |
+| /employees | Facturación por usuario y nombre histórico |
+| /debts/pending | Deudas pendientes, por factura |
+| /debts/settled | Deudas saldadas, por factura |
+| /closings | Últimos cierres guardados y reaperturas informativas |
+| /open-sales | Venta de jornadas actualmente abiertas |
+
+from y to son obligatorios e inclusivos por fecha de jornada, excepto en
+/open-sales. branchIds es repetible; omitir o seleccionar Todas incluye las
+sucursales físicas. /sales exige grouping=Day, Week o Month. productNames
+es repetible y exacto, admitido en ventas, productos y empleados.
+Subconjunto de productos omite el bloque methods en JSON. Una factura con varios
+productos se cuenta una vez en los totales. Históricos usan jornadas cerradas.
+Abiertas tienen apartado independiente. Las etiquetas de sucursal usan directorio
+actual; productos, empleados y datos de factura conservan sus valores emitidos.
+
+Consultas comprobadas por HTTP:
+GET /api/reports/business/sales?from=2026-11-24&to=2026-11-25&grouping=Day
+GET /api/reports/business/closings?from=2026-11-24&to=2026-11-25&limit=1
+GET /api/reports/business/open-sales
+
+Deudas pendientes y saldadas son consultas independientes. Cierres y deudas
+usan offset desde cero y limit predeterminado 50, máximo 100. Una página vacía
+conserva los totales del filtro completo. La copia de una jornada reabierta se
+identifica como Jornada reabierta y se excluye de closedTotals.
+
+Cada respuesta se calcula en RepeatableRead de solo lectura. Las consultas de
+Billing y anulaciones se incorporan por los participantes de la conexión común.
+La siguiente página obtiene una lectura nueva. Se filtra y agrega en SQL y se
+proyectan filas de la página; no se mantiene una tabla ni caché de reportes.
+Los cálculos diarios alimentan agrupación semanal/mensual en backend.
+Si falta el proveedor Billing, el reporte del negocio devuelve 404 controlado
+y las funcionalidades del Core conservan su independencia.
+
+Verificaciones ejecutadas:
+dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q
+dotnet build Src/Host/PirryLedger.Host --no-restore -v q
+
+Suite completa: 707 aprobadas, cero fallidas/omitidas. Build sin errores ni
+advertencias. Pruebas cubren nueve rutas con 401/403, cifras y fechas, nombres,
+métodos omitidos, páginas, reapertura y recuperación sin reescribir cierre.
+Una mutación sumando el cierre reabierto fue detectada y se restauró la regla.
+
+PostgreSQL real verificó agregaciones y todas las consultas con datos temporales.
+Una segunda conexión confirmó cambios de factura y permiso mientras se leía:
+la respuesta conservó sus cifras, la siguiente vio los cambios y un intento de
+escritura dentro de la lectura fue rechazado. Datos temporales retirados.
+No hubo envío de correos. Docker sigue sin verificar por ausencia del comando.
+La aceptación acumulada de la práctica sigue pendiente.
+
 ## Reporte administrativo de solicitudes — ADR 033
 
 RF-REP-01/03/04/05. GET /api/reports/permission-requests exige sesión de

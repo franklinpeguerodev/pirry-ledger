@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+- `034-business-report-read-contracts.md` (2026-11-26) — Business report filters, per-response snapshots and separate paged debt queries.
+
 - `033-query-time-report-aggregation.md` (2026-11-26) — Query-time aggregation owned by each module, with report composition through Core.Contracts.
 
 - `032-notification-owned-overdue-reminders.md` (2026-11-25) — Notification-owned once-only overdue controls, combined CLI and pre-send relevance checks.
