@@ -1,5 +1,25 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Sucursal obligatoria en solicitudes
+
+- Franklin autorizó fix separado desde develop d0a342d antes de reportes.
+- Ambos caminos guardan sucursal física del Estándar o Todas para Administrador,
+  incluso ascendido desde sucursal. Se rechaza identidad o sucursal ausente,
+  vacía y global para Estándar antes de persistir. Fábrica exige Guid no vacío.
+- PostgreSQL exige NOT NULL y restricción contra UUID vacío, sin default.
+  Inventario previo del entorno: cero solicitudes, nulas y vacías. Migración
+  RequirePermissionRequestBranch aplicada y esquema verificado sin inspeccionar .env.
+- Pruebas existentes asignan sucursal física y directorio al gateway conservando
+  aserciones originales. Se agregaron cuatro casos. Mutación detectada para
+  Administrador ascendido; regla restaurada y suite Release verde.
+- dotnet test pirry-ledger.slnx --configuration Release --no-restore -v q:
+  663 aprobadas, cero fallidas/omitidas. Permisos 58, Integration 7, Billing 313,
+  AccessControl 171, Notifications 74 y Documents 40.
+- Documentación y ADR 030 actualizado acompañan el fix. Migración/diseñador
+  constituyen unidad lógica mayor de 200 líneas. Bitácora en commit propio.
+- Verificaciones realizadas por el agente. Revisión de Franklin pendiente.
+  Reportes continúan como siguiente bloque. Docker pendiente de verificación.
+
 ## 2026-11-26 — Avisos únicos de atraso y trabajador CLI
 
 - Franklin aprobó PR 110; se verificó base develop 5457422 y se creó
