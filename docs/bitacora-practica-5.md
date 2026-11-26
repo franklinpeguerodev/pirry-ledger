@@ -1,5 +1,31 @@
 # Bitácora — Práctica 5
 
+## 2026-11-26 — Revisión acumulada sobre la versión integrada
+
+- Franklin aprobó PR 114 y pidió continuar. Se comprobó integración 2aa76d6,
+  incluyendo a4a3972, y se creó chore/practice-5-acceptance desde develop.
+- Se ejecutó dotnet test pirry-ledger.slnx --configuration Release:
+  709 aprobadas, cero fallidas/omitidas. Restore emitió NU1900; se repitió
+  dotnet restore pirry-ledger.slnx -v q con red y persistió la advertencia.
+- dotnet build Src/Host/PirryLedger.Host --no-restore -v q:
+  cero errores, siete advertencias NU1900. Reports.Api compiló por separado sin
+  errores ni advertencias. No se ocultó la consulta de vulnerabilidades fallida.
+- Se repitieron las pruebas externas de reportes Core/negocio y cola PostgreSQL.
+  Datos propios retirados o revertidos. Se verificó snapshot concurrente, lectura
+  nueva y rechazo de escritura, cinco intentos e incertidumbre sin reenvío.
+- SMTP contra servidor local comprobó aceptación, rechazo e incertidumbre.
+  Sin correos externos; recepción/uso de enlaces reales continúa pendiente.
+- Grafo de 21 proyectos Core sin referencia directa/transitiva a Business.
+  Contexto/criterios 57d4feb preceden al motor 0788bc7. Sin bin/obj/.env locales
+  versionados; revisión limitada de patrones de tokens/claves sin coincidencias.
+- docker compose up --build falló porque el comando no existe. Franklin confirmó
+  que no puede ejecutarlo en su equipo. No se declara probado ni se sustituyó
+  persistencia tras reinicio con las pruebas en memoria.
+- Se preparó matriz de aceptación con evidencia, límites y pendientes y se
+  corrigieron estados antiguos de reportes en README. No cambió producción.
+- Verificaciones ejecutadas por el agente. Franklin revisa el PR de evidencia;
+  aceptación integral, desviación RF-NOT-06 y autorización del tag siguen abiertas.
+
 ## 2026-11-26 — Separación de resultados internos y respuestas de reportes
 
 - Franklin cuestionó JsonIgnore en los contratos entre módulos y pidió cerrar
