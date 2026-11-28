@@ -1,123 +1,83 @@
-# Current iteration — Practice 5: Notifications and reports
+# Current iteration — Assignment 3: Audit and delegation
 
-## Current feature — Accumulated acceptance
+## Current work
 
-Core report integrated through PR 113 at 37f0a76.
-feature/business-sales-reports implements the seven business report families and
-the separate open-day sales view under approved ADR 034 and decisions 1–8.
-See business-report-contract.md for exact filters, endpoints, fields and paging.
-Each response uses a read-only RepeatableRead snapshot. Pending and settled
-debts have separate queries. Reopened closing snapshots remain informational.
-Reports use only contracts and preserve module-owned queries. No new tables.
-PR 114, including the provider/HTTP responsibility correction, is integrated
-in develop 2aa76d6. Branch chore/practice-5-acceptance records final evidence.
-See aceptacion-practica-5.md for the requirement matrix, commands and limits.
-709 tests passed on the integrated version. Host builds with zero errors and
-seven NU1900 warnings; network-enabled restore still could not query NuGet.
-Core/business report SQL, isolated queue persistence and local SMTP were checked.
-Subsequent Codespace verification on develop 7e53a79 (PR 115) completed Docker
-startup, six deployed regression flows and document persistence after container
-recreation. Linux suite: 709 passed, no NU1900 in its log. Mailpit received access
-messages and their links/codes worked. Five SMTP failures stopped further attempts.
-See verificacion-docker-practica-5.md for commands, evidence and limits.
-The CLI emitted a nonblocking missing-GSSAPI warning; external mail and Kerberos
-were not verified. Franklin's final review and the RF-NOT-06 deviation remain open.
-No production behavior change or delivery tag is part of this evidence branch.
+Planning requested by Franklin on 2026-11-28. Preparation is authorized;
+execution follows Franklin's review of docs/plan-ejecucion-asignacion-3.md.
+Franklin authorized publishing this planning branch and opening its PR on 2026-11-28.
+No implementation decisions are currently open for starting this audit.
+Any important choice exposed by a finding follows AGENTS.md approval before coding.
 
-## Scope
+Franklin reconfirmed that ADR 023 and ADR 024 channel policies are approved.
+Audit operational channels against that policy. Preserve RF-NOT-06 original
+academic wording and the documented difference as a historical antecedent.
 
-Base and PR target: `develop`. Preparation: `docs/practice-5-planning`.
-One branch per major feature; sequence: `docs/plan-ejecucion-practica-5.md`.
-Logbook: `docs/bitacora-practica-5.md`.
+## Scope and sources
 
-Assignment: `docs/assignments/practica-5.md` (takes precedence).
-Read `docs/requirements/README.md` first. Requirement sources:
-`notifications.md`, `reports.md`, `business-module.md`, `permissions.md`,
-`design-rules.md`, `access-control.md` and `entities.md` in that directory.
-Applicable: RF-NOT-01 through 13, RF-REP-01 through 05,
-RF-NEG-02 through 06 and RF-NEG-09, RF-GP-01 through 07, RD-01 through 12.
-Preserve the access-control baseline.
+Assignment: docs/assignments/asignacion-3.md, transcribed from Franklin's PDF.
+Audit Practice 5 notifications, email queue and reports, then fix confirmed findings.
+Plan: docs/plan-ejecucion-asignacion-3.md.
+Audit evidence, created during execution: docs/auditoria-asignacion-3.md.
+Required logbook: docs/bitacora-asignacion-3.md.
 
-Business decisions: `docs/reglas-operativas-practica-5.md`.
-Acceptance scenarios: `docs/criterios-notificaciones-reportes.md`.
-Preparation authorized 2026-11-19; implementation is being delivered by feature.
-Invoice ownership integrated in develop (ADR 025).
-Scoped repository combines branch and issuer; no standard branch transfers.
-Debt-specific cross-issuer queries and verified payments integrated in develop
-(ADR 027, PR 105). Ordinary invoice queries
-remain private; Standard responses hide debt payment history.
-Branch business days integrated in develop (ADR 026).
-Close/reopen and first-invoice opening are coordinated per
-branch; closed snapshots include pending cancellation exclusions through a Core
-contract. Dedicated undelivered recovery and shared sales calculations are
-integrated in develop (ADR 028, PR 106).
-Only the Standard issuer recovers, retaining the original invoice/day and
-leaving saved closings unchanged. Pending cancellation exclusions and resolution
-are covered across Billing and Permissions. Reports are integrated through PR 113
-and 114; notification delivery status follows below. No closing revision history is implemented.
-Notification-center prerequisite integrated in develop (ADR 029, PR 107).
-Own inbox integrated in develop (PR 108):
-list without automatic reading, mark one/all with server-side ownership.
-Notification producers, active-recipient selection and administrator email preferences
-integrated in develop (ADR 030, PR 109).
-Billing and Permissions operations join the explicit common transaction; source
-operation, internal notice and linked mail commit or roll back together.
-Stable event/recipient keys prevent duplicate deliveries without a general events table.
-Five-attempt queue and administrative inspection integrated in develop
-(ADR 031, PR 110). Session-lock exclusion
-failed in the configured environment; Franklin authorized an exclusive coordination
-transaction, verified with concurrent connections. Interrupted and uncertain
-deliveries are not retried; safe metadata inspection is administrative only.
-Overdue reminders integrated in develop through PR 111
-(ADR 032): Notifications owns one durable control table; Billing
-supplies candidates and locked revalidation through Core.Contracts. Transfers
-strictly older than 96 hours and open days at their 16:00 RD deadline generate
-at most 50 newly recorded cases per execution, once per source even with no
-active administrators. Each case commits or rolls back independently. Combined
-CLI scans reminders then sends mail; Docker waits 30 seconds after completion.
-Resolved overdue emails are cancelled before claiming without an attempt;
-validation errors leave them pending. No push or changes to business states.
-Operational reset: reviewed PostgreSQL data and referenced R2 images removed.
-See `docs/limpieza-datos-practica-5.md`. Franklin approved preserving sessions and access codes.
-Identity/access rows were preserved and operational counts verified as zero.
-Five unreferenced R2 objects remain for ownership review; unregistered SeaweedFS
-objects were not inventoried. Do not claim all external storage is empty.
+Read docs/requirements/README.md first. Requirement sources in that directory:
+notifications.md, reports.md, design-rules.md, permissions.md, access-control.md,
+business-module.md and entities.md.
+Audit RF-NOT-01 through 13 and RF-REP-01 through 05, especially RD-02, RD-03,
+RD-06, RD-07, RD-08, RD-10 and RD-11. Regression tests follow RD-12.
+Preserve previous requirements through the six accumulated regression fronts.
 
-- Invoice ownership, branch business days, closing snapshots and explicit reopening.
-- Branch debt payments with verified transfers and role-specific views.
-- Pending cancellation exclusions and recoverable undelivered invoices.
-- Internal notifications and approved selective email policy.
-- Five-attempt mail queue and administrative inspection; uncertain sends not retried.
-- Individually timed, once-only reminders through CLI.
-- Reports module, permission aggregation, seven business reports and open-day totals.
-- Reviewed operational data reset preserving users, branches and assignments.
+Original criteria: docs/criterios-notificaciones-reportes.md.
+Business rules: docs/reglas-operativas-practica-5.md.
+Report definitions: docs/business-report-contract.md.
+Previous assignment: docs/assignments/practica-5.md.
+Relevant decisions: ADR 023 through 034 and earlier ADRs used by a tested flow.
+Historical evidence: docs/aceptacion-practica-5.md and
+docs/verificacion-docker-practica-5.md. Recheck behavior during this assignment.
+
+## Baseline and Git workflow
+
+Local baseline: develop 860d0fd10f887d4a49c0ef4691737883c8d792c2.
+Main 1fa48d2 has the same tree. Confirm remote state before audit execution.
+Preparation branch: docs/assignment-3-planning, based on develop.
+Subsequent branches target develop after their dependencies are integrated.
+One correction branch and one fix commit per confirmed finding.
+Fix subjects cite H-XX and applicable requirement IDs. Include regression and
+affected documentation with the fix; logbook entries have separate commits.
+
+Franklin reviews the plan before execution, each correction plan before coding,
+and commits and logbook before publication. This planning PR is authorized.
+Publication of later branches/PRs requires his authorization. Merge and delivery tag require explicit
+authorization. PRs retain the existing four-section template.
 
 ## Acceptance criteria
 
-- Approved scenarios pass, including rejections without state/data changes.
-- Build and tests pass; unit tests use doubles and fake clock.
-- Verify real transactions, concurrency, persistence and email separately.
-- Context and criteria committed before new notification engine implementation.
-- README commands executed; documentation and logbook ship with each behavior.
-- No Core-to-Business reference or cross-module table access.
-- RF-NOT-06 remains a known deviation (ADR 023 and 024), not professor-approved.
-- Complete accumulated review and Franklin's final review.
-- Delivery tag practica-5 only with explicit authorization.
-
-## Workflow
-
-Commits are atomic; 100–200 changed lines is a guideline, not a hard limit.
-Larger cohesive changes are allowed with a stated reason; do not split solely by size.
-Agent is authorized to push and create PRs; Franklin reviews and approves.
-No merging or tagging without explicit approval. Branches start from develop
-after their prerequisites are integrated. Important decisions need alternatives
-and approval before implementation. Reset target and exact inventory must be
-reviewed before execution. Previous iteration closed by Franklin; its historical
-PostgreSQL verification limitation remains in its logbook.
+- At least three reproducible findings including notifications and reports.
+  Each has a number, justified severity, violated criterion/requirement, exact
+  baseline, setup, executed command and observed result.
+- Each finding declared fixed is corrected in its own commit citing its number.
+  Review recurrence of the root cause. Low-severity deferrals are explicit,
+  justified and reviewed by Franklin.
+- Each fixed finding has a new independent xUnit regression with Spanish name,
+  identifiable arrange/act/assert and H-XX in its name or comment. It fails for
+  expected behavior on exact parent code and passes on corrected code.
+  Compilation errors do not demonstrate the defect. Use doubles and fake clock.
+- README contains one full-suite command in its tests section, executed from a
+  clean clone. Verify build and dotnet test pirry-ledger.slnx --configuration Release.
+- Verify README startup with docker compose up --build and the six inherited
+  fronts: registration/activation, sessions/roles, recovery, permissions,
+  Billing/business days and document persistence after container recreation.
+- Verify real SQL, persistence, SMTP and concurrency where applicable, with safe
+  evidence. An environment limitation leaves that criterion unverified.
+- Logbook is organized by finding with all six assignment fields, real delegation
+  evidence, explanation of escaped defects, correction instructions and commits,
+  and preventive changes visible in context or criteria. Attribute agent and
+  Franklin checks accurately. Keep original criteria traceable by baseline SHA.
+- Final candidate replays defects on parent commits and verifies all regressions
+  and corrected behavior on delivery tree. Tag asignacion-3 only when authorized.
 
 ## Out of scope
 
-Mobile work, exports, inventory, purchases, expenses, profit, cash counting,
-initial cash funds, withdrawals, monetary refunds and general audit module.
-No historical closing revisions; keep latest closing only. Debt payment history
-is still in scope. New invoice states are not planned.
+New business features, mobile changes, a general audit module, infrastructure
+changes and operational data resets. Use existing infrastructure and isolated
+test data. Preserve module boundaries, approved channel policy and report contracts.
